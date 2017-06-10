@@ -1,0 +1,51 @@
+Code Style Guidelines - mnm
+
+Identifier Prefixes
+
+Since capitalized names are exported in packages, we use these
+conventions for clarity in non-exported terms.
+
+sPkg - package-local variable (s = static)
+kConst - package-local constant
+tType - package-local type
+runOp - package-local goroutine function
+
+aLocal - function-local variable (exceptions: err & ok return values)
+   for a := 0; a < kMax; a++ {} // instead of i
+o - function-local "receiver" variable, aka this (o = object)
+   func (o *tType) DoIt()
+   func runIt(o *tType)
+iArg - function-local argument (i = input)
+fFunc - function-local closure
+cArg - function-local closure argument
+
+Since these are recognized by context, no special prefix for:
+
+o.field - struct member
+doX() - package-local function
+net.Conn - imported package
+
+Code Format
+
+Package constants and variables go at the top of their source files,
+followed by func init() (if used).
+
+Type, function, and variable definitions appear roughtly in order of invocation
+in source files. Types are defined before the functions that operate on them.
+Definitions therefore usually appear after first use.
+
+Indents are 3 spaces.
+
+Since this is ubiquitous, it goes on one line:
+   if err != nil { panic(err) }
+
+Dense conditionals
+   if test {
+      stuff()
+   } else {
+      other()
+   }
+
+In lieu of (v = t ? a : b)
+   v = b; if t { v = a }
+
