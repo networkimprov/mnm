@@ -1,28 +1,38 @@
-Code Style Guidelines - mnm
+
+--- Go Code Style Guidelines ---
 
 Identifier Prefixes
 
-Since capitalized names are exported in packages, we use these
-conventions for clarity in non-exported terms.
+runIt - package goroutine function
+   go runIt(...)
 
-sPkg - package-local variable (s = static)
-kConst - package-local constant
-tType - package-local type
-runOp - package-local goroutine function
+Since it may be hard to infer the scope of lowercase identifiers,
+we use these conventions for clarity in non-exported terms.
 
-aLocal - function-local variable (exceptions: err & ok return values)
+kConst - package/function constant
+   const kDumbPi = 3.142
+eConst - package/function enumerated constant
+   const ( eOne=iota; eTwo; eThree; )
+tType - package/function type
+   type tStuff struct {...}
+sVar - package variable (s = static)
+   var sWhat string
+aVar - function variable; exceptions: err & ok return values
+   aFile, err := Open(...)
    for a := 0; a < kMax; a++ {} // instead of i
-o - function-local "receiver" variable, aka this (o = object)
+iArg - function argument (i = input)
+   func doIt(iWhat string) {...}
+o - function "receiver" argument, aka this (o = object)
    func (o *tType) DoIt()
-   func runIt(o *tType)
-iArg - function-local argument (i = input)
-fFunc - function-local closure
-cArg - function-local closure argument
+   func runIt(o *tType) // go s.runIt() not allowed
+fFunc - function "closure"
+cVar - closure variable or argument
+   fSum := func(cNum int) { cSum := cNum + aNum }
 
-Since these are recognized by context, no special prefix for:
+Since these are recognized by context, no prefix for:
 
-o.field - struct member
-doX() - package-local function
+s.field - struct member
+doIt() - package function
 net.Conn - imported package
 
 Code Format
