@@ -268,16 +268,17 @@ type tStore struct { // queue and msg storage
 }
 
 func Init(iMain string) {
-   sStore.Root = iMain + "/"
-   sStore.temp = sStore.Root + "temp/"
-   sStore.idStore = make(chan uint64, 1)
+   o := &sStore
+   o.Root = iMain + "/"
+   o.temp = o.Root + "temp/"
+   o.idStore = make(chan uint64, 1)
 
-   err := os.MkdirAll(sStore.temp, 0700)
+   err := os.MkdirAll(o.temp, 0700)
    if err != nil { panic(err) }
 
    var aWg sync.WaitGroup
    aWg.Add(1)
-   go runIdStore(&sStore, &aWg)
+   go runIdStore(o, &aWg)
    aWg.Wait()
 }
 
