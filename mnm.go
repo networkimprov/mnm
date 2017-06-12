@@ -20,6 +20,17 @@ func main() {
    }
 }
 
+const (
+   _ = iota
+   eRegister // uid newnode aliases
+   eAddNode  // uid nodeid newnode
+   eLogin    // uid nodeid
+   eListEdit // id to type member
+   ePost     // id for
+   ePing     // id alias
+   eAck      // id type
+)
+
 func NewTc(a int) *tTestClient {
    return &tTestClient{id:a, to:a+111111, ack:make(chan int,10)}
 }
@@ -37,19 +48,21 @@ func (o *tTestClient) Read(buf []byte) (int, error) {
       return 0, &net.OpError{Op:"log out"}
    }
    aTmr := time.NewTimer(10 * time.Millisecond)
-   var aS string
+   var aS, aData string
    select {
    case <-o.ack:
-      aS = fmt.Sprintf(`{"Type":"ack"}`)
+      aS = fmt.Sprintf(`{"Op":%d}`, eAck)
       aTmr.Stop()
    case <-aTmr.C:
       o.count++
       if o.count == 1 {
-         aS = fmt.Sprintf(`{"Type":"login", "Id":"%d"}`, o.id)
+         aS = fmt.Sprintf(`{"Op":%d, "Uid":"%d"}`, eLogin, o.id)
       } else {
-         aS = fmt.Sprintf(`{"Type":"text",  "To":"%d", "Data":"msg %d"}`, o.to, o.count)
+         aS = fmt.Sprintf(`{"Op":%d, "To":"%d"}`, ePost, o.to)
+         aData = fmt.Sprintf(" |msg %d|", o.count)
       }
    }
+   aS = fmt.Sprintf("%04x"+aS+aData, len(aS))
    fmt.Printf("%d testclient.read %s\n", o.id, aS)
    return copy(buf, aS), nil
 }

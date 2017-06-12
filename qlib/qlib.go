@@ -30,7 +30,7 @@ type Link struct { // network client msg handler
    conn net.Conn // link to client
    connSet chan<- net.Conn // updates tQueue
    ack chan<- string // forwards client acks to queue thread
-   id int
+   uid string
 }
 
 func NewLink(iConn net.Conn) *Link {
@@ -49,32 +49,56 @@ func runLink(o *Link) {
          o.conn.Close()
          break
       }
-      var aMsg tMessage
-      err = json.Unmarshal(aBuf[:aLen], &aMsg)
+      aHeadEnd, err := strconv.ParseUint(string(aBuf[:4]), 16, 0)
       if err != nil { panic(err) }
-      o.HandleMsg(&aMsg)
+      aHeadEnd += 4
+      var aMsg tHeader
+      err = json.Unmarshal(aBuf[4:aHeadEnd], &aMsg)
+      if err != nil { panic(err) }
+      var aData []byte
+      if aLen > int(aHeadEnd) {
+         aData = aBuf[aHeadEnd:]
+      }
+      o.HandleMsg(&aMsg, aData)
    }
 }
 
-type tMessage struct {
-   Type string
+type tHeader struct {
+   Op uint8
+   Uid string
    Id string
+   NodeId, NewNode string
+   Aliases string
    To string
-   Data string
+   Type string
+   Member string
+   Alias string
+   For []string
 }
 
-func (o *Link) HandleMsg(iMsg *tMessage) {
-   switch(iMsg.Type) {
-   case "login":
-      o.id, _ = strconv.Atoi(iMsg.Id)
-      aQ := NewQueue(iMsg.Id)
+const (
+   _ = iota
+   eRegister // uid newnode aliases
+   eAddNode  // uid nodeid newnode
+   eLogin    // uid nodeid
+   eListEdit // id to type member
+   ePost     // id for
+   ePing     // id alias
+   eAck      // id type
+)
+
+func (o *Link) HandleMsg(iMsg *tHeader, iData []byte) {
+   switch(iMsg.Op) {
+   case eLogin:
+      o.uid = iMsg.Uid
+      aQ := NewQueue(o.uid)
       o.ack = aQ.ack
       o.connSet = aQ.connIn
       o.connSet <- o.conn
-      fmt.Printf("%d link.handlemsg login user %s\n", o.id, aQ.uid)
-   case "text":
+      fmt.Printf("%s link.handlemsg login user %s\n", o.uid, aQ.uid)
+   case ePost:
       aId := sStore.MakeId()
-      sStore.PutFile(aId, []byte(iMsg.Data))
+      sStore.PutFile(aId, iData)
       aNd := GetNode(iMsg.To)
       aNd.dir.RLock()
       sStore.PutLink(aId, iMsg.To, aId)
@@ -84,13 +108,13 @@ func (o *Link) HandleMsg(iMsg *tMessage) {
       }
       aNd.dir.RUnlock()
       sStore.RmFile(aId)
-   case "ack":
+   case eAck:
       aTmr := time.NewTimer(2 * time.Second)
       select {
       case o.ack <- "bing":
          aTmr.Stop()
       case <-aTmr.C:
-         fmt.Printf("%d link.handlemsg timed out waiting on ack\n", o.id)
+         fmt.Printf("%s link.handlemsg timed out waiting on ack\n", o.uid)
       }
    default:
       fmt.Printf("unknown msg type %s\n", iMsg.Type)
