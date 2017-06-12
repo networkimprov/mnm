@@ -15,6 +15,7 @@ import (
    "time"
 )
 
+const kLoginTimeout time.Duration =  5 * time.Second
 const kQueueIdleMax time.Duration = 28 * time.Hour
 const kStoreIdIncr = 1000
 
@@ -40,12 +41,18 @@ func NewLink(iConn net.Conn) *Link {
 }
 
 func runLink(o *Link) {
+   o.conn.SetReadDeadline(time.Now().Add(kLoginTimeout))
    aBuf := make([]byte, 64)
    for {
       aLen, err := o.conn.Read(aBuf)
       if err != nil {
          //todo if recoverable continue
-         o.connSet <- nil
+         if err.(net.Error).Timeout() {
+            o.conn.Write([]byte("login timeout"))
+         }
+         if o.connSet != nil {
+            o.connSet <- nil
+         }
          o.conn.Close()
          break
       }
@@ -90,8 +97,9 @@ const (
 func (o *Link) HandleMsg(iMsg *tHeader, iData []byte) {
    switch(iMsg.Op) {
    case eLogin:
+      aQ := NewQueue(iMsg.Uid)
+      o.conn.SetReadDeadline(time.Time{})
       o.uid = iMsg.Uid
-      aQ := NewQueue(o.uid)
       o.ack = aQ.ack
       o.connSet = aQ.connIn
       o.connSet <- o.conn

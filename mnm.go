@@ -8,6 +8,7 @@ import (
 )
 
 var sId chan int
+var sTimeout error = &tTimeoutError{}
 
 func main() {
    fmt.Printf("Starting Test Pass\n")
@@ -15,8 +16,9 @@ func main() {
    sId <- 111111
    sId <- 222222
    qlib.Init("qstore")
-   for {
-      qlib.NewLink(NewTc(<-sId))
+   for a := 0; true; a++ {
+      aDawdle := a == 1
+      qlib.NewLink(NewTc(<-sId, aDawdle))
    }
 }
 
@@ -31,36 +33,47 @@ const (
    eAck      // id type
 )
 
-func NewTc(a int) *tTestClient {
-   return &tTestClient{id:a, to:a+111111, ack:make(chan int,10)}
+func NewTc(i int, iNoLogin bool) *tTestClient {
+   return &tTestClient{id:i, to:i+111111, noLogin:iNoLogin, ack:make(chan int,10)}
 }
 
 type tTestClient struct {
    id, to, count int
+   noLogin bool
    ack chan int
    closed bool
+   readDeadline time.Time
 }
 
 func (o *tTestClient) Read(buf []byte) (int, error) {
    if o.count % 10 == 9 {
-      time.AfterFunc(2*time.Second, func(){ sId <- o.id })
-      fmt.Printf("%d testclient.read preparing to log out\n", o.id)
       return 0, &net.OpError{Op:"log out"}
    }
-   aTmr := time.NewTimer(10 * time.Millisecond)
+   var aDlC <-chan time.Time
+   if !o.readDeadline.IsZero() {
+      aDl := time.NewTimer(o.readDeadline.Sub(time.Now()))
+      defer aDl.Stop()
+      aDlC = aDl.C
+   }
+   aUnit := 200 * time.Millisecond; if o.noLogin { aUnit = 6 * time.Second }
+   aTmr := time.NewTimer(aUnit)
+   defer aTmr.Stop()
    var aS, aData string
    select {
    case <-o.ack:
       aS = fmt.Sprintf(`{"Op":%d}`, eAck)
-      aTmr.Stop()
    case <-aTmr.C:
       o.count++
-      if o.count == 1 {
+      if o.noLogin {
+         aS = `{}`
+      } else if o.count == 1 {
          aS = fmt.Sprintf(`{"Op":%d, "Uid":"%d"}`, eLogin, o.id)
       } else {
          aS = fmt.Sprintf(`{"Op":%d, "To":"%d"}`, ePost, o.to)
          aData = fmt.Sprintf(" |msg %d|", o.count)
       }
+   case <-aDlC:
+      return 0, &net.OpError{Op:"timeout",Err:sTimeout}
    }
    aS = fmt.Sprintf("%04x"+aS+aData, len(aS))
    fmt.Printf("%d testclient.read %s\n", o.id, aS)
@@ -84,10 +97,23 @@ func (o *tTestClient) Write(buf []byte) (int, error) {
    return len(buf), nil
 }
 
-func (o *tTestClient) Close() error { o.closed = true; return nil }
+func (o *tTestClient) SetReadDeadline(i time.Time) error {
+   o.readDeadline = i
+   return nil
+}
+
+func (o *tTestClient) Close() error {
+   o.closed = true;
+   time.AfterFunc(10*time.Millisecond, func(){ sId <- o.id })
+   return nil
+}
+
 func (o *tTestClient) LocalAddr() net.Addr { return &net.UnixAddr{"e", "a"} }
 func (o *tTestClient) RemoteAddr() net.Addr { return &net.UnixAddr{"e", "a"} }
 func (o *tTestClient) SetDeadline(time.Time) error { return nil }
-func (o *tTestClient) SetReadDeadline(time.Time) error { return nil }
 func (o *tTestClient) SetWriteDeadline(time.Time) error { return nil }
 
+type tTimeoutError struct{}
+func (o *tTimeoutError) Error() string   { return "i/o timeout" }
+func (o *tTimeoutError) Timeout() bool   { return true }
+func (o *tTimeoutError) Temporary() bool { return true }
