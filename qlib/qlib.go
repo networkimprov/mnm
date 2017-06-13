@@ -29,8 +29,7 @@ func init() {
 
 type Link struct { // network client msg handler
    conn net.Conn // link to client
-   connSet chan<- net.Conn // updates tQueue
-   ack chan<- string // forwards client acks to queue thread
+   queue *tQueue
    uid string
 }
 
@@ -50,8 +49,8 @@ func runLink(o *Link) {
          if err.(net.Error).Timeout() {
             o.conn.Write([]byte("login timeout"))
          }
-         if o.connSet != nil {
-            o.connSet <- nil
+         if o.queue != nil {
+            o.queue.Unlink()
          }
          o.conn.Close()
          break
@@ -97,12 +96,14 @@ const (
 func (o *Link) HandleMsg(iMsg *tHeader, iData []byte) {
    switch(iMsg.Op) {
    case eLogin:
-      aQ := NewQueue(iMsg.Uid)
+      //todo check credentials
+      aQ := QueueLink(iMsg.Uid, o.conn)
+      if aQ == nil {
+         return
+      }
       o.conn.SetReadDeadline(time.Time{})
       o.uid = iMsg.Uid
-      o.ack = aQ.ack
-      o.connSet = aQ.connIn
-      o.connSet <- o.conn
+      o.queue = aQ
       fmt.Printf("%s link.handlemsg login user %s\n", o.uid, aQ.uid)
    case ePost:
       aId := sStore.MakeId()
@@ -119,7 +120,7 @@ func (o *Link) HandleMsg(iMsg *tHeader, iData []byte) {
    case eAck:
       aTmr := time.NewTimer(2 * time.Second)
       select {
-      case o.ack <- "bing":
+      case o.queue.ack <- "bing":
          aTmr.Stop()
       case <-aTmr.C:
          fmt.Printf("%s link.handlemsg timed out waiting on ack\n", o.uid)
@@ -168,31 +169,45 @@ type tQueue struct {
    buf []string // elastic channel buffer
    in chan string // elastic channel input
    out chan string // elastic channel output
+   hasConn int32 // in use by Link
 }
 
-func NewQueue(iUid string) *tQueue {
+func QueueLink(iUid string, iConn net.Conn) *tQueue {
    aNd := GetNode(iUid)
    if aNd.queue == nil {
       aNd.dir.Lock()
-      if aNd.queue != nil { panic("attempt to recreate queue for node "+iUid) }
-      fmt.Printf("%s newqueue make queue\n", iUid)
-      aNd.queue = new(tQueue)
-      aQ := aNd.queue
-      aQ.uid = iUid
-      aQ.connIn = make(chan net.Conn)
-      aQ.connOut = make(chan net.Conn)
-      aQ.ack = make(chan string, 10)
-      aQ.in = make(chan string)
-      aQ.out = make(chan string)
-      var err error
-      aQ.buf, err = sStore.GetDir(iUid)
-      if err != nil { panic(err) }
-      aNd.dir.Unlock()
-      go runConnChan(aQ)
-      go runElasticChan(aQ)
-      go runQueue(aQ)
+      if aNd.queue != nil {
+         aNd.dir.Unlock()
+         fmt.Printf(iUid+" newqueue attempt to recreate queue\n")
+      } else {
+         aNd.queue = new(tQueue)
+         aQ := aNd.queue
+         aQ.uid = iUid
+         aQ.connIn = make(chan net.Conn)
+         aQ.connOut = make(chan net.Conn)
+         aQ.ack = make(chan string, 10)
+         aQ.in = make(chan string)
+         aQ.out = make(chan string)
+         var err error
+         aQ.buf, err = sStore.GetDir(iUid)
+         if err != nil { panic(err) }
+         aNd.dir.Unlock()
+         fmt.Printf(iUid+" newqueue create queue\n")
+         go runConnChan(aQ)
+         go runElasticChan(aQ)
+         go runQueue(aQ)
+      }
    }
-   return aNd.queue
+   if atomic.CompareAndSwapInt32(&aNd.queue.hasConn, 0, 1) {
+      aNd.queue.connIn <- iConn
+      return aNd.queue
+   }
+   return nil
+}
+
+func (o *tQueue) Unlink() {
+   o.connIn <- nil
+   o.hasConn = 0
 }
 
 func runQueue(o *tQueue) {
