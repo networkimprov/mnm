@@ -19,10 +19,13 @@ const kLoginTimeout time.Duration =  5 * time.Second
 const kQueueIdleMax time.Duration = 28 * time.Hour
 const kStoreIdIncr = 1000
 
+var sMsgLoginTimeout []byte
+
 var sNode tNodes
 var sStore tStore
 
 func init() {
+   sMsgLoginTimeout = PackMsg(tMsg{"op":"quit", "info":"login timeout"}, nil)
    sNode.list = make(tNodeMap)
 }
 
@@ -47,7 +50,7 @@ func runLink(o *Link) {
       if err != nil {
          //todo if recoverable continue
          if err.(net.Error).Timeout() {
-            o.conn.Write([]byte("login timeout"))
+            o.conn.Write(sMsgLoginTimeout)
          }
          if o.queue != nil {
             o.queue.Unlink()
@@ -128,6 +131,30 @@ func (o *Link) HandleMsg(iMsg *tHeader, iData []byte) {
    default:
       fmt.Printf("unknown msg type %s\n", iMsg.Type)
    }
+}
+
+type tMsg map[string]interface{}
+
+func PackMsg(iJso tMsg, iData []byte) []byte {
+   var err error
+   var aEtc []byte
+   aEtcdata := iJso["etcdata"]
+   if aEtcdata != nil {
+      delete(iJso, "etcdata")
+      aEtc, err = json.Marshal(aEtcdata)
+      if err != nil { panic(err) }
+      iJso["etc"] = len(aEtc)
+   }
+   aReq, err := json.Marshal(iJso)
+   if err != nil { panic(err) }
+   aLen := fmt.Sprintf("%04x", len(aReq))
+   if len(aLen) > 4 { panic("packmsg json input too long") }
+   aBuf := make([]byte, 0, len(aLen)+len(aReq)+len(aEtc)+len(iData))
+   aBuf = append(aBuf, aLen...)
+   aBuf = append(aBuf, aReq...)
+   aBuf = append(aBuf, aEtc...)
+   aBuf = append(aBuf, iData...)
+   return aBuf
 }
 
 

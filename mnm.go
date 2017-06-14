@@ -11,6 +11,13 @@ var sId chan int
 var sTimeout error = &tTimeoutError{}
 
 func main() {
+   aJso := qlib.PackMsg(map[string]interface{}{
+      "s": "stuff",
+      "etcdata": []string{ "a", "b" },
+      "o": map[string]interface{}{ "t": "trash" },
+   }, []byte{'#'})
+   fmt.Printf("packmsg: %v\n", string(aJso))
+
    fmt.Printf("Starting Test Pass\n")
    sId = make(chan int, 10)
    sId <- 111111
