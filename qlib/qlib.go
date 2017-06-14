@@ -75,8 +75,8 @@ func runLink(o *Link) {
       err = json.Unmarshal(aBuf[4:aHeadEnd], &aMsg)
       if err != nil { panic(err) }
       if !checkHeader(&aMsg) {
-         //fmt.Printf("%s link.runlink incorrect message header\n", o.uid)
-         //continue
+         fmt.Printf("%s link.runlink incorrect message header\n", o.uid)
+         continue
       }
       var aData []byte
       if aLen > int(aHeadEnd) {
@@ -133,14 +133,16 @@ func (o *Link) HandleMsg(iMsg *tHeader, iData []byte) {
    case ePost:
       aId := sStore.MakeId()
       sStore.PutFile(aId, iData)
-      aNd := GetNode(iMsg.To)
-      aNd.dir.RLock()
-      sStore.PutLink(aId, iMsg.To, aId)
-      sStore.SyncDirs(iMsg.To)
-      if aNd.queue != nil {
-         aNd.queue.in <- aId
+      for _, aTo := range iMsg.For {
+         aNd := GetNode(aTo)
+         aNd.dir.RLock()
+         sStore.PutLink(aId, aTo, aId)
+         sStore.SyncDirs(aTo)
+         if aNd.queue != nil {
+            aNd.queue.in <- aId
+         }
+         aNd.dir.RUnlock()
       }
-      aNd.dir.RUnlock()
       sStore.RmFile(aId)
    case eAck:
       aTmr := time.NewTimer(2 * time.Second)

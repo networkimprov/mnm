@@ -65,26 +65,27 @@ func (o *tTestClient) Read(buf []byte) (int, error) {
    aUnit := 200 * time.Millisecond; if o.noLogin { aUnit = 6 * time.Second }
    aTmr := time.NewTimer(aUnit)
    defer aTmr.Stop()
-   var aS, aData string
+   var aHead map[string]interface{}
+   var aData string
    select {
    case <-o.ack:
-      aS = fmt.Sprintf(`{"Op":%d}`, eAck)
+      aHead = tMsg{"Op":eAck, "Id":"n", "Type":"n"}
    case <-aTmr.C:
       o.count++
       if o.noLogin {
-         aS = `{}`
+         aHead = tMsg{}
       } else if o.count == 1 {
-         aS = fmt.Sprintf(`{"Op":%d, "Uid":"%d"}`, eLogin, o.id)
+         aHead = tMsg{"Op":eLogin, "Uid":fmt.Sprint(o.id), "NodeId":"n"}
       } else {
-         aS = fmt.Sprintf(`{"Op":%d, "To":"%d"}`, ePost, o.to)
+         aHead = tMsg{"Op":ePost, "Id":"n", "For":[]string{fmt.Sprint(o.to)}}
          aData = fmt.Sprintf(" |msg %d|", o.count)
       }
    case <-aDlC:
       return 0, &net.OpError{Op:"timeout",Err:sTimeout}
    }
-   aS = fmt.Sprintf("%04x"+aS+aData, len(aS))
-   fmt.Printf("%d testclient.read %s\n", o.id, aS)
-   return copy(buf, aS), nil
+   aMsg := qlib.PackMsg(aHead, []byte(aData))
+   fmt.Printf("%d testclient.read %s\n", o.id, string(aMsg))
+   return copy(buf, aMsg), nil
 }
 
 func (o *tTestClient) Write(buf []byte) (int, error) {
@@ -124,3 +125,5 @@ type tTimeoutError struct{}
 func (o *tTimeoutError) Error() string   { return "i/o timeout" }
 func (o *tTimeoutError) Timeout() bool   { return true }
 func (o *tTimeoutError) Temporary() bool { return true }
+
+type tMsg map[string]interface{}
