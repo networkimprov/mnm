@@ -19,6 +19,16 @@ const kLoginTimeout time.Duration =  5 * time.Second
 const kQueueIdleMax time.Duration = 28 * time.Hour
 const kStoreIdIncr = 1000
 
+var sParams = [...]tHeader{
+   eRegister: { Uid:"1", NewNode:"1", Aliases:"1"    },
+   eAddNode : { Uid:"1", NodeId:"1", NewNode:"1"     },
+   eLogin   : { Uid:"1", NodeId:"1"                  },
+   eListEdit: { Id:"1", To:"1", Type:"1", Member:"1" },
+   ePost    : { Id:"1", For:[]string{"1"}            },
+   ePing    : { Id:"1", Alias:"1"                    },
+   eAck     : { Id:"1", Type:"1"                     },
+}
+
 var sMsgLoginTimeout []byte
 
 var sNode tNodes
@@ -64,6 +74,10 @@ func runLink(o *Link) {
       var aMsg tHeader
       err = json.Unmarshal(aBuf[4:aHeadEnd], &aMsg)
       if err != nil { panic(err) }
+      if !checkHeader(&aMsg) {
+         //fmt.Printf("%s link.runlink incorrect message header\n", o.uid)
+         //continue
+      }
       var aData []byte
       if aLen > int(aHeadEnd) {
          aData = aBuf[aHeadEnd:]
@@ -85,16 +99,24 @@ type tHeader struct {
    For []string
 }
 
-const (
-   _ = iota
-   eRegister // uid newnode aliases
-   eAddNode  // uid nodeid newnode
-   eLogin    // uid nodeid
-   eListEdit // id to type member
-   ePost     // id for
-   ePing     // id alias
-   eAck      // id type
-)
+const ( _=iota; eRegister; eAddNode; eLogin; eListEdit; ePost; ePing; eAck; eOpEnd )
+
+func checkHeader(iMsg *tHeader) bool {
+   if iMsg.Op == 0 || iMsg.Op >= eOpEnd { return false }
+   aDef := &sParams[iMsg.Op]
+   aFail :=
+      len(aDef.Uid)     > 0 && len(iMsg.Uid)     == 0 ||
+      len(aDef.Id)      > 0 && len(iMsg.Id)      == 0 ||
+      len(aDef.NodeId)  > 0 && len(iMsg.NodeId)  == 0 ||
+      len(aDef.NewNode) > 0 && len(iMsg.NewNode) == 0 ||
+      len(aDef.Aliases) > 0 && len(iMsg.Aliases) == 0 ||
+      len(aDef.To)      > 0 && len(iMsg.To)      == 0 ||
+      len(aDef.Type)    > 0 && len(iMsg.Type)    == 0 ||
+      len(aDef.Member)  > 0 && len(iMsg.Member)  == 0 ||
+      len(aDef.Alias)   > 0 && len(iMsg.Alias)   == 0 ||
+      len(aDef.For)     > 0 && len(iMsg.For)     == 0
+   return !aFail
+}
 
 func (o *Link) HandleMsg(iMsg *tHeader, iData []byte) {
    switch(iMsg.Op) {
@@ -129,7 +151,7 @@ func (o *Link) HandleMsg(iMsg *tHeader, iData []byte) {
          fmt.Printf("%s link.handlemsg timed out waiting on ack\n", o.uid)
       }
    default:
-      fmt.Printf("unknown msg type %s\n", iMsg.Type)
+      panic(fmt.Sprintf("checkHeader failure, op %d", iMsg.Op))
    }
 }
 
