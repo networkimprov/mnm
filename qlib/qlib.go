@@ -69,7 +69,7 @@ type UserDatabase interface {
 type Link struct { // network client msg handler
    conn net.Conn // link to client
    queue *tQueue
-   uid string
+   uid, node string
 }
 
 func NewLink(iConn net.Conn) *Link {
@@ -145,21 +145,34 @@ func (o *tHeader) check() bool {
 }
 
 func (o *Link) HandleMsg(iHead *tHeader, iData []byte) {
+   var err error
+
    switch(iHead.Op) {
    case eLogin:
-      //todo check credentials
-      aQ := QueueLink(iHead.Uid, o.conn)
+      _, err = UDb.Verify(iHead.Uid, iHead.NodeId)
+      if err != nil {
+         return
+      }
+      aQ := QueueLink(iHead.NodeId, o.conn)
       if aQ == nil {
          return
       }
       o.conn.SetReadDeadline(time.Time{})
       o.uid = iHead.Uid
+      o.node = iHead.NodeId
       o.queue = aQ
       fmt.Printf("%s link.handlemsg login user %s\n", o.uid, aQ.uid)
    case ePost:
       aId := sStore.MakeId()
-      sStore.PutFile(aId, iData)
+      err = sStore.PutFile(aId, iData)
+      if err != nil { panic(err) }
+      var aRecips []string
       for _, aTo := range iHead.For {
+         aNodes, err := UDb.GetNodes(aTo)
+         if err != nil { panic(err) }
+         aRecips = append(aRecips, aNodes...)
+      }
+      for _, aTo := range aRecips {
          aNd := GetNode(aTo)
          aNd.dir.RLock()
          sStore.PutLink(aId, aTo, aId)

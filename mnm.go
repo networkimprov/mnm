@@ -78,9 +78,9 @@ func (o *tTestClient) Read(buf []byte) (int, error) {
       if o.noLogin {
          aHead = tMsg{}
       } else if o.count == 1 {
-         aHead = tMsg{"Op":eLogin, "Uid":fmt.Sprint(o.id), "NodeId":"n"}
+         aHead = tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(o.id), "NodeId":fmt.Sprint(o.id)}
       } else {
-         aHead = tMsg{"Op":ePost, "Id":"n", "For":[]string{fmt.Sprint(o.to)}}
+         aHead = tMsg{"Op":ePost, "Id":"n", "For":[]string{"u"+fmt.Sprint(o.to)}}
          aData = fmt.Sprintf(" |msg %d|", o.count)
       }
    case <-aDlC:
