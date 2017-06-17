@@ -19,7 +19,7 @@ const kLoginTimeout time.Duration =  5 * time.Second
 const kQueueIdleMax time.Duration = 28 * time.Hour
 const kStoreIdIncr = 1000
 
-var sParams = [...]tHeader{
+var sHeaderDefs = [...]tHeader{
    eRegister: { Uid:"1", NewNode:"1", Aliases:"1"    },
    eAddNode : { Uid:"1", NodeId:"1", NewNode:"1"     },
    eLogin   : { Uid:"1", NodeId:"1"                  },
@@ -97,10 +97,10 @@ func runLink(o *Link) {
       aHeadEnd, err := strconv.ParseUint(string(aBuf[:4]), 16, 0)
       if err != nil { panic(err) }
       aHeadEnd += 4
-      var aMsg tHeader
-      err = json.Unmarshal(aBuf[4:aHeadEnd], &aMsg)
+      aHead := new(tHeader)
+      err = json.Unmarshal(aBuf[4:aHeadEnd], aHead)
       if err != nil { panic(err) }
-      if !checkHeader(&aMsg) {
+      if !aHead.check() {
          fmt.Printf("%s link.runlink incorrect message header\n", o.uid)
          continue
       }
@@ -108,7 +108,7 @@ func runLink(o *Link) {
       if aLen > int(aHeadEnd) {
          aData = aBuf[aHeadEnd:]
       }
-      o.HandleMsg(&aMsg, aData)
+      o.HandleMsg(aHead, aData)
    }
 }
 
@@ -127,39 +127,39 @@ type tHeader struct {
 
 const ( _=iota; eRegister; eAddNode; eLogin; eListEdit; ePost; ePing; eAck; eOpEnd )
 
-func checkHeader(iMsg *tHeader) bool {
-   if iMsg.Op == 0 || iMsg.Op >= eOpEnd { return false }
-   aDef := &sParams[iMsg.Op]
+func (o *tHeader) check() bool {
+   if o.Op == 0 || o.Op >= eOpEnd { return false }
+   aDef := &sHeaderDefs[o.Op]
    aFail :=
-      len(aDef.Uid)     > 0 && len(iMsg.Uid)     == 0 ||
-      len(aDef.Id)      > 0 && len(iMsg.Id)      == 0 ||
-      len(aDef.NodeId)  > 0 && len(iMsg.NodeId)  == 0 ||
-      len(aDef.NewNode) > 0 && len(iMsg.NewNode) == 0 ||
-      len(aDef.Aliases) > 0 && len(iMsg.Aliases) == 0 ||
-      len(aDef.To)      > 0 && len(iMsg.To)      == 0 ||
-      len(aDef.Type)    > 0 && len(iMsg.Type)    == 0 ||
-      len(aDef.Member)  > 0 && len(iMsg.Member)  == 0 ||
-      len(aDef.Alias)   > 0 && len(iMsg.Alias)   == 0 ||
-      len(aDef.For)     > 0 && len(iMsg.For)     == 0
+      len(aDef.Uid)     > 0 && len(o.Uid)     == 0 ||
+      len(aDef.Id)      > 0 && len(o.Id)      == 0 ||
+      len(aDef.NodeId)  > 0 && len(o.NodeId)  == 0 ||
+      len(aDef.NewNode) > 0 && len(o.NewNode) == 0 ||
+      len(aDef.Aliases) > 0 && len(o.Aliases) == 0 ||
+      len(aDef.To)      > 0 && len(o.To)      == 0 ||
+      len(aDef.Type)    > 0 && len(o.Type)    == 0 ||
+      len(aDef.Member)  > 0 && len(o.Member)  == 0 ||
+      len(aDef.Alias)   > 0 && len(o.Alias)   == 0 ||
+      len(aDef.For)     > 0 && len(o.For)     == 0
    return !aFail
 }
 
-func (o *Link) HandleMsg(iMsg *tHeader, iData []byte) {
-   switch(iMsg.Op) {
+func (o *Link) HandleMsg(iHead *tHeader, iData []byte) {
+   switch(iHead.Op) {
    case eLogin:
       //todo check credentials
-      aQ := QueueLink(iMsg.Uid, o.conn)
+      aQ := QueueLink(iHead.Uid, o.conn)
       if aQ == nil {
          return
       }
       o.conn.SetReadDeadline(time.Time{})
-      o.uid = iMsg.Uid
+      o.uid = iHead.Uid
       o.queue = aQ
       fmt.Printf("%s link.handlemsg login user %s\n", o.uid, aQ.uid)
    case ePost:
       aId := sStore.MakeId()
       sStore.PutFile(aId, iData)
-      for _, aTo := range iMsg.For {
+      for _, aTo := range iHead.For {
          aNd := GetNode(aTo)
          aNd.dir.RLock()
          sStore.PutLink(aId, aTo, aId)
@@ -179,7 +179,7 @@ func (o *Link) HandleMsg(iMsg *tHeader, iData []byte) {
          fmt.Printf("%s link.handlemsg timed out waiting on ack\n", o.uid)
       }
    default:
-      panic(fmt.Sprintf("checkHeader failure, op %d", iMsg.Op))
+      panic(fmt.Sprintf("checkHeader failure, op %d", iHead.Op))
    }
 }
 
