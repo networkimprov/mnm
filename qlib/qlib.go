@@ -33,10 +33,36 @@ var sMsgLoginTimeout []byte
 
 var sNode tNodes
 var sStore tStore
+var UDb UserDatabase // set by caller
 
 func init() {
    sMsgLoginTimeout = PackMsg(tMsg{"op":"quit", "info":"login timeout"}, nil)
    sNode.list = make(tNodeMap)
+}
+
+
+type UserDatabase interface {
+   // a UserDatabase stores:
+   //   a set of Uids, one per user
+   //   the set of Nodes for each user
+   //   the set of Aliases for each user
+   //   a set of message distribution lists
+   //   the set of Uids for each list
+
+   AddUser(iUid, iNewNode string, iAliases []string) (aAliases []string, err error)
+   SetAliases(iUid, iNode string, iAliases []string) (aAliases []string, err error)
+   AddNode(iUid, iNode, iNewNode string) (aNodeRef int, err error)
+   DropNode(iUid, iNode string) error
+   //DropUser(iUid string) error
+
+   Verify(iUid, iNode string) (aNodeRef int, err error)
+   GetNodes(iUid string) (aNodes []string, err error)
+   Lookup(iAlias string) (aUid string, err error)
+
+   ListInvite(iList, iBy, iAlias string) error
+   ListJoin(iList, iAlias, iUid string) (aAlias string, err error)
+   ListDrop(iList, iBy, iUid string) error
+   ListLookup(iList, iBy string) (aUids []string, err error)
 }
 
 
