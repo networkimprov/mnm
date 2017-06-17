@@ -29,14 +29,17 @@ var sHeaderDefs = [...]tHeader{
    eAck     : { Id:"1", Type:"1"                     },
 }
 
-var sMsgLoginTimeout []byte
+var sMsgLogin, sMsgLoginTimeout, sMsgLoginFailure, sMsgLoginNodeOnline []byte
 
 var sNode tNodes
 var sStore tStore
 var UDb UserDatabase // set by caller
 
 func init() {
-   sMsgLoginTimeout = PackMsg(tMsg{"op":"quit", "info":"login timeout"}, nil)
+   sMsgLogin           = PackMsg(tMsg{"op":"info", "info":"login ok"}, nil)
+   sMsgLoginTimeout    = PackMsg(tMsg{"op":"quit", "info":"login timeout"}, nil)
+   sMsgLoginFailure    = PackMsg(tMsg{"op":"quit", "info":"login failed"}, nil)
+   sMsgLoginNodeOnline = PackMsg(tMsg{"op":"quit", "info":"node already connected"}, nil)
    sNode.list = make(tNodeMap)
 }
 
@@ -151,6 +154,7 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) {
    case eLogin:
       _, err = UDb.Verify(iHead.Uid, iHead.NodeId)
       if err != nil {
+         o.conn.Write(sMsgLoginFailure)
          return
       }
       aQ := QueueLink(iHead.NodeId, o.conn)
@@ -288,11 +292,13 @@ func QueueLink(iUid string, iConn net.Conn) *tQueue {
          go runQueue(aQ)
       }
    }
-   if atomic.CompareAndSwapInt32(&aNd.queue.hasConn, 0, 1) {
-      aNd.queue.connIn <- iConn
-      return aNd.queue
+   if !atomic.CompareAndSwapInt32(&aNd.queue.hasConn, 0, 1) {
+      iConn.Write(sMsgLoginNodeOnline)
+      return nil
    }
-   return nil
+   iConn.Write(sMsgLogin)
+   aNd.queue.connIn <- iConn
+   return aNd.queue
 }
 
 func (o *tQueue) Unlink() {
