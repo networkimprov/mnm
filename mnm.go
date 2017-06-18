@@ -243,12 +243,18 @@ func (o *tUserDb) DropNode(iUid, iNode string) error {
 
 func (o *tUserDb) Verify(iUid, iNode string) (aNodeRef int, err error) {
    //: return noderef if iUid in db and has iNode
+   // trivial implementation for qlib testing
+   o.Uid[iUid] = tUser{Nodes: map[string]int{iNode:0}}
    return 0, nil
 }
 
 func (o *tUserDb) GetNodes(iUid string) (aNodes []string, err error) {
    //: return noderefs if iUid in db
-   return nil, nil
+   // trivial implementation for qlib testing
+   for aN,_ := range o.Uid[iUid].Nodes {
+      aNodes = append(aNodes, aN)
+   }
+   return aNodes, nil
 }
 
 func (o *tUserDb) Lookup(iAlias string) (aUid string, err error) {
