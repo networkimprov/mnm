@@ -193,6 +193,14 @@ const (
    eTgroup  tType = "group"
 )
 
+//: add a crash recovery pass on startup
+//: examine temp dir
+//:   complete any pending transactions
+//: in transaction
+//:   sync temp dir instead of data dir
+//:   remove temp file in commitDir
+//:   drop .tmp files
+
 func NewUserDb(iPath string) (*tUserDb, error) {
    for _, a := range [...]tType{ "temp", eTuid, eTalias, eTgroup } {
       err := os.MkdirAll(iPath + "/" + string(a), 0700)
