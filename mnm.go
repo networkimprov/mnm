@@ -157,9 +157,9 @@ type tUserDb struct {
    uidDoor, alsDoor, lstDoor sync.RWMutex // protect cache during update
 
    // cache records here
-   Uid map[string]tUser
+   Uid map[string]*tUser
    Alias map[string]string // value is Uid
-   Group map[string]tGroup
+   Group map[string]*tGroup
 }
 
 type tUser struct {
@@ -210,9 +210,9 @@ func NewUserDb(iPath string) (*tUserDb, error) {
    aDb := new(tUserDb)
    aDb.root = iPath+"/"
    aDb.temp = aDb.root + "temp"
-   aDb.Uid = make(map[string]tUser)
+   aDb.Uid = make(map[string]*tUser)
    aDb.Alias = make(map[string]string)
-   aDb.Group = make(map[string]tGroup)
+   aDb.Group = make(map[string]*tGroup)
 
    return aDb, nil
 }
