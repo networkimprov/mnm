@@ -17,6 +17,9 @@ var sTimeout error = &tTimeoutError{}
 func main() {
    aDb, err := NewUserDb("./userdb")
    if err != nil { panic(err) }
+   aDb.Uid["u111111"] = &tUser{Nodes: map[string]int{"111111":1}}
+   aDb.Uid["u222222"] = &tUser{Nodes: map[string]int{"222222":1}}
+   aDb.Uid["u333333"] = &tUser{Nodes: map[string]int{"333333":1}}
 
    qlib.UDb = aDb
    qlib.Init("qstore")
@@ -183,8 +186,8 @@ type tMember struct {
    Joined bool // use a date here?
 }
 
-//type tUserDbErr string
-//func (o tUserDbErr) Error() string { return string(o) }
+type tUserDbErr string
+func (o tUserDbErr) Error() string { return string(o) }
 
 type tType string
 const (
@@ -252,8 +255,10 @@ func (o *tUserDb) DropNode(iUid, iNode string) error {
 func (o *tUserDb) Verify(iUid, iNode string) (aNodeRef int, err error) {
    //: return noderef if iUid in db and has iNode
    // trivial implementation for qlib testing
-   o.Uid[iUid] = tUser{Nodes: map[string]int{iNode:0}}
-   return 0, nil
+   if o.Uid[iUid] != nil && o.Uid[iUid].Nodes[iNode] != 0 {
+      return 1, nil
+   }
+   return 0, tUserDbErr("no such user/node")
 }
 
 func (o *tUserDb) GetNodes(iUid string) (aNodes []string, err error) {
