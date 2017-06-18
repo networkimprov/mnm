@@ -37,16 +37,16 @@ const ( _=iota; eRegister; eAddNode; eLogin; eListEdit; ePost; ePing; eAck )
 type tTestClient struct {
    id, to int // who i am, who i send to
    count int // msg number
-   noLogin bool // test login timeout feature
+   deferLogin bool // test login timeout feature
    ack chan int // writer tells reader to issue ack to qlib
    closed bool // when about to shut down
    readDeadline time.Time // set by qlib
 }
 
-func NewTc(i int, iNoLogin bool) *tTestClient {
+func NewTc(i int, iDawdle bool) *tTestClient {
    return &tTestClient{
       id: i, to: i+111111,
-      noLogin: iNoLogin,
+      deferLogin: iDawdle,
       ack: make(chan int,10),
    }
 }
@@ -63,7 +63,7 @@ func (o *tTestClient) Read(buf []byte) (int, error) {
       aDlC = aDl.C
    }
 
-   aUnit := 200 * time.Millisecond; if o.noLogin { aUnit = 6 * time.Second }
+   aUnit := 200 * time.Millisecond; if o.deferLogin { aUnit = 6 * time.Second }
    aTmr := time.NewTimer(aUnit)
    defer aTmr.Stop()
 
@@ -75,7 +75,7 @@ func (o *tTestClient) Read(buf []byte) (int, error) {
       aHead = tMsg{"Op":eAck, "Id":"n", "Type":"n"}
    case <-aTmr.C:
       o.count++
-      if o.noLogin {
+      if o.deferLogin {
          aHead = tMsg{}
       } else if o.count == 1 {
          aHead = tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(o.id), "NodeId":fmt.Sprint(o.id)}
@@ -377,4 +377,3 @@ func (o *tUserDb) commitDir(iType tType, iPath string) error {
    err = os.Rename(iPath + ".tmp", iPath)
    return err
 }
-
