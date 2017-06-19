@@ -31,7 +31,7 @@ func main() {
    }
 }
 
-const ( _=iota; eRegister; eAddNode; eLogin; eGroupEdit; ePost; ePing; eAck )
+const ( _=iota; eRegister; eAddNode; eLogin; eListEdit; ePost; ePing; eAck )
 
 
 type tTestClient struct {
@@ -262,7 +262,7 @@ func (o *tUserDb) Lookup(iAlias string) (aUid string, err error) {
    return "", nil
 }
 
-func (o *tUserDb) ListInvite(iList iBy, iAlias string) error {
+func (o *tUserDb) ListInvite(iList, iBy, iAlias string) error {
    //: if iAlias in db, and iBy in db & iList (or make iList and add iBy), list iAlias
    return nil
 }
