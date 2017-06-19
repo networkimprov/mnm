@@ -279,23 +279,23 @@ func (o *tUserDb) Lookup(iAlias string) (aUid string, err error) {
    return "", nil
 }
 
-func (o *tUserDb) GroupInvite(iGroup, iBy, iAlias string) error {
-   //: if iAlias in db, and iBy in db & iGroup (or make iGroup and add iBy), store iAlias
+func (o *tUserDb) GroupInvite(iGid, iBy, iAlias string) error {
+   //: if iAlias in db, and iBy in db & iGid (or make iGid and add iBy), store iAlias
    return nil
 }
 
-func (o *tUserDb) GroupJoin(iGroup, iAlias, iUid string) (aAlias string, err error) {
-   //: set joined and return stored alias if iGroup in db and iUid in iGroup, store iAlias if != ""
+func (o *tUserDb) GroupJoin(iGid, iAlias, iUid string) (aAlias string, err error) {
+   //: set joined and return stored alias if iGid in db and iUid in iGid, store iAlias if != ""
    return "", nil
 }
 
-func (o *tUserDb) GroupDrop(iGroup, iBy, iUid string) error {
-   //: remove iUid from iGroup if iBy in iGroup
+func (o *tUserDb) GroupDrop(iGid, iBy, iUid string) error {
+   //: remove iUid from iGid if iBy in iGid
    return nil
 }
 
-func (o *tUserDb) GroupLookup(iGroup, iBy string) (aUids []string, err error) {
-   //: return uids if iBy in iGroup
+func (o *tUserDb) GroupLookup(iGid, iBy string) (aUids []string, err error) {
+   //: return uids if iBy in iGid
    return []string{}, nil
 }
 
