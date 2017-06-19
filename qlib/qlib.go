@@ -49,8 +49,8 @@ type UserDatabase interface {
    //   a set of Uids, one per user
    //   the set of Nodes for each user
    //   the set of Aliases for each user
-   //   a set of message distribution lists
-   //   the set of Uids for each list
+   //   a set of message distribution groups
+   //   the set of Uids for each group
 
    AddUser(iUid, iNewNode string, iAliases []string) (aAliases []string, err error)
    SetAliases(iUid, iNode string, iAliases []string) (aAliases []string, err error)
@@ -62,10 +62,10 @@ type UserDatabase interface {
    GetNodes(iUid string) (aNodes []string, err error)
    Lookup(iAlias string) (aUid string, err error)
 
-   ListInvite(iList, iBy, iAlias string) error
-   ListJoin(iList, iAlias, iUid string) (aAlias string, err error)
-   ListDrop(iList, iBy, iUid string) error
-   ListLookup(iList, iBy string) (aUids []string, err error)
+   GroupInvite(iGroup, iBy, iAlias string) error
+   GroupJoin(iGroup, iAlias, iUid string) (aAlias string, err error)
+   GroupDrop(iGroup, iBy, iUid string) error
+   GroupLookup(iGroup, iBy string) (aUids []string, err error)
 }
 
 
