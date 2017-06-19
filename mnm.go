@@ -157,11 +157,15 @@ type tMsg map[string]interface{}
 type tUserDb struct {
    root string // top-level directory
    temp string // temp subdirectory; write files here first
-   uidDoor, alsDoor, lstDoor sync.RWMutex // protect cache during update
 
    // cache records here
+   uidDoor sync.RWMutex
    Uid map[string]*tUser
+
+   aliasDoor sync.RWMutex
    Alias map[string]string // value is Uid
+
+   groupDoor sync.RWMutex
    Group map[string]*tGroup
 }
 
