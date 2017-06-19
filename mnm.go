@@ -141,14 +141,14 @@ type tMsg map[string]interface{}
 //: you'll implement the public api to add/edit userdb records
 //: for all ops, you look up a record in cache,
 //:   and if not there call getRecord and cache the result
-//:   lookups are done with aObj := o.Uid[iUid] (or o.Alias, o.List)
+//:   lookups are done with aObj := o.Uid[iUid] (or o.Alias, o.Group)
 //: for add/edit ops, you then modify the cache object, then call putRecord
 //: locking
 //:   cache read ops are done inside o.xyzDoor.RLock/RUnlock()
 //:   cache add/delete ops are done inside o.xyzDoor.Lock/Unlock()
-//:   Uid and List object updates are done inside aObj.door.Lock/Unlock()
-//: records are stored as files in subdirectories of o.root: uid, alias, list
-//:   uid/* & list/* files are json format
+//:   Uid and Group object updates are done inside aObj.door.Lock/Unlock()
+//: records are stored as files in subdirectories of o.root: uid, alias, group
+//:   uid/* & group/* files are json format
 //:   alias/* files are symlinks to Uid
 
 type tUserDb struct {
@@ -159,7 +159,7 @@ type tUserDb struct {
    // cache records here
    Uid map[string]tUser
    Alias map[string]string // value is Uid
-   List map[string]tList
+   Group map[string]tGroup
 }
 
 type tUser struct {
@@ -173,7 +173,7 @@ type tAlias struct {
    Nat string // in whatever language
 }
 
-type tList struct {
+type tGroup struct {
    door sync.RWMutex
    Uid map[string]tMember
 }
@@ -190,11 +190,11 @@ type tType string
 const (
    eTuid   tType = "uid"
    eTalias tType = "alias"
-   eTlist  tType = "list"
+   eTgroup  tType = "group"
 )
 
 func NewUserDb(iPath string) (*tUserDb, error) {
-   for _, a := range [...]tType{ "temp", eTuid, eTalias, eTlist } {
+   for _, a := range [...]tType{ "temp", eTuid, eTalias, eTgroup } {
       err := os.MkdirAll(iPath + "/" + string(a), 0700)
       if err != nil { return nil, err }
    }
@@ -204,7 +204,7 @@ func NewUserDb(iPath string) (*tUserDb, error) {
    aDb.temp = aDb.root + "temp"
    aDb.Uid = make(map[string]tUser)
    aDb.Alias = make(map[string]string)
-   aDb.List = make(map[string]tList)
+   aDb.Group = make(map[string]tGroup)
 
    return aDb, nil
 }
@@ -307,7 +307,7 @@ func (o *tUserDb) getRecord(iType tType, iId string) (interface{}, error) {
       }
       return &aLn, nil
    case "uid":  aObj = &tUser{}
-   case "list": aObj = &tList{}
+   case "group": aObj = &tGroup{}
    }
 
    aBuf, err := ioutil.ReadFile(aPath)
@@ -338,7 +338,7 @@ func (o *tUserDb) putRecord(iType tType, iId string, iObj interface{}) error {
       err = os.Symlink(iObj.(string), aPath + ".tmp")
       if err != nil { return err }
       return o.commitDir(iType, aPath)
-   case "uid", "list":
+   case "uid", "group":
    }
 
    aBuf, err := json.Marshal(iObj)
