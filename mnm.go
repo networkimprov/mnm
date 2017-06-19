@@ -17,9 +17,9 @@ var sTimeout error = &tTimeoutError{}
 func main() {
    aDb, err := NewUserDb("./userdb")
    if err != nil { panic(err) }
-   aDb.Uid["u111111"] = &tUser{Nodes: map[string]int{"111111":1}}
-   aDb.Uid["u222222"] = &tUser{Nodes: map[string]int{"222222":1}}
-   aDb.Uid["u333333"] = &tUser{Nodes: map[string]int{"333333":1}}
+   aDb.user["u111111"] = &tUser{Nodes: map[string]int{"111111":1}}
+   aDb.user["u222222"] = &tUser{Nodes: map[string]int{"222222":1}}
+   aDb.user["u333333"] = &tUser{Nodes: map[string]int{"333333":1}}
 
    qlib.UDb = aDb
    qlib.Init("qstore")
@@ -144,14 +144,14 @@ type tMsg map[string]interface{}
 //: you'll implement the public api to add/edit userdb records
 //: for all ops, you look up a record in cache,
 //:   and if not there call getRecord and cache the result
-//:   lookups are done with aObj := o.Uid[iUid] (or o.Alias, o.Group)
+//:   lookups are done with aObj := o.user[Uid] (or o.alias, o.group)
 //: for add/edit ops, you then modify the cache object, then call putRecord
 //: locking
 //:   cache read ops are done inside o.xyzDoor.RLock/RUnlock()
 //:   cache add/delete ops are done inside o.xyzDoor.Lock/Unlock()
-//:   Uid and Group object updates are done inside aObj.door.Lock/Unlock()
-//: records are stored as files in subdirectories of o.root: uid, alias, group
-//:   uid/* & group/* files are json format
+//:   tUser and tGroup object updates are done inside aObj.door.Lock/Unlock()
+//: records are stored as files in subdirectories of o.root: user, alias, group
+//:   user/* & group/* files are json format
 //:   alias/* files are symlinks to Uid
 
 type tUserDb struct {
@@ -159,14 +159,14 @@ type tUserDb struct {
    temp string // temp subdirectory; write files here first
 
    // cache records here
-   uidDoor sync.RWMutex
-   Uid map[string]*tUser
+   userDoor sync.RWMutex
+   user map[string]*tUser
 
    aliasDoor sync.RWMutex
-   Alias map[string]string // value is Uid
+   alias map[string]string // value is Uid
 
    groupDoor sync.RWMutex
-   Group map[string]*tGroup
+   group map[string]*tGroup
 }
 
 type tUser struct {
@@ -186,7 +186,7 @@ type tGroup struct {
 }
 
 type tMember struct {
-   Alias string // invited/joined by this Alias
+   Alias string // invited/joined by this alias
    Joined bool // use a date here?
 }
 
@@ -195,9 +195,9 @@ func (o tUserDbErr) Error() string { return string(o) }
 
 type tType string
 const (
-   eTuid   tType = "uid"
+   eTuser  tType = "user"
    eTalias tType = "alias"
-   eTgroup  tType = "group"
+   eTgroup tType = "group"
 )
 
 //: add a crash recovery pass on startup
@@ -209,7 +209,7 @@ const (
 //:   drop .tmp files
 
 func NewUserDb(iPath string) (*tUserDb, error) {
-   for _, a := range [...]tType{ "temp", eTuid, eTalias, eTgroup } {
+   for _, a := range [...]tType{ "temp", eTuser, eTalias, eTgroup } {
       err := os.MkdirAll(iPath + "/" + string(a), 0700)
       if err != nil { return nil, err }
    }
@@ -217,9 +217,9 @@ func NewUserDb(iPath string) (*tUserDb, error) {
    aDb := new(tUserDb)
    aDb.root = iPath+"/"
    aDb.temp = aDb.root + "temp"
-   aDb.Uid = make(map[string]*tUser)
-   aDb.Alias = make(map[string]string)
-   aDb.Group = make(map[string]*tGroup)
+   aDb.user = make(map[string]*tUser)
+   aDb.alias = make(map[string]string)
+   aDb.group = make(map[string]*tGroup)
 
    return aDb, nil
 }
@@ -259,7 +259,7 @@ func (o *tUserDb) DropNode(iUid, iNode string) error {
 func (o *tUserDb) Verify(iUid, iNode string) (aNodeRef int, err error) {
    //: return noderef if iUid in db and has iNode
    // trivial implementation for qlib testing
-   if o.Uid[iUid] != nil && o.Uid[iUid].Nodes[iNode] != 0 {
+   if o.user[iUid] != nil && o.user[iUid].Nodes[iNode] != 0 {
       return 1, nil
    }
    return 0, tUserDbErr("no such user/node")
@@ -268,7 +268,7 @@ func (o *tUserDb) Verify(iUid, iNode string) (aNodeRef int, err error) {
 func (o *tUserDb) GetNodes(iUid string) (aNodes []string, err error) {
    //: return noderefs if iUid in db
    // trivial implementation for qlib testing
-   for aN,_ := range o.Uid[iUid].Nodes {
+   for aN,_ := range o.user[iUid].Nodes {
       aNodes = append(aNodes, aN)
    }
    return aNodes, nil
@@ -300,19 +300,19 @@ func (o *tUserDb) GroupLookup(iGroup, iBy string) (aUids []string, err error) {
 }
 
 func (o *tUserDb) fetchUser(iUid string) *tUser {
-   o.uidDoor.RLock() // read-lock uid map
-   aUser := o.Uid[iUid] // lookup user in map
-   o.uidDoor.RUnlock()
+   o.userDoor.RLock() // read-lock user map
+   aUser := o.user[iUid] // lookup user in map
+   o.userDoor.RUnlock()
 
    if aUser == nil { // user not in cache
-      aObj, err := o.getRecord(eTuid, iUid) // lookup user on disk
+      aObj, err := o.getRecord(eTuser, iUid) // lookup user on disk
       if err != nil { panic(err) }
       aUser = aObj.(*tUser) // "type assertion" to extract *tUser value from interface{}
       aUser.door.Lock() // write-lock user
 
-      o.uidDoor.Lock() // write-lock uid map
-      o.Uid[iUid] = aUser // add user to map
-      o.uidDoor.Unlock()
+      o.userDoor.Lock() // write-lock user map
+      o.user[iUid] = aUser // add user to map
+      o.userDoor.Unlock()
    } else {
       aUser.door.Lock() // write-lock user
    }
@@ -337,15 +337,15 @@ func (o *tUserDb) getRecord(iType tType, iId string) (interface{}, error) {
    switch (iType) {
    default:
       panic("getRecord: unexpected type "+iType)
-   case "alias":
+   case eTalias:
       aLn, err := os.Readlink(aPath)
       if err != nil {
          if os.IsNotExist(err) { return nil, nil }
          return nil, err
       }
       return &aLn, nil
-   case "uid":  aObj = &tUser{}
-   case "group": aObj = &tGroup{}
+   case eTuser:  aObj = &tUser{}
+   case eTgroup: aObj = &tGroup{}
    }
 
    aBuf, err := ioutil.ReadFile(aPath)
@@ -372,11 +372,11 @@ func (o *tUserDb) putRecord(iType tType, iId string, iObj interface{}) error {
    switch (iType) {
    default:
       panic("putRecord: unexpected type "+iType)
-   case "alias":
+   case eTalias:
       err = os.Symlink(iObj.(string), aPath + ".tmp")
       if err != nil { return err }
       return o.commitDir(iType, aPath)
-   case "uid", "group":
+   case eTuser, eTgroup:
    }
 
    aBuf, err := json.Marshal(iObj)
