@@ -299,6 +299,27 @@ func (o *tUserDb) ListLookup(iList, iBy string) (aUids []string, err error) {
    return []string{}, nil
 }
 
+func (o *tUserDb) fetchUser(iUid string) *tUser {
+   o.uidDoor.RLock() // read-lock uid map
+   aUser := o.Uid[iUid] // lookup user in map
+   o.uidDoor.RUnlock()
+
+   if aUser == nil { // user not in cache
+      aObj, err := o.getRecord(eTuid, iUid) // lookup user on disk
+      if err != nil { panic(err) }
+      aUser = aObj.(*tUser) // "type assertion" to extract *tUser value from interface{}
+      aUser.door.Lock() // write-lock user
+
+      o.uidDoor.Lock() // write-lock uid map
+      o.Uid[iUid] = aUser // add user to map
+      o.uidDoor.Unlock()
+   } else {
+      aUser.door.Lock() // write-lock user
+   }
+   return aUser // user is write-locked and cached
+   // must do putRecord() and .door.Unlock() on return value after changes!
+}
+
 // pull a file into a cache object
 func (o *tUserDb) getRecord(iType tType, iId string) (interface{}, error) {
    var err error
@@ -329,7 +350,7 @@ func (o *tUserDb) getRecord(iType tType, iId string) (interface{}, error) {
 
    aBuf, err := ioutil.ReadFile(aPath)
    if err != nil {
-      if os.IsNotExist(err) { return nil, nil }
+      if os.IsNotExist(err) { return aObj, nil }
       return nil, err
    }
 
