@@ -159,7 +159,7 @@ type tUserDb struct {
    // cache records here
    Uid map[string]tUser
    Alias map[string]string // value is Uid
-   List map[string]tList
+   List map[string]tGroup
 }
 
 type tUser struct {
@@ -173,7 +173,7 @@ type tAlias struct {
    Nat string // in whatever language
 }
 
-type tList struct {
+type tGroup struct {
    door sync.RWMutex
    Uid map[string]tMember
 }
@@ -190,11 +190,11 @@ type tType string
 const (
    eTuid   tType = "uid"
    eTalias tType = "alias"
-   eTlist  tType = "list"
+   eTgroup  tType = "list"
 )
 
 func NewUserDb(iPath string) (*tUserDb, error) {
-   for _, a := range [...]tType{ "temp", eTuid, eTalias, eTlist } {
+   for _, a := range [...]tType{ "temp", eTuid, eTalias, eTgroup } {
       err := os.MkdirAll(iPath + "/" + string(a), 0700)
       if err != nil { return nil, err }
    }
@@ -204,7 +204,7 @@ func NewUserDb(iPath string) (*tUserDb, error) {
    aDb.temp = aDb.root + "temp"
    aDb.Uid = make(map[string]tUser)
    aDb.Alias = make(map[string]string)
-   aDb.List = make(map[string]tList)
+   aDb.List = make(map[string]tGroup)
 
    return aDb, nil
 }
@@ -307,7 +307,7 @@ func (o *tUserDb) getRecord(iType tType, iId string) (interface{}, error) {
       }
       return &aLn, nil
    case "uid":  aObj = &tUser{}
-   case "list": aObj = &tList{}
+   case "list": aObj = &tGroup{}
    }
 
    aBuf, err := ioutil.ReadFile(aPath)
