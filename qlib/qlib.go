@@ -18,6 +18,8 @@ import (
 const kLoginTimeout time.Duration =  5 * time.Second
 const kQueueIdleMax time.Duration = 28 * time.Hour
 const kStoreIdIncr = 1000
+const kMsgHeaderMinLen = len(`{"op":1}`)
+const kMsgHeaderMaxLen = 1 << 8 //todo larger?
 
 var sHeaderDefs = [...]tHeader{
    eRegister: { Uid:"1", NewNode:"1", Aliases:"1"    },
@@ -29,17 +31,24 @@ var sHeaderDefs = [...]tHeader{
    eAck     : { Id:"1", Type:"1"                     },
 }
 
-var sMsgLogin, sMsgLoginTimeout, sMsgLoginFailure, sMsgLoginNodeOnline []byte
+var sMsgIncomplete, sMsgLengthBad, sMsgHeaderBad, sMsgOpDisallowed, sMsgOpDataless tMsg
+var sMsgLogin, sMsgLoginTimeout, sMsgLoginFailure, sMsgLoginNodeOnline tMsg
 
 var sNode tNodes
 var sStore tStore
 var UDb UserDatabase // set by caller
 
 func init() {
-   sMsgLogin           = PackMsg(tMsg{"op":"info", "info":"login ok"}, nil)
-   sMsgLoginTimeout    = PackMsg(tMsg{"op":"quit", "info":"login timeout"}, nil)
-   sMsgLoginFailure    = PackMsg(tMsg{"op":"quit", "info":"login failed"}, nil)
-   sMsgLoginNodeOnline = PackMsg(tMsg{"op":"quit", "info":"node already connected"}, nil)
+   sMsgIncomplete      = tMsg{"op":"quit", "info":"incomplete header"}
+   sMsgLengthBad       = tMsg{"op":"quit", "info":"invalid header length"}
+   sMsgHeaderBad       = tMsg{"op":"quit", "info":"invalid header"}
+   sMsgOpDisallowed    = tMsg{"op":"quit", "info":"disallowed op on unauthenticated link"}
+   sMsgOpDataless      = tMsg{"op":"quit", "info":"op does not support data"}
+   sMsgLogin           = tMsg{"op":"info", "info":"login ok"}
+   sMsgLoginTimeout    = tMsg{"op":"quit", "info":"login timeout"}
+   sMsgLoginFailure    = tMsg{"op":"quit", "info":"login failed"}
+   sMsgLoginNodeOnline = tMsg{"op":"quit", "info":"node already connected"}
+
    sNode.list = make(tNodeMap)
 }
 
@@ -82,36 +91,52 @@ func NewLink(iConn net.Conn) *Link {
 }
 
 func runLink(o *Link) {
+   var aQuitMsg tMsg
+   aBuf := make([]byte, kMsgHeaderMaxLen+4)
+
    o.conn.SetReadDeadline(time.Now().Add(kLoginTimeout))
-   aBuf := make([]byte, 64)
    for {
       aLen, err := o.conn.Read(aBuf)
       if err != nil {
          //todo if recoverable continue
          if err.(net.Error).Timeout() {
-            o.conn.Write(sMsgLoginTimeout)
+            aQuitMsg = sMsgLoginTimeout
+         } else {
+            fmt.Printf("%s link.runlink net error %s\n", o.uid, err.Error())
          }
-         if o.queue != nil {
-            o.queue.Unlink()
-         }
-         o.conn.Close()
          break
       }
-      aHeadEnd, err := strconv.ParseUint(string(aBuf[:4]), 16, 0)
-      if err != nil { panic(err) }
-      aHeadEnd += 4
+      if aLen < kMsgHeaderMinLen+4 {
+         aQuitMsg = sMsgIncomplete
+         break
+      }
+      aUi,_ := strconv.ParseUint(string(aBuf[:4]), 16, 0)
+      aHeadEnd := int(aUi)+4
+      if aHeadEnd-4 < kMsgHeaderMinLen || aHeadEnd > aLen {
+         aQuitMsg = sMsgLengthBad
+         break
+      }
       aHead := new(tHeader)
       err = json.Unmarshal(aBuf[4:aHeadEnd], aHead)
-      if err != nil { panic(err) }
-      if !aHead.check() {
-         fmt.Printf("%s link.runlink incorrect message header\n", o.uid)
-         continue
+      if err != nil || !aHead.check() {
+         aQuitMsg = sMsgHeaderBad
+         break
       }
       var aData []byte
-      if aLen > int(aHeadEnd) {
-         aData = aBuf[aHeadEnd:]
+      if aLen > aHeadEnd {
+         aData = aBuf[aHeadEnd:aLen]
       }
-      o.HandleMsg(aHead, aData)
+      aQuitMsg = o.HandleMsg(aHead, aData)
+      if aQuitMsg != nil { break }
+   }
+
+   if aQuitMsg != nil {
+      fmt.Printf("%s link.runlink quit %s\n", o.uid, aQuitMsg["info"].(string))
+      o.conn.Write(PackMsg(aQuitMsg, nil))
+   }
+   o.conn.Close()
+   if o.queue != nil {
+      o.queue.Unlink()
    }
 }
 
@@ -147,19 +172,26 @@ func (o *tHeader) check() bool {
    return !aFail
 }
 
-func (o *Link) HandleMsg(iHead *tHeader, iData []byte) {
+func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
    var err error
+
+   if iHead.Op != eRegister && iHead.Op != eAddNode && iHead.Op != eLogin {
+      if o.node == "" { return sMsgOpDisallowed }
+   }
+
+   if iHead.Op != ePost && iHead.Op != eListEdit && iHead.Op != ePing {
+      if iData != nil { return sMsgOpDataless }
+   }
 
    switch(iHead.Op) {
    case eLogin:
       _, err = UDb.Verify(iHead.Uid, iHead.NodeId)
       if err != nil {
-         o.conn.Write(sMsgLoginFailure)
-         return
+         return sMsgLoginFailure
       }
       aQ := QueueLink(iHead.NodeId, o.conn)
       if aQ == nil {
-         return
+         return sMsgLoginNodeOnline
       }
       o.conn.SetReadDeadline(time.Time{})
       o.uid = iHead.Uid
@@ -198,6 +230,7 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) {
    default:
       panic(fmt.Sprintf("checkHeader failure, op %d", iHead.Op))
    }
+   return nil
 }
 
 type tMsg map[string]interface{}
@@ -293,10 +326,9 @@ func QueueLink(iUid string, iConn net.Conn) *tQueue {
       }
    }
    if !atomic.CompareAndSwapInt32(&aNd.queue.hasConn, 0, 1) {
-      iConn.Write(sMsgLoginNodeOnline)
       return nil
    }
-   iConn.Write(sMsgLogin)
+   iConn.Write(PackMsg(sMsgLogin, nil))
    aNd.queue.connIn <- iConn
    return aNd.queue
 }
