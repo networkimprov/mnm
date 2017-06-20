@@ -11,8 +11,6 @@ import (
    "time"
 )
 
-var sId chan int // recycles client ids back to main()
-var sTimeout error = &tTimeoutError{}
 
 func main() {
    aDb, err := NewUserDb("./userdb")
@@ -23,19 +21,18 @@ func main() {
 
    qlib.UDb = aDb
    qlib.Init("qstore")
-   sId = make(chan int, 10)
 
    fmt.Printf("Starting Test Pass\n")
-   sId <- 111111
-   sId <- 222222
+   InitTestClient(2)
    for a := 0; true; a++ {
       aDawdle := a == 1
-      qlib.NewLink(NewTc(<-sId, aDawdle))
+      qlib.NewLink(NewTestClient(aDawdle))
    }
 }
 
 const ( _=iota; eRegister; eAddNode; eLogin; eListEdit; ePost; ePing; eAck )
 
+var sTestClientId chan int
 
 type tTestClient struct {
    id, to int // who i am, who i send to
@@ -46,9 +43,17 @@ type tTestClient struct {
    readDeadline time.Time // set by qlib
 }
 
-func NewTc(i int, iDawdle bool) *tTestClient {
+func InitTestClient(i int) {
+   sTestClientId = make(chan int, i)
+   for a:=1; a <= i; a++ {
+      sTestClientId <- 111111 * a
+   }
+}
+
+func NewTestClient(iDawdle bool) *tTestClient {
+   a := <-sTestClientId
    return &tTestClient{
-      id: i, to: i+111111,
+      id: a, to: a+111111,
       deferLogin: iDawdle,
       ack: make(chan int,10),
    }
@@ -87,7 +92,7 @@ func (o *tTestClient) Read(buf []byte) (int, error) {
          aData = fmt.Sprintf(" |msg %d|", o.count)
       }
    case <-aDlC:
-      return 0, &net.OpError{Op:"read", Err:sTimeout}
+      return 0, &net.OpError{Op:"read", Err:&tTimeoutError{}}
    }
 
    aMsg := qlib.PackMsg(aHead, []byte(aData))
@@ -122,7 +127,7 @@ func (o *tTestClient) SetReadDeadline(i time.Time) error {
 
 func (o *tTestClient) Close() error {
    o.closed = true;
-   time.AfterFunc(10*time.Millisecond, func(){ sId <- o.id })
+   time.AfterFunc(10*time.Millisecond, func(){ sTestClientId <- o.id })
    return nil
 }
 
