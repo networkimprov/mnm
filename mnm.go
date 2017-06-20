@@ -56,7 +56,7 @@ func NewTc(i int, iDawdle bool) *tTestClient {
 
 func (o *tTestClient) Read(buf []byte) (int, error) {
    if o.count % 10 == 9 {
-      return 0, &net.OpError{Op:"log out"}
+      return 0, &net.OpError{Op:"read", Err:tTestClientError("log out")}
    }
 
    var aDlC <-chan time.Time
@@ -87,7 +87,7 @@ func (o *tTestClient) Read(buf []byte) (int, error) {
          aData = fmt.Sprintf(" |msg %d|", o.count)
       }
    case <-aDlC:
-      return 0, &net.OpError{Op:"timeout",Err:sTimeout}
+      return 0, &net.OpError{Op:"read", Err:sTimeout}
    }
 
    aMsg := qlib.PackMsg(aHead, []byte(aData))
@@ -98,7 +98,7 @@ func (o *tTestClient) Read(buf []byte) (int, error) {
 func (o *tTestClient) Write(buf []byte) (int, error) {
    if o.closed {
       fmt.Printf("%d testclient.write was closed\n", o.id)
-      return 0, &net.OpError{Op:"closed"}
+      return 0, &net.OpError{Op:"write", Err:tTestClientError("closed")}
    }
 
    aTmr := time.NewTimer(2 * time.Second)
@@ -108,7 +108,7 @@ func (o *tTestClient) Write(buf []byte) (int, error) {
       aTmr.Stop()
    case <-aTmr.C:
       fmt.Printf("%d testclient.write timed out on ack\n", o.id)
-      return 0, &net.OpError{Op:"noack"}
+      return 0, &net.OpError{Op:"write", Err:tTestClientError("noack")}
    }
 
    fmt.Printf("%d testclient.write got %s\n", o.id, string(buf))
@@ -136,6 +136,9 @@ type tTimeoutError struct{}
 func (o *tTimeoutError) Error() string   { return "i/o timeout" }
 func (o *tTimeoutError) Timeout() bool   { return true }
 func (o *tTimeoutError) Temporary() bool { return true }
+
+type tTestClientError string
+func (o tTestClientError) Error() string { return string(o) }
 
 type tMsg map[string]interface{}
 
