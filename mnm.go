@@ -4,11 +4,9 @@ import (
    "fmt"
    "io/ioutil"
    "encoding/json"
-   "net"
    "os"
    "qlib"
    "sync"
-   "time"
 )
 
 
@@ -23,13 +21,14 @@ func main() {
    qlib.Init("qstore")
 
    fmt.Printf("Starting Test Pass\n")
-   InitTestClient(2)
+   qlib.InitTestClient(2)
    for a := 0; true; a++ {
       aDawdle := a == 1
-      qlib.NewLink(NewTestClient(aDawdle))
+      qlib.NewLink(qlib.NewTestClient(aDawdle))
    }
 }
 
+/* moved to qlib/testclient.go
 const ( _=iota; eRegister; eAddNode; eLogin; eListEdit; ePost; ePing; eAck )
 
 var sTestClientId chan int
@@ -146,6 +145,7 @@ type tTestClientError string
 func (o tTestClientError) Error() string { return string(o) }
 
 type tMsg map[string]interface{}
+*/
 
 
 //: these are instructions/guidance comments
