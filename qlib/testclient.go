@@ -2,7 +2,9 @@ package qlib
 
 import (
    "fmt"
+   "encoding/json"
    "net"
+   "strconv"
    "time"
 )
 
@@ -13,7 +15,7 @@ type tTestClient struct {
    id, to int // who i am, who i send to
    count int // msg number
    deferLogin bool // test login timeout feature
-   ack chan int // writer tells reader to issue ack to qlib
+   ack chan string // writer tells reader to issue ack to qlib
    closed bool // when about to shut down
    readDeadline time.Time // set by qlib
 }
@@ -30,7 +32,7 @@ func NewTestClient(iDawdle bool) *tTestClient {
    return &tTestClient{
       id: a, to: a+111111,
       deferLogin: iDawdle,
-      ack: make(chan int,10),
+      ack: make(chan string, 10),
    }
 }
 
@@ -54,8 +56,8 @@ func (o *tTestClient) Read(buf []byte) (int, error) {
    var aData string
 
    select {
-   case <-o.ack:
-      aHead = tMsg{"Op":eAck, "Id":"n", "Type":"n"}
+   case aId := <-o.ack:
+      aHead = tMsg{"Op":eAck, "Id":aId, "Type":"n"}
    case <-aTmr.C:
       o.count++
       if o.deferLogin {
@@ -75,24 +77,30 @@ func (o *tTestClient) Read(buf []byte) (int, error) {
    return copy(buf, aMsg), nil
 }
 
-func (o *tTestClient) Write(buf []byte) (int, error) {
+func (o *tTestClient) Write(iBuf []byte) (int, error) {
    if o.closed {
       fmt.Printf("%d testclient.write was closed\n", o.id)
       return 0, &net.OpError{Op:"write", Err:tTestClientError("closed")}
    }
+   fmt.Printf("%d testclient.write got %s\n", o.id, string(iBuf))
 
-   aTmr := time.NewTimer(2 * time.Second)
+   aHeadLen,_ := strconv.ParseInt(string(iBuf[:4]), 16, 0)
+   aHead := &tClientHead{}
+   err := json.Unmarshal(iBuf[4:aHeadLen+4], aHead)
+   if err != nil { panic(err) }
 
-   select {
-   case o.ack <- 1:
-      aTmr.Stop()
-   case <-aTmr.C:
-      fmt.Printf("%d testclient.write timed out on ack\n", o.id)
-      return 0, &net.OpError{Op:"write", Err:tTestClientError("noack")}
+   if aHead.Op == "delivery" {
+      aTmr := time.NewTimer(2 * time.Second)
+      select {
+      case o.ack <- aHead.Id:
+         aTmr.Stop()
+      case <-aTmr.C:
+         fmt.Printf("%d testclient.write timed out on ack\n", o.id)
+         return 0, &net.OpError{Op:"write", Err:tTestClientError("noack")}
+      }
    }
 
-   fmt.Printf("%d testclient.write got %s\n", o.id, string(buf))
-   return len(buf), nil
+   return len(iBuf), nil
 }
 
 func (o *tTestClient) SetReadDeadline(i time.Time) error {
@@ -111,6 +119,7 @@ func (o *tTestClient) RemoteAddr() net.Addr { return &net.UnixAddr{"e", "a"} }
 func (o *tTestClient) SetDeadline(time.Time) error { return nil }
 func (o *tTestClient) SetWriteDeadline(time.Time) error { return nil }
 
+type tClientHead struct { Op, Info, Id, From string }
 
 type tTimeoutError struct{}
 func (o *tTimeoutError) Error() string   { return "i/o timeout" }

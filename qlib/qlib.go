@@ -21,6 +21,8 @@ const kStoreIdIncr = 1000
 const kMsgHeaderMinLen = len(`{"op":1}`)
 const kMsgHeaderMaxLen = 1 << 8 //todo larger?
 
+const ( _=iota; eRegister; eAddNode; eLogin; eListEdit; ePost; ePing; eAck; eOpEnd )
+
 var sHeaderDefs = [...]tHeader{
    eRegister: { Uid:"1", NewNode:"1", Aliases:"1"    },
    eAddNode : { Uid:"1", NodeId:"1", NewNode:"1"     },
@@ -29,6 +31,15 @@ var sHeaderDefs = [...]tHeader{
    ePost    : { Id:"1", For:[]string{"1"}            },
    ePing    : { Id:"1", Alias:"1"                    },
    eAck     : { Id:"1", Type:"1"                     },
+}
+
+var sResponseOps = [...]string{
+   eRegister: "registered",
+   eAddNode:  "nodeAdded",
+   eListEdit: "listEdited",
+   ePost:     "delivery",
+   ePing:     "pong",
+   eOpEnd:    "",
 }
 
 var sMsgIncomplete, sMsgLengthBad, sMsgHeaderBad, sMsgOpDisallowed, sMsgOpDataless tMsg
@@ -153,8 +164,6 @@ type tHeader struct {
    For []string
 }
 
-const ( _=iota; eRegister; eAddNode; eLogin; eListEdit; ePost; ePing; eAck; eOpEnd )
-
 func (o *tHeader) check() bool {
    if o.Op == 0 || o.Op >= eOpEnd { return false }
    aDef := &sHeaderDefs[o.Op]
@@ -200,7 +209,8 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
       fmt.Printf("%s link.handlemsg login user %s\n", o.uid, aQ.uid)
    case ePost:
       aId := sStore.MakeId()
-      err = sStore.PutFile(aId, iData)
+      aBuf := PackMsg(tMsg{"Op":sResponseOps[ePost], "Id":aId, "From":o.uid}, iData)
+      err = sStore.PutFile(aId, aBuf)
       if err != nil { panic(err) }
       var aRecips []string
       for _, aTo := range iHead.For {
@@ -222,7 +232,7 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
    case eAck:
       aTmr := time.NewTimer(2 * time.Second)
       select {
-      case o.queue.ack <- "bing":
+      case o.queue.ack <- iHead.Id:
          aTmr.Stop()
       case <-aTmr.C:
          fmt.Printf("%s link.handlemsg timed out waiting on ack\n", o.uid)
@@ -348,8 +358,12 @@ func runQueue(o *tQueue) {
       if err == nil {
          aTimeout := time.NewTimer(5 * time.Second)
          select {
-         case <-o.ack:
+         case aAckId := <-o.ack:
             aTimeout.Stop()
+            if aAckId != aId {
+               fmt.Printf("%s queue.runqueue got ack for %s, expected %s\n", aAckId, aId)
+               break
+            }
             sStore.RmLink(o.uid, aId)
             aId = <-o.out
             aConn = <-o.connOut
