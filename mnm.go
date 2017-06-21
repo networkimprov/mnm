@@ -16,6 +16,11 @@ func main() {
    aDb.user["u111111"] = &tUser{Nodes: map[string]int{"111111":1}}
    aDb.user["u222222"] = &tUser{Nodes: map[string]int{"222222":1}}
    aDb.user["u333333"] = &tUser{Nodes: map[string]int{"333333":1}}
+   aDb.group["g1"] = &tGroup{Uid: map[string]tMember{
+      "u111111": tMember{Alias: "111"},
+      "u222222": tMember{Alias: "222"},
+      "u333333": tMember{Alias: "333"},
+   }}
 
    qlib.UDb = aDb
    qlib.Init("qstore")
@@ -304,7 +309,10 @@ func (o *tUserDb) GroupDrop(iGid, iBy, iUid string) error {
 
 func (o *tUserDb) GroupLookup(iGid, iBy string) (aUids []string, err error) {
    //: return uids if iBy in iGid
-   return []string{}, nil
+   for a,_ := range o.group["g1"].Uid {
+      aUids = append(aUids, a)
+   }
+   return aUids, nil
 }
 
 func (o *tUserDb) fetchUser(iUid string) *tUser {
