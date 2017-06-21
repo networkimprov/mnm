@@ -42,26 +42,21 @@ var sResponseOps = [...]string{
    eOpEnd:    "",
 }
 
-var sMsgIncomplete, sMsgLengthBad, sMsgHeaderBad, sMsgOpDisallowed, sMsgOpDataless tMsg
-var sMsgLogin, sMsgLoginTimeout, sMsgLoginFailure, sMsgLoginNodeOnline tMsg
-
-var sNode tNodes
-var sStore tStore
-var UDb UserDatabase // set by caller
-
-func init() {
+var (
    sMsgIncomplete      = tMsg{"op":"quit", "info":"incomplete header"}
    sMsgLengthBad       = tMsg{"op":"quit", "info":"invalid header length"}
    sMsgHeaderBad       = tMsg{"op":"quit", "info":"invalid header"}
    sMsgOpDisallowed    = tMsg{"op":"quit", "info":"disallowed op on unauthenticated link"}
    sMsgOpDataless      = tMsg{"op":"quit", "info":"op does not support data"}
-   sMsgLogin           = tMsg{"op":"info", "info":"login ok"}
    sMsgLoginTimeout    = tMsg{"op":"quit", "info":"login timeout"}
    sMsgLoginFailure    = tMsg{"op":"quit", "info":"login failed"}
    sMsgLoginNodeOnline = tMsg{"op":"quit", "info":"node already connected"}
+   sMsgLogin           = tMsg{"op":"info", "info":"login ok"}
+)
 
-   sNode.list = make(tNodeMap)
-}
+var sNode = tNodes{list: tNodeMap{}}
+var sStore = tStore{}
+var UDb UserDatabase // set by caller
 
 
 type UserDatabase interface {
