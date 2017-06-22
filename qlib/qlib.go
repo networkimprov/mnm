@@ -23,12 +23,14 @@ const kMsgHeaderMaxLen = 1 << 8 //todo larger?
 
 const ( _=iota; eRegister; eAddNode; eLogin; eListEdit; ePost; ePing; eAck; eOpEnd )
 
+const ( eForNode =iota; eForUser; eForGroupAll; eForGroupExcl )
+
 var sHeaderDefs = [...]tHeader{
    eRegister: { Uid:"1", NewNode:"1", Aliases:"1"    },
    eAddNode : { Uid:"1", NodeId:"1", NewNode:"1"     },
    eLogin   : { Uid:"1", NodeId:"1"                  },
    eListEdit: { Id:"1", To:"1", Type:"1", Member:"1" },
-   ePost    : { Id:"1", For:[]string{"1"}            },
+   ePost    : { Id:"1", For:[]tHeaderFor{{}}         },
    ePing    : { Id:"1", Alias:"1"                    },
    eAck     : { Id:"1", Type:"1"                     },
 }
@@ -156,8 +158,10 @@ type tHeader struct {
    Type string
    Member string
    Alias string
-   For []string
+   For []tHeaderFor
 }
+
+type tHeaderFor struct { Id string; Type int8 }
 
 func (o *tHeader) check() bool {
    if o.Op == 0 || o.Op >= eOpEnd { return false }
@@ -209,9 +213,18 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
       if err != nil { panic(err) }
       var aRecips []string
       for _, aTo := range iHead.For {
-         aNodes, err := UDb.GetNodes(aTo)
-         if err != nil { panic(err) }
-         aRecips = append(aRecips, aNodes...)
+         var aUids []string
+         if aTo.Type >= eForGroupAll {
+            aUids, err = UDb.GroupLookup(aTo.Id, o.uid)
+            if err != nil { panic(err) }
+         } else {
+            aUids = []string{aTo.Id}
+         }
+         for _, aUid := range aUids {
+            aNodes, err := UDb.GetNodes(aUid)
+            if err != nil { panic(err) }
+            aRecips = append(aRecips, aNodes...)
+         }
       }
       for _, aTo := range aRecips {
          aNd := GetNode(aTo)

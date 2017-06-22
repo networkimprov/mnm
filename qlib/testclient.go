@@ -65,7 +65,9 @@ func (o *tTestClient) Read(buf []byte) (int, error) {
       } else if o.count == 1 {
          aHead = tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(o.id), "NodeId":fmt.Sprint(o.id)}
       } else {
-         aHead = tMsg{"Op":ePost, "Id":"n", "For":[]string{"u"+fmt.Sprint(o.to)}}
+         aFor := tHeaderFor{Id:"u"+fmt.Sprint(o.to), Type:eForUser}
+         if o.count % 10 == 9 { aFor = tHeaderFor{Id:"g1", Type:eForGroupAll} }
+         aHead = tMsg{"Op":ePost, "Id":"n", "For":[]tHeaderFor{aFor}}
          aData = fmt.Sprintf(" |msg %d|", o.count)
       }
    case <-aDlC:
