@@ -37,7 +37,7 @@ func NewTestClient(iDawdle bool) *tTestClient {
 }
 
 func (o *tTestClient) Read(buf []byte) (int, error) {
-   if o.count % 10 == 9 {
+   if o.count % 20 == 19 {
       return 0, &net.OpError{Op:"read", Err:tTestClientError("log out")}
    }
 
@@ -66,7 +66,8 @@ func (o *tTestClient) Read(buf []byte) (int, error) {
          aHead = tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(o.id), "NodeId":fmt.Sprint(o.id)}
       } else {
          aFor := tHeaderFor{Id:"u"+fmt.Sprint(o.to), Type:eForUser}
-         if o.count % 10 == 9 { aFor = tHeaderFor{Id:"g1", Type:eForGroupAll} }
+         if o.count % 20 >= 18 { aFor = tHeaderFor{Id:"g1", Type:eForGroupAll} }
+         if o.count % 20 == 19 { aFor.Type = eForGroupExcl }
          aHead = tMsg{"Op":ePost, "Id":"n", "For":[]tHeaderFor{aFor}}
          aData = fmt.Sprintf(" |msg %d|", o.count)
       }

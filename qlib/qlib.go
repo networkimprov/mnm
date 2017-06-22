@@ -211,7 +211,7 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
       aBuf := PackMsg(tMsg{"Op":sResponseOps[ePost], "Id":aId, "From":o.uid}, iData)
       err = sStore.PutFile(aId, aBuf)
       if err != nil { panic(err) }
-      var aRecips []string
+      aRecips := make(map[string]bool, len(iHead.For)) //todo x2 or more?
       for _, aTo := range iHead.For {
          var aUids []string
          if aTo.Type >= eForGroupAll {
@@ -221,12 +221,17 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
             aUids = []string{aTo.Id}
          }
          for _, aUid := range aUids {
+            if aTo.Type == eForGroupExcl && aUid == o.uid {
+               continue
+            }
             aNodes, err := UDb.GetNodes(aUid)
             if err != nil { panic(err) }
-            aRecips = append(aRecips, aNodes...)
+            for _, aNd := range aNodes {
+               aRecips[aNd] = true
+            }
          }
       }
-      for _, aTo := range aRecips {
+      for aTo,_ := range aRecips {
          aNd := GetNode(aTo)
          aNd.dir.RLock()
          sStore.PutLink(aId, aTo, aId)
