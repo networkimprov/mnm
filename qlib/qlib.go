@@ -16,6 +16,7 @@ import (
 )
 
 const kLoginTimeout time.Duration =  5 * time.Second
+const kQueueAckTimeout time.Duration = 3 * time.Second
 const kQueueIdleMax time.Duration = 28 * time.Hour
 const kStoreIdIncr = 1000
 const kMsgHeaderMinLen = len(`{"op":1}`)
@@ -369,7 +370,7 @@ func runQueue(o *tQueue) {
       if err != nil { panic(err) }
       _, err = aConn.Write(aMsg)
       if err == nil {
-         aTimeout := time.NewTimer(5 * time.Second)
+         aTimeout := time.NewTimer(kQueueAckTimeout)
          select {
          case aAckId := <-o.ack:
             aTimeout.Stop()
