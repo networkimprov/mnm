@@ -242,6 +242,7 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
          }
          aNd.dir.RUnlock()
       }
+      o.conn.Write(PackMsg(tMsg{"op:":"ack", "id":iHead.Id, "type":"ok"}, nil))
       sStore.RmFile(aId)
    case eAck:
       aTmr := time.NewTimer(2 * time.Second)

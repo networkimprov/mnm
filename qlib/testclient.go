@@ -68,7 +68,7 @@ func (o *tTestClient) Read(buf []byte) (int, error) {
          aFor := tHeaderFor{Id:"u"+fmt.Sprint(o.to), Type:eForUser}
          if o.count % 20 >= 18 { aFor = tHeaderFor{Id:"g1", Type:eForGroupAll} }
          if o.count % 20 == 19 { aFor.Type = eForGroupExcl }
-         aHead = tMsg{"Op":ePost, "Id":"n", "For":[]tHeaderFor{aFor}}
+         aHead = tMsg{"Op":ePost, "Id":fmt.Sprint(o.count), "For":[]tHeaderFor{aFor}}
          aData = fmt.Sprintf(" |msg %d|", o.count)
       }
    case <-aDlC:
