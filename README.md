@@ -17,7 +17,7 @@ mnm does not provide:
 - Message encryption; clients are responsible for encryption before/after transmission
 
 mnm may provide:
-- a gateway to whitelisted SMTP sites
+- a gateway to whitelisted mnm & SMTP sites
 
 mnm shall be accessible via several network frontends:
 - TCP server
@@ -38,24 +38,44 @@ http://github.com/networkimprov/websocket.MQ
 
 - qlib/qlib.go: package with simple API to the reciever & sender threads.
 - qlib/testclient.go: in-process test client, invoked from main().
-- mnm.go: main(), frontends, temporary home of tUserDb.
+- mnm.go: main(), frontends (in progress), temporary home of tUserDb.
+- vendor/qlib: symlink to qlib/ to simplify build
+- After build & run:  
+mnm: the app!  
+userdb/: user & group data  
+qstore/: queued messages awaiting delivery
 
 ### Protocol
 
-0. Headers: 001f{ "op":X ... <,"dataLen":N> }N bytes of 8-bit data  
-Four hex digits give the size of the following JSON metadata object,
+0. Headers precede every message  
+`001f{ ... <,"dataLen":uint> }dataLen 8-bit bytes of data`  
+Four hex digits give the size of the following JSON metadata,
 which may be followed by arbitrary format 8-bit data.
 Headers shall be encrypted with public keys for transmission.
-1. Register
-2. AddNode
-3. Login: {"op":3, "uid":string, "node":string}   
-Response {"op":"info|quit" "info":string} (also given on login timeout)
-4. GroupEdit
-5. Post: {"op":5, "id":string, "for":[{"id":string, "type":int}, ...]}  
+
+1. Register creates a user and client queue  
+`in progress`
+
+2. AddNode creates a client queue for a registered user  
+`in progress`
+
+3. Login connects a client to its queue  
+`{"op":3, "uid":string, "node":string}`   
+Response `{"op":"info|quit" "info":string}` (also given on login timeout)
+
+4. GroupEdit creates or updates a group  
+`in progress`
+
+5. Post sends a message to users and/or groups  
+`{"op":5, "id":string, "for":[{"id":string, "type":uint}, ...]}`  
 .for[i].type: 0) single-node, 1) user_id, 2) group_id (include self) 3) group_id (exclude self)  
-Response {"op":"ack", "id":string, "ok":"ok|error" <,"error":string>}
-6. Ping
-7. Ack: {"op":7, "id":string}
+Response `{"op":"ack", "id":string, "ok":"ok|error" <,"error":string>}`
+
+6. Ping sends a short message via a user's alias  
+`in progress`
+
+7. Ack acknowledges receipt of a message  
+`{"op":7, "id":string}`
 
 ### Log
 
