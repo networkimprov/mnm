@@ -208,11 +208,11 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
       o.queue = aQ
       fmt.Printf("%s link.handlemsg login user %s\n", o.uid, aQ.uid)
    case ePost:
-      aId := sStore.MakeId()
-      aBuf := PackMsg(tMsg{"Op":sResponseOps[ePost], "Id":aId, "From":o.uid}, iData)
-      err = sStore.PutFile(aId, aBuf)
+      aMsgId := sStore.MakeId()
+      aBuf := PackMsg(tMsg{"Op":sResponseOps[ePost], "Id":aMsgId, "From":o.uid}, iData)
+      err = sStore.PutFile(aMsgId, aBuf)
       if err != nil { panic(err) }
-      aRecips := make(map[string]bool, len(iHead.For)) //todo x2 or more?
+      aForNodes := make(map[string]bool, len(iHead.For)) //todo x2 or more?
       aForMyUid := false
       iHead.For = append(iHead.For, tHeaderFor{Id:o.uid, Type:eForSelf})
       for _, aTo := range iHead.For {
@@ -231,26 +231,26 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
             aNodes, err := UDb.GetNodes(aUid)
             if err != nil { panic(err) }
             for _, aNd := range aNodes {
-               aRecips[aNd] = true
+               aForNodes[aNd] = true
             }
             aForMyUid = aForMyUid || aUid == o.uid && aTo.Type != eForSelf
          }
       }
-      for aTo,_ := range aRecips {
-         if aTo == o.node && !aForMyUid {
+      for aNodeId,_ := range aForNodes {
+         if aNodeId == o.node && !aForMyUid {
             continue
          }
-         aNd := GetNode(aTo)
+         aNd := GetNode(aNodeId)
          aNd.dir.RLock()
-         sStore.PutLink(aId, aTo, aId)
-         sStore.SyncDirs(aTo)
+         sStore.PutLink(aMsgId, aNodeId, aMsgId)
+         sStore.SyncDirs(aNodeId)
          if aNd.queue != nil {
-            aNd.queue.in <- aId
+            aNd.queue.in <- aMsgId
          }
          aNd.dir.RUnlock()
       }
       o.conn.Write(PackMsg(tMsg{"op:":"ack", "id":iHead.Id, "type":"ok"}, nil))
-      sStore.RmFile(aId)
+      sStore.RmFile(aMsgId)
    case eAck:
       aTmr := time.NewTimer(2 * time.Second)
       select {
@@ -371,10 +371,10 @@ func (o *tQueue) Unlink() {
 }
 
 func runQueue(o *tQueue) {
-   aId := <-o.out
+   aMsgId := <-o.out
    aConn := <-o.connOut
    for {
-      aMsg, err := sStore.GetFile(o.uid, aId)
+      aMsg, err := sStore.GetFile(o.uid, aMsgId)
       if err != nil { panic(err) }
       _, err = aConn.Write(aMsg)
       if err == nil {
@@ -382,12 +382,12 @@ func runQueue(o *tQueue) {
          select {
          case aAckId := <-o.ack:
             aTimeout.Stop()
-            if aAckId != aId {
-               fmt.Printf("%s queue.runqueue got ack for %s, expected %s\n", aAckId, aId)
+            if aAckId != aMsgId {
+               fmt.Printf("%s queue.runqueue got ack for %s, expected %s\n", aAckId, aMsgId)
                break
             }
-            sStore.RmLink(o.uid, aId)
-            aId = <-o.out
+            sStore.RmLink(o.uid, aMsgId)
+            aMsgId = <-o.out
             aConn = <-o.connOut
          case <-aTimeout.C:
             fmt.Printf("%s queue.runqueue timed out awaiting ack\n", o.uid)
