@@ -24,7 +24,7 @@ const kMsgHeaderMaxLen = 1 << 8 //todo larger?
 
 const ( _=iota; eRegister; eAddNode; eLogin; eListEdit; ePost; ePing; eAck; eOpEnd )
 
-const ( eForNode =iota; eForUser; eForGroupAll; eForGroupExcl )
+const ( _=iota; eForUser; eForGroupAll; eForGroupExcl )
 
 var sHeaderDefs = [...]tHeader{
    eRegister: { Uid:"1", NewNode:"1", Aliases:"1"    },
@@ -215,10 +215,11 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
       aRecips := make(map[string]bool, len(iHead.For)) //todo x2 or more?
       for _, aTo := range iHead.For {
          var aUids []string
-         if aTo.Type >= eForGroupAll {
+         switch (aTo.Type) {
+         case eForGroupAll, eForGroupExcl:
             aUids, err = UDb.GroupLookup(aTo.Id, o.uid)
             if err != nil { panic(err) }
-         } else {
+         default:
             aUids = []string{aTo.Id}
          }
          for _, aUid := range aUids {
