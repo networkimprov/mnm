@@ -24,7 +24,7 @@ const kMsgHeaderMaxLen = 1 << 8 //todo larger?
 
 const ( _=iota; eRegister; eAddNode; eLogin; eListEdit; ePost; ePing; eAck; eOpEnd )
 
-const ( _=iota; eForUser; eForGroupAll; eForGroupExcl )
+const ( _=iota; eForUser; eForGroupAll; eForGroupExcl; eForSelf )
 
 var sHeaderDefs = [...]tHeader{
    eRegister: { Uid:"1", NewNode:"1", Aliases:"1"    },
@@ -213,6 +213,8 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
       err = sStore.PutFile(aId, aBuf)
       if err != nil { panic(err) }
       aRecips := make(map[string]bool, len(iHead.For)) //todo x2 or more?
+      aForMyUid := false
+      iHead.For = append(iHead.For, tHeaderFor{Id:o.uid, Type:eForSelf})
       for _, aTo := range iHead.For {
          var aUids []string
          switch (aTo.Type) {
@@ -231,9 +233,13 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
             for _, aNd := range aNodes {
                aRecips[aNd] = true
             }
+            aForMyUid = aForMyUid || aUid == o.uid && aTo.Type != eForSelf
          }
       }
       for aTo,_ := range aRecips {
+         if aTo == o.node && !aForMyUid {
+            continue
+         }
          aNd := GetNode(aTo)
          aNd.dir.RLock()
          sStore.PutLink(aId, aTo, aId)
