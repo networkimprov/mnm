@@ -322,8 +322,8 @@ func GetNode(iUid string) *tNode {
 
 type tQueue struct {
    uid string
-   connIn chan net.Conn // Link updates client ref here
-   connOut chan net.Conn // runQueue receives client ref here
+   conn net.Conn // client ref
+   connDoor sync.Mutex // control access to conn
    ack chan string // forwards acks from client
    buf []string // elastic channel buffer
    in chan string // elastic channel input
@@ -342,8 +342,7 @@ func QueueLink(iUid string, iConn net.Conn) *tQueue {
          aNd.queue = new(tQueue)
          aQ := aNd.queue
          aQ.uid = iUid
-         aQ.connIn = make(chan net.Conn)
-         aQ.connOut = make(chan net.Conn)
+         aQ.connDoor.Lock()
          aQ.ack = make(chan string, 10)
          aQ.in = make(chan string)
          aQ.out = make(chan string)
@@ -352,7 +351,6 @@ func QueueLink(iUid string, iConn net.Conn) *tQueue {
          if err != nil { panic(err) }
          aNd.dir.Unlock()
          fmt.Printf(iUid+" newqueue create queue\n")
-         go runConnChan(aQ)
          go runElasticChan(aQ)
          go runQueue(aQ)
       }
@@ -361,18 +359,27 @@ func QueueLink(iUid string, iConn net.Conn) *tQueue {
       return nil
    }
    iConn.Write(PackMsg(sMsgLogin, nil))
-   aNd.queue.connIn <- iConn
+   aNd.queue.conn = iConn
+   aNd.queue.connDoor.Unlock() // unblocks waitForConn
    return aNd.queue
 }
 
 func (o *tQueue) Unlink() {
-   o.connIn <- nil
+   o.connDoor.Lock() // blocks waitForConn
+   o.conn = nil
    o.hasConn = 0
+}
+
+func (o *tQueue) waitForConn() net.Conn {
+   o.connDoor.Lock() // waits if o.conn nil
+   aConn := o.conn
+   o.connDoor.Unlock()
+   return aConn
 }
 
 func runQueue(o *tQueue) {
    aMsgId := <-o.out
-   aConn := <-o.connOut
+   aConn := o.waitForConn()
    for {
       aMsg, err := sStore.GetFile(o.uid, aMsgId)
       if err != nil { panic(err) }
@@ -388,35 +395,17 @@ func runQueue(o *tQueue) {
             }
             sStore.RmLink(o.uid, aMsgId)
             aMsgId = <-o.out
-            aConn = <-o.connOut
+            aConn = o.waitForConn()
          case <-aTimeout.C:
             fmt.Printf("%s queue.runqueue timed out awaiting ack\n", o.uid)
          }
       } else if false { //todo transient
          time.Sleep(10 * time.Millisecond)
       } else {
-         aConn = <-o.connOut
+         aConn = o.waitForConn()
          fmt.Printf("%s runqueue resumed\n", o.uid)
       }
    }
-}
-
-func runConnChan(o *tQueue) {
-   var aConn net.Conn
-   var ok bool
-   for {
-      for aConn == nil {
-         aConn, ok = <-o.connIn
-         if !ok { goto closed }
-      }
-      select {
-         case aConn, ok = <-o.connIn:
-            if !ok { goto closed }
-         case o.connOut <- aConn:
-      }
-   }
-closed:
-   close(o.connOut)
 }
 
 func runElasticChan(o *tQueue) {
