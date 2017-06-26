@@ -244,76 +244,108 @@ func (o *tUserDb) Test() error {
 }
 
 //: below is the public api
+//: if same parameters are retried after success, ie data already exists,
+//:   function should do nothing but return success
 
-func (o *tUserDb) AddUser(iUid, iNewNode string, iAliases []string) (aAliases []string, err error) {
-   //: add user if iUid not in db
-   return []string{}, nil
+func (o *tUserDb) AddUser(iUid, iNewNode string) (aQid string, err error) {
+   //: add user
+   //: iUid not in o.user, or already has iNewNode
+   return "", nil
 }
 
-func (o *tUserDb) SetAliases(iUid, iNode string, iAliases []string) (aAliases []string, err error) {
-   //: replace aliases if iUid in db and has iNode, and iAliases elements are unique
-   return []string{}, nil
+func (o *tUserDb) AddNode(iUid, iNode, iNewNode string) (aQid string, err error) {
+   //: add node
+   //: iUid has iNode
+   //: iUid may already have iNewNode
+   return "", nil
 }
 
-func (o *tUserDb) AddNode(iUid, iNode, iNewNode string) (aNodeRef int, err error) {
-   //: add iNewNode if iUid in db and has iNode
-   return 0, nil
+func (o *tUserDb) DropNode(iUid, iNode string) (aQid string, err error) {
+   //: mark iNode defunct
+   //: iUid has iNode
+   return "", nil
 }
 
-func (o *tUserDb) DropNode(iUid, iNode string) error {
-   //: delete iNode if iUid in db and has iNode
+func (o *tUserDb) AddAlias(iUid, iNode, iNat, iEn string) error {
+   //: add aliases to iUid and o.alias
+   //: iUid has iNode
+   //: iNat != iEn, iNat or iEn != ""
    return nil
 }
 
-//func (o *tUserDb) DropUser(iUid string) error {
-//   return nil
-//}
-
-func (o *tUserDb) Verify(iUid, iNode string) (aNodeRef int, err error) {
-   //: return noderef if iUid in db and has iNode
-   // trivial implementation for qlib testing
-   if o.user[iUid] != nil && o.user[iUid].Nodes[iNode] != 0 {
-      return 1, nil
-   }
-   return 0, tUserDbErr("no such user/node")
+func (o *tUserDb) DropAlias(iUid, iNode, iAlias string) error {
+   //: mark alias defunct in o.alias
+   //: iUid has iNode
+   //: iAlias for iUid
+   return nil
 }
 
-func (o *tUserDb) GetNodes(iUid string) (aNodes []string, err error) {
-   //: return noderefs if iUid in db
+//func (o *tUserDb) DropUser(iUid string) error { return nil }
+
+func (o *tUserDb) Verify(iUid, iNode string) (aQid string, err error) {
+   //: return Qid of node
+   //: iUid has iNode
+   // trivial implementation for qlib testing
+   if o.user[iUid] != nil && o.user[iUid].Nodes[iNode] != 0 {
+      return "q"+iNode, nil
+   }
+   return "", tUserDbErr("no such user/node")
+}
+
+func (o *tUserDb) GetNodes(iUid string) (aQids []string, err error) {
+   //: return Qids for iUid
    // trivial implementation for qlib testing
    for aN,_ := range o.user[iUid].Nodes {
-      aNodes = append(aNodes, aN)
+      aQids = append(aQids, aN)
    }
-   return aNodes, nil
+   return aQids, nil
 }
 
 func (o *tUserDb) Lookup(iAlias string) (aUid string, err error) {
-   //: return uid if iAlias in db
+   //: return uid for iAlias
    return "", nil
 }
 
-func (o *tUserDb) GroupInvite(iGid, iBy, iAlias string) error {
-   //: if iAlias in db, and iBy in db & iGid (or make iGid and add iBy), store iAlias
+func (o *tUserDb) GroupInvite(iGid, iAlias, iByAlias, iByUid string) error {
+   //: add member to group, possibly create group
+   //: iAlias exists
+   //: iGid exists, iByUid in group, iByAlias ignored
+   //: iGid !exists, make iGid and add iByUid with iByAlias
+   //: iByAlias for iByUid
    return nil
 }
 
-func (o *tUserDb) GroupJoin(iGid, iAlias, iUid string) (aAlias string, err error) {
-   //: set joined and return stored alias if iGid in db and iUid in iGid, store iAlias if != ""
-   return "", nil
-}
-
-func (o *tUserDb) GroupDrop(iGid, iBy, iUid string) error {
-   //: remove iUid from iGid if iBy in iGid
+func (o *tUserDb) GroupJoin(iGid, iUid, iNewAlias string) error {
+   //: set joined status for member
+   //: iUid in group
+   //: iNewAlias optional for iUid
    return nil
 }
 
-func (o *tUserDb) GroupLookup(iGid, iBy string) (aUids []string, err error) {
-   //: return uids if iBy in iGid
+func (o *tUserDb) GroupAlias(iGid, iUid, iNewAlias string) error {
+   //: update member alias
+   //: iUid in group
+   //: iNewAlias for iUid
+   return nil
+}
+
+func (o *tUserDb) GroupDrop(iGid, iUid, iByUid string) error {
+   //: change member status of member with iUid
+   //: iUid in group, iByUid same or in group
+   //: iUid == iByUid, status=invited
+   //: iUid != iByUid, if iUid status==joined, status=barred else delete member
+   return nil
+}
+
+func (o *tUserDb) GroupLookup(iGid, iByUid string) (aUids []string, err error) {
+   //: return uids in iGid
+   //: iByUid is member
    for a,_ := range o.group["g1"].Uid {
       aUids = append(aUids, a)
    }
    return aUids, nil
 }
+
 
 func (o *tUserDb) fetchUser(iUid string) *tUser {
    o.userDoor.RLock() // read-lock user map
