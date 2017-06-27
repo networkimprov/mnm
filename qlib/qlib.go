@@ -67,23 +67,25 @@ type UserDatabase interface {
    //   a set of Uids, one per user
    //   the set of Nodes for each user
    //   the set of Aliases for each user
-   //   a set of message distribution groups
-   //   the set of Uids for each group
+   //   a set of Groups for message distribution
+   //   the set of Aliases & Uids for each group
 
-   AddUser(iUid, iNewNode string, iAliases []string) (aAliases []string, err error)
-   SetAliases(iUid, iNode string, iAliases []string) (aAliases []string, err error)
-   AddNode(iUid, iNode, iNewNode string) (aNodeRef int, err error)
-   DropNode(iUid, iNode string) error
+   AddUser(iUid, iNewNode string) (aQid string, err error)
+   AddNode(iUid, iNode, iNewNode string) (aQid string, err error)
+   DropNode(iUid, iNode string) (aQid string, err error)
+   AddAlias(iUid, iNode, iNat, iEn string) error
+   DropAlias(iUid, iNode, iAlias string) error
    //DropUser(iUid string) error
 
-   Verify(iUid, iNode string) (aNodeRef int, err error)
-   GetNodes(iUid string) (aNodes []string, err error)
+   Verify(iUid, iNode string) (aQid string, err error)
+   GetNodes(iUid string) (aQids []string, err error)
    Lookup(iAlias string) (aUid string, err error)
 
-   GroupInvite(iGid, iBy, iAlias string) error
-   GroupJoin(iGid, iAlias, iUid string) (aAlias string, err error)
-   GroupDrop(iGid, iBy, iUid string) error
-   GroupLookup(iGid, iBy string) (aUids []string, err error)
+   GroupInvite(iGid, iAlias, iByAlias, iByUid string) error
+   GroupJoin(iGid, iUid, iNewAlias string) error
+   GroupAlias(iGid, iUid, iNewAlias string) error
+   GroupDrop(iGid, iUid, iByUid string) error
+   GroupGetUsers(iGid, iByUid string) (aUids []string, err error)
 }
 
 
@@ -219,7 +221,7 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
          var aUids []string
          switch (aTo.Type) {
          case eForGroupAll, eForGroupExcl:
-            aUids, err = UDb.GroupLookup(aTo.Id, o.uid)
+            aUids, err = UDb.GroupGetUsers(aTo.Id, o.uid)
             if err != nil { panic(err) }
          default:
             aUids = []string{aTo.Id}
