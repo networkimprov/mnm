@@ -22,6 +22,23 @@ func main() {
       "u333333": tMember{Alias: "333"},
    }}
 
+   if false {
+      aU, err := aDb.fetchUser("fetched", eFetchMake)
+      if err != nil { panic(err) }
+      aU.door.Lock()
+      aU.Nodes["fi"] = 44
+      aU.Aliases = append(aU.Aliases, tAlias{En:"fet"})
+      aDb.putRecord(eTuser, "fetched", aU)
+      aU.door.Unlock()
+      delete(aDb.user, "fetched")
+      aU, err = aDb.fetchUser("fetched", eFetchCheck)
+      if err != nil { panic(err) }
+      aU.door.RLock()
+      fmt.Printf("node %v, alias %v\n", aU.Nodes["fi"], aU.Aliases[0].En)
+      aU.door.RUnlock()
+      return
+   }
+
    qlib.UDb = aDb
    qlib.Init("qstore")
 
@@ -346,16 +363,26 @@ func (o *tUserDb) GroupGetUsers(iGid, iByUid string) (aUids []string, err error)
    return aUids, nil
 }
 
-func (o *tUserDb) fetchUser(iUid string) *tUser {
+type tFetch bool
+const eFetchCheck, eFetchMake tFetch = false, true
+
+// retrieve user from cache or disk
+func (o *tUserDb) fetchUser(iUid string, iMake tFetch) (*tUser, error) {
    o.userDoor.RLock() // read-lock user map
    aUser := o.user[iUid] // lookup user in map
    o.userDoor.RUnlock()
 
    if aUser == nil { // user not in cache
       aObj, err := o.getRecord(eTuser, iUid) // lookup user on disk
-      if err != nil { panic(err) }
-      aUser = aObj.(*tUser) // "type assertion" to extract *tUser value from interface{}
-      aUser.door.Lock() // write-lock user
+      if err != nil { return nil, err }
+      aUser = aObj.(*tUser) // "type assertion" extracts *tUser from interface{}
+
+      if aUser.Nodes == nil { // user not on disk
+         if !iMake {
+            return nil, nil
+         }
+         aUser.Nodes = make(map[string]int) // initialize user
+      }
 
       o.userDoor.Lock() // write-lock user map
       if aTemp := o.user[iUid]; aTemp != nil { // recheck the map
@@ -364,11 +391,8 @@ func (o *tUserDb) fetchUser(iUid string) *tUser {
          o.user[iUid] = aUser // add user to map
       }
       o.userDoor.Unlock()
-   } else {
-      aUser.door.Lock() // write-lock user
    }
-   return aUser // user is write-locked and cached
-   // must do putRecord() and .door.Unlock() on return value after changes!
+   return aUser, nil // do .door.[R]Lock() on return value before use
 }
 
 // pull a file into a cache object
