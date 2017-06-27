@@ -358,7 +358,11 @@ func (o *tUserDb) fetchUser(iUid string) *tUser {
       aUser.door.Lock() // write-lock user
 
       o.userDoor.Lock() // write-lock user map
-      o.user[iUid] = aUser // add user to map
+      if aTemp := o.user[iUid]; aTemp != nil { // recheck the map
+         aUser = aTemp
+      } else {
+         o.user[iUid] = aUser // add user to map
+      }
       o.userDoor.Unlock()
    } else {
       aUser.door.Lock() // write-lock user
