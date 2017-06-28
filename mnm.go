@@ -320,7 +320,12 @@ func (o *tUserDb) GetNodes(iUid string) (aQids []string, err error) {
 
 func (o *tUserDb) Lookup(iAlias string) (aUid string, err error) {
    //: return uid for iAlias
-   return "", nil
+   // trivial implementation for qlib testing
+   switch iAlias {
+   case "a1": return "u111111", nil
+   case "a2": return "u222222", nil
+   }
+   return "", tUserDbErr(iAlias+" not known")
 }
 
 func (o *tUserDb) GroupInvite(iGid, iAlias, iByAlias, iByUid string) error {
