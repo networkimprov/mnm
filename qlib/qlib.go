@@ -210,49 +210,14 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
       o.queue = aQ
       fmt.Printf("%s link.handlemsg login user %s\n", o.uid, aQ.uid)
    case ePost:
-      aMsgId := sStore.MakeId()
-      aBuf := PackMsg(tMsg{"Op":sResponseOps[ePost], "Id":aMsgId, "From":o.uid}, iData)
-      err = sStore.PutFile(aMsgId, aBuf)
-      if err != nil { panic(err) }
-      aForNodes := make(map[string]bool, len(iHead.For)) //todo x2 or more?
-      aForMyUid := false
-      iHead.For = append(iHead.For, tHeaderFor{Id:o.uid, Type:eForSelf})
-      for _, aTo := range iHead.For {
-         var aUids []string
-         switch (aTo.Type) {
-         case eForGroupAll, eForGroupExcl:
-            aUids, err = UDb.GroupGetUsers(aTo.Id, o.uid)
-            if err != nil { panic(err) }
-         default:
-            aUids = []string{aTo.Id}
-         }
-         for _, aUid := range aUids {
-            if aTo.Type == eForGroupExcl && aUid == o.uid {
-               continue
-            }
-            aNodes, err := UDb.GetNodes(aUid)
-            if err != nil { panic(err) }
-            for _, aNd := range aNodes {
-               aForNodes[aNd] = true
-            }
-            aForMyUid = aForMyUid || aUid == o.uid && aTo.Type != eForSelf
-         }
+      aAck := tMsg{"op:":"ack", "id":iHead.Id, "type":"ok"}
+      err = o.postMsg(iHead, iData)
+      if err != nil {
+         aAck["type"] = "error"
+         aAck["error"] = err.Error()
+         fmt.Printf("%s link.handlemsg post %s\n", o.uid, err.Error())
       }
-      for aNodeId,_ := range aForNodes {
-         if aNodeId == o.node && !aForMyUid {
-            continue
-         }
-         aNd := GetNode(aNodeId)
-         aNd.dir.RLock()
-         sStore.PutLink(aMsgId, aNodeId, aMsgId)
-         sStore.SyncDirs(aNodeId)
-         if aNd.queue != nil {
-            aNd.queue.in <- aMsgId
-         }
-         aNd.dir.RUnlock()
-      }
-      o.conn.Write(PackMsg(tMsg{"op:":"ack", "id":iHead.Id, "type":"ok"}, nil))
-      sStore.RmFile(aMsgId)
+      o.conn.Write(PackMsg(aAck, nil))
    case eAck:
       aTmr := time.NewTimer(2 * time.Second)
       select {
@@ -263,6 +228,55 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
       }
    default:
       panic(fmt.Sprintf("checkHeader failure, op %d", iHead.Op))
+   }
+   return nil
+}
+
+func (o *Link) postMsg(iHead *tHeader, iData []byte) error {
+   var err error
+   aMsgId := sStore.MakeId()
+   aBuf := PackMsg(tMsg{"Op":sResponseOps[ePost], "Id":aMsgId, "From":o.uid}, iData)
+   err = sStore.PutFile(aMsgId, aBuf)
+   if err != nil { panic(err) }
+   defer sStore.RmFile(aMsgId)
+   aForNodes := make(map[string]bool, len(iHead.For)) //todo x2 or more?
+   aForMyUid := false
+   iHead.For = append(iHead.For, tHeaderFor{Id:o.uid, Type:eForSelf})
+   for _, aTo := range iHead.For {
+      var aUids []string
+      switch (aTo.Type) {
+      case eForGroupAll, eForGroupExcl:
+         aUids, err = UDb.GroupGetUsers(aTo.Id, o.uid)
+         if err != nil { return err }
+      default:
+         aUids = []string{aTo.Id}
+      }
+      for _, aUid := range aUids {
+         if aTo.Type == eForGroupExcl && aUid == o.uid {
+            continue
+         }
+         aNodes, err := UDb.GetNodes(aUid)
+         if err != nil { return err }
+         for _, aNd := range aNodes {
+            aForNodes[aNd] = true
+         }
+         aForMyUid = aForMyUid || aUid == o.uid && aTo.Type != eForSelf
+      }
+   }
+   for aNodeId,_ := range aForNodes {
+      if aNodeId == o.node && !aForMyUid {
+         continue
+      }
+      aNd := GetNode(aNodeId)
+      aNd.dir.RLock()
+      err = sStore.PutLink(aMsgId, aNodeId, aMsgId)
+      if err != nil { panic(err) }
+      err = sStore.SyncDirs(aNodeId)
+      if err != nil { panic(err) }
+      if aNd.queue != nil {
+         aNd.queue.in <- aMsgId
+      }
+      aNd.dir.RUnlock()
    }
    return nil
 }
