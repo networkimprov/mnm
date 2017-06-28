@@ -32,7 +32,7 @@ var sHeaderDefs = [...]tHeader{
    eLogin   : { Uid:"1", NodeId:"1"                  },
    eListEdit: { Id:"1", To:"1", Type:"1", Member:"1" },
    ePost    : { Id:"1", For:[]tHeaderFor{{}}         },
-   ePing    : { Id:"1", Alias:"1"                    },
+   ePing    : { Id:"1", From:"1", To:"1"             },
    eAck     : { Id:"1", Type:"1"                     },
 }
 
@@ -41,7 +41,7 @@ var sResponseOps = [...]string{
    eAddNode:  "nodeAdded",
    eListEdit: "listEdited",
    ePost:     "delivery",
-   ePing:     "pong",
+   ePing:     "ping",
    eOpEnd:    "",
 }
 
@@ -157,10 +157,9 @@ type tHeader struct {
    Id string
    NodeId, NewNode string
    Aliases string
-   To string
+   From, To string // alias
    Type string
    Member string
-   Alias string
    For []tHeaderFor
 }
 
@@ -175,10 +174,10 @@ func (o *tHeader) check() bool {
       len(aDef.NodeId)  > 0 && len(o.NodeId)  == 0 ||
       len(aDef.NewNode) > 0 && len(o.NewNode) == 0 ||
       len(aDef.Aliases) > 0 && len(o.Aliases) == 0 ||
+      len(aDef.From)    > 0 && len(o.From)    == 0 ||
       len(aDef.To)      > 0 && len(o.To)      == 0 ||
       len(aDef.Type)    > 0 && len(o.Type)    == 0 ||
       len(aDef.Member)  > 0 && len(o.Member)  == 0 ||
-      len(aDef.Alias)   > 0 && len(o.Alias)   == 0 ||
       len(aDef.For)     > 0 && len(o.For)     == 0
    return !aFail
 }
@@ -218,6 +217,24 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
          fmt.Printf("%s link.handlemsg post %s\n", o.uid, err.Error())
       }
       o.conn.Write(PackMsg(aAck, nil))
+   case ePing:
+      aUid, err := UDb.Lookup(iHead.From)
+      if aUid != o.uid {
+         err = tError(iHead.From+" is not an alias for sender")
+      } else {
+         aUid, err = UDb.Lookup(iHead.To)
+         if err == nil {
+            aHead := tHeader{Op:ePing, Id:iHead.Id, For:[]tHeaderFor{{Id:aUid, Type:eForUser}}}
+            err = o.postMsg(&aHead, []byte("ping from "+iHead.From))
+         }
+      }
+      aAck := tMsg{"op:":"ack", "id":iHead.Id, "type":"ok"}
+      if err != nil {
+         aAck["type"] = "error"
+         aAck["error"] = err.Error()
+         fmt.Printf("%s link.handlemsg ping %s\n", o.uid, err.Error())
+      }
+      o.conn.Write(PackMsg(aAck, nil))
    case eAck:
       aTmr := time.NewTimer(2 * time.Second)
       select {
@@ -235,7 +252,7 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
 func (o *Link) postMsg(iHead *tHeader, iData []byte) error {
    var err error
    aMsgId := sStore.MakeId()
-   aBuf := PackMsg(tMsg{"Op":sResponseOps[ePost], "Id":aMsgId, "From":o.uid}, iData)
+   aBuf := PackMsg(tMsg{"Op":sResponseOps[iHead.Op], "Id":aMsgId, "From":o.uid}, iData)
    err = sStore.PutFile(aMsgId, aBuf)
    if err != nil { panic(err) }
    defer sStore.RmFile(aMsgId)
@@ -450,6 +467,10 @@ closed:
    }
    close(o.out)
 }
+
+
+type tError string
+func (o tError) Error() string { return string(o) }
 
 
 type tStore struct { // queue and msg storage
