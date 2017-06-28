@@ -194,7 +194,7 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
       if iData != nil { return sMsgOpDataless }
    }
 
-   switch(iHead.Op) {
+   switch iHead.Op {
    case eLogin:
       _, err = UDb.Verify(iHead.Uid, iHead.NodeId)
       if err != nil {
@@ -244,7 +244,7 @@ func (o *Link) postMsg(iHead *tHeader, iData []byte) error {
    iHead.For = append(iHead.For, tHeaderFor{Id:o.uid, Type:eForSelf})
    for _, aTo := range iHead.For {
       var aUids []string
-      switch (aTo.Type) {
+      switch aTo.Type {
       case eForGroupAll, eForGroupExcl:
          aUids, err = UDb.GroupGetUsers(aTo.Id, o.uid)
          if err != nil { return err }

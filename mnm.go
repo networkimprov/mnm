@@ -414,7 +414,7 @@ func (o *tUserDb) getRecord(iType tType, iId string) (interface{}, error) {
       fmt.Println("getRecord: finished transaction for "+aPath)
    }
 
-   switch (iType) {
+   switch iType {
    default:
       panic("getRecord: unexpected type "+iType)
    case eTalias:
@@ -449,7 +449,7 @@ func (o *tUserDb) putRecord(iType tType, iId string, iObj interface{}) error {
       fmt.Println("putRecord: removed residual .tmp file for "+aPath)
    }
 
-   switch (iType) {
+   switch iType {
    default:
       panic("putRecord: unexpected type "+iType)
    case eTalias:
