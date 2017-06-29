@@ -184,8 +184,15 @@ type tUserDb struct {
 
 type tUser struct {
    door sync.RWMutex
-   Nodes map[string]int // value is NodeRef
+   Nodes map[string]tNode // value is NodeRef
+   nonDefunctNodesCount int
    Aliases []tAlias // public names for the user
+}
+
+type tNode struct {
+  defunct bool
+  Qid string
+  nodeRef int
 }
 
 type tAlias struct {
@@ -253,19 +260,19 @@ func (o *tUserDb) AddUser(iUid, iNewNode string) (aQid string, err error) {
    //: iNewNode string is the NodeId
    //: Qid is the same as NodeId (will use hash for NodeId to generate Qid)
    //: qlib will use Qid as the name for the queue the node will attach to
-   
+
    //: If iUid already exists, check if iNewNode already exists
    //: Errors-- iUid already exists, but does not have iNewNode
-   
+
    // aQid = iNewNode, return aQid (don't need to use :=)
-   
-    /*-------------ACTION PLAN----------
-    * 1. Check if iUid is in cache. 
+
+   /* ACTION PLAN
+    * 1. Check is iUid is in cache. 
          aUserExists := false
          if(fetchUser(iUid) != nil) {
             aUserExists = true
          }
-    * 2. If iUid already exists, check if iNewNode exists. If iNewNode does not 
+    * 2. If iUid already exists, check if iNewNode exists. If iNewNode does not, 
     *    exist, return error.
          if(aUserExists){
             for key, value := range o.user.Nodes {
@@ -278,11 +285,10 @@ func (o *tUserDb) AddUser(iUid, iNewNode string) (aQid string, err error) {
          o.userDoor.Lock()
          o.user[iUid].Nodes = map[string]tNode{iNewNode: tNode{defunct: false, Qid: iNewNode}}
          o.user[iUid].nonDefunctNodesCount++ // need to find someplace to initialize count to 0
-         o.userDoor.Unlock()
     * 4. Assign iNewNode to aQid
          aQid = iNewNode
     * 5. return aQid
-    *-------------------------------------/
+    */
 
    return "", nil
 }
@@ -291,35 +297,46 @@ func (o *tUserDb) AddNode(iUid, iNode, iNewNode string) (aQid string, err error)
    //: add node
    //: iUid has iNode
    //: iUid may already have iNewNode
-   
+
    //: Can override iNewNode if it already exists.
    //: Types don't match, so change tUserDb types to accomodate the API
-   
+
    //: aQid = iNewNode
-   
+
    //: Error- if iUid or iNode is missing
    //: Error- if length of the map is over kUserNodeMax constant (100)
-   
+
+   /* ACTION PLAN
+    * 1. Check if iUid exists. If iUid does not exist, return error.
+    * 2. Check if iUid has iNode. If iUid does not have iNode, return error.
+    * 3. Check if iUid already has iNewNode. If yes:
+         aQid = iNewNode
+         return aQid
+    * 4. Check if the length of the map <= kUserNodeMax (100). If yes, return error.
+    * 5. Add iNewNode to o.tUserDb.Nodes
+      
+    */
+
    return "", nil
 }
 
 func (o *tUserDb) DropNode(iUid, iNode string) (aQid string, err error) {
    //: mark iNode defunct
    //: iUid has iNode
-   
+
    //: Check if iUid has iNode.
    //: Check if iNode is already defunct. If it is, return success.
    //: Check if there are 2 non-defunct nodes in iUid. If no, error. If yes, defunct that node.
-   
+
    //: Requires change of tUserDb. Nodes will be map[string]struct, struct contains string Qid and bool defunct
    //: Define new type- tNode
-   
+
    //: When assigning to Nodes map, make a compound literal tNode that changes either the string Qid or the bool defunct
    //: (will have copy of one value and one changed value)
-   
+
    //: Error- iUid does not have iNode
    //: Error- you only have one node left
-   
+
    return "", nil
 }
 
@@ -327,10 +344,10 @@ func (o *tUserDb) AddAlias(iUid, iNode, iNat, iEn string) error {
    //: add aliases to iUid and o.alias
    //: iUid has iNode
    //: iNat != iEn, iNat or iEn != "" <-- could optimize this code later (write it in 1 line)
-   
+
    //: Error- Alias exists in o.alias
    //: Error- Aliax belongs to someone else
-   
+
    return nil
 }
 
@@ -338,15 +355,15 @@ func (o *tUserDb) DropAlias(iUid, iNode, iAlias string) error {
    //: mark alias defunct in o.alias
    //: iUid has iNode
    //: iAlias for iUid
-   
+
    //: In alias index, create a struct with uId & defunct flag
    //: Only the user who owns the alias can drop the alias, so you must verify that the user & node are correct
    //: Need defunct flag in tAlias
    //: Have another struct for index value for o.tAlias index, which also has defunct
    //: Call tAlias --> tUserAlias, new struct: tAlias contains string uId & bool defunct
-   
+
    //: Error-- iNode or iAlias don't belong to user
-   
+
    return nil
 }
 
@@ -356,9 +373,9 @@ func (o *tUserDb) Verify(iUid, iNode string) (aQid string, err error) {
    //: return Qid of node
    //: iUid has iNode
    // trivial implementation for qlib testing
-   
+
    // Check if the node is defunct
-   
+
    if o.user[iUid] != nil && o.user[iUid].Nodes[iNode] != 0 {
       return "q"+iNode, nil
    }
@@ -368,11 +385,11 @@ func (o *tUserDb) Verify(iUid, iNode string) (aQid string, err error) {
 func (o *tUserDb) GetNodes(iUid string) (aQids []string, err error) {
    //: return Qids for iUid
    // trivial implementation for qlib testing
-   
+
    // Error-- uId does not exist
    // Cannot return defunct nodes!
-   
-   for aN,_ := range o.user[iUid].Nodes { // must do appropriate locking 
+
+   for aN,_ := range o.user[iUid].Nodes { // must do appropriate locking
       // check if the node is defunct
       aQids = append(aQids, aN)
    }
@@ -391,10 +408,10 @@ func (o *tUserDb) GroupInvite(iGid, iAlias, iByAlias, iByUid string) error {
    //: iGid exists, iByUid in group, iByAlias ignored
    //: iGid !exists, make iGid and add iByUid with iByAlias
    //: iByAlias for iByUid
-   
+
    // may want to create helper function that verifies an alias (or call lookup)
    // could call lookup to check if iByAlias matches with iByUid, and to check if iByAlias exists
-   
+
    //: iByAlias is optional
    //: Error-- group is created, but iByAlias is not given
    return nil
@@ -403,11 +420,11 @@ func (o *tUserDb) GroupInvite(iGid, iAlias, iByAlias, iByUid string) error {
 func (o *tUserDb) GroupJoin(iGid, iUid, iNewAlias string) error {
    //: set joined status for member
    //: iUid in group
-   //: iNewAlias optional for iUid 
-   
+   //: iNewAlias optional for iUid
+
    //: iNewAlias must match with iUid
    // if not alias, iUid uses the alias they were invited by
-   
+
    // Error-- iGid does not exist, iUid is not in group, iNewAlias does not match iUid
    return nil
 }
@@ -423,7 +440,7 @@ func (o *tUserDb) GroupDrop(iGid, iUid, iByUid string) error {
    //: change member status of member with iUid
    //: iUid in group, iByUid same or in group
    //: iUid == iByUid, status=invited
-   //: iUid != iByUid, if iUid status==joined, status=barred 
+   //: iUid != iByUid, if iUid status==joined, status=barred
    // do not drop member
    return nil
 }
