@@ -433,6 +433,15 @@ func (o *tUserDb) GetNodes(iUid string) (aQids []string, err error) {
 func (o *tUserDb) Lookup(iAlias string) (aUid string, err error) {
    //: return uid for iAlias
    //: Error-- iAlias does not exist, or iAlias is defunct
+   
+   /* ACTION PLAN
+    * 1. Check if iAlias exists in map of aliases. If iAlias exists, check if is defunct.
+         Return error if it is defunct. Return error if iAlias does not exist.
+    * 2. RLock aliasDoor, assign aUid to the Uid iAlias refers to.
+         o.aliasDoor.RLock()
+         aUid = alias[iAlias]
+    * 3. return aUid
+    */
    return "", nil
 }
 
