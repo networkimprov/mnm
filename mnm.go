@@ -391,6 +391,12 @@ func (o *tUserDb) DropAlias(iUid, iNode, iAlias string) error {
    //: Call tAlias --> tUserAlias, new struct: tAlias contains string uId & bool defunct
 
    //: Error-- iNode or iAlias don't belong to user
+   
+  /* ACTION PLAN
+   * 1. Check if iNode belongs to iUid. If not, return error.
+   * 2. Check if iAlias belongs to iUid. If not, return error.
+   * 3. Find iAlias in user's map of aliases, and mark it as defunct.
+   */
 
    return nil
 }
