@@ -258,6 +258,30 @@ func (o *tUserDb) AddUser(iUid, iNewNode string) (aQid string, err error) {
    //: Errors-- iUid already exists, but does not have iNewNode
    
    // aQid = iNewNode, return aQid (don't need to use :=)
+   
+    /*-------------ACTION PLAN----------
+    * 1. Check is iUid is in cache. 
+         aUserExists := false
+         if(fetchUser(iUid) != nil) {
+            aUserExists = true
+         }
+    * 2. If iUid already exists, check if iNewNode exists. If iNewNode does not, 
+    *    exist, return error.
+         if(aUserExists){
+            for key, value := range o.user.Nodes {
+               if(key==iNewNode) {
+                  return error
+               }
+            }
+         }
+    * 3. Write-lock userDoor, add user to o.user
+         o.userDoor.Lock()
+         o.user[iUid].Nodes = map[string]tNode{iNewNode: tNode{defunct: false, Qid: iNewNode}}
+         o.user[iUid].nonDefunctNodesCount++ // need to find someplace to initialize count to 0
+    * 4. Assign iNewNode to aQid
+         aQid = iNewNode
+    * 5. return aQid
+    *-------------------------------------/
 
    return "", nil
 }
