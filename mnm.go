@@ -343,6 +343,20 @@ func (o *tUserDb) DropNode(iUid, iNode string) (aQid string, err error) {
 
    //: Error- iUid does not have iNode
    //: Error- you only have one node left
+   
+   /* ACTION PLAN
+    * 1. Check if iUid has iNode. If not, return error.
+    * 2. Check if iNode is already defunct. If it is:
+         aQid = iNode
+         return aQid
+    * 3. Lock userDoor, make iNode in Nodes map defunct, decrement nonDefunctNodesCount
+         o.userDoor.Lock()
+         o.user.Nodes[iNode] = tNode{defunct: true, Qid: iNode}
+         o.user.nonDefunctNodesCount--
+         o.userDoor.Unlock()
+    * 4. aQid = iNode
+         return aQid
+    */
 
    return "", nil
 }
