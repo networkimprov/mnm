@@ -260,7 +260,7 @@ func (o *tUserDb) AddUser(iUid, iNewNode string) (aQid string, err error) {
    // aQid = iNewNode, return aQid (don't need to use :=)
    
     /*-------------ACTION PLAN----------
-    * 1. Check is iUid is in cache. 
+    * 1. Check if iUid is in cache. 
          aUserExists := false
          if(fetchUser(iUid) != nil) {
             aUserExists = true
