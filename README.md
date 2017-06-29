@@ -69,13 +69,18 @@ Response `{"op":"info|quit" "info":string}` (also given on login timeout)
 5. Post sends a message to users and/or groups  
 `{"op":5, "id":string, "for":[{"id":string, "type":uint}, ...]}`  
 .for[i].type: 1) user_id, 2) group_id (include self) 3) group_id (exclude self)  
-Response `{"op":"ack", "id":string, "ok":"ok|error" <,"error":string>}`
+Response `{"op":"ack", "id":string, "ok":"ok|error" <,"error":string>}`  
+At recipient `{"op":"delivery", "id":string, "from":string}`
 
-6. Ping sends a short message via a user's alias  
-`in progress`
+6. Ping sends a short text message via a user's alias.
+A reply establishes contact between the parties.  
+`{"op":6, "id":string, "from":string, "to":string}`  
+.from & .to are user aliases  
+Response `{"op":"ack", "id":string, "ok":"ok|error" <,"error":string>}`  
+At recipient `{"op":"ping", "id":string, "from":string}`
 
 7. Ack acknowledges receipt of a message  
-`{"op":7, "id":string}`
+`{"op":7, "id":string, "type":string}`
 
 ### Log
 
