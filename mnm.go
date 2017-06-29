@@ -313,8 +313,15 @@ func (o *tUserDb) AddNode(iUid, iNode, iNewNode string) (aQid string, err error)
          aQid = iNewNode
          return aQid
     * 4. Check if the length of the map <= kUserNodeMax (100). If yes, return error.
-    * 5. Add iNewNode to o.tUserDb.Nodes
-      
+    * 5. Lock userDoor, Add iNewNode to o.tUserDb.Nodes, set iNewNode to nondefunct, 
+         increment nonDefunctNodesCount, Unlock userDoor
+         o.userDoor.lock()
+         o.user.Nodes[iNewNode] = tNode{defunct: false, Qid: iNewNode}
+         o.user.nonDefunctNodesCount++
+         o.userDoor.Unlock()
+    * 6. Return aQid
+         aQid = iNewNode
+         return aQid   
     */
 
    return "", nil
