@@ -368,6 +368,13 @@ func (o *tUserDb) AddAlias(iUid, iNode, iNat, iEn string) error {
 
    //: Error- Alias exists in o.alias
    //: Error- Aliax belongs to someone else
+   
+   /* ACTION PLAN
+    * 1. Check if iUid has iNode. If not, return error.
+    * 2. Read lock o.alias, Check if iNat and iEn exist in o.alias. If yes, return error.
+    * 3. Write-lock o.alias, add iNat and iEn into o.alias
+    * 4. Write-lock user, add iNat and iEn into user's map of aliases 
+    */
 
    return nil
 }
