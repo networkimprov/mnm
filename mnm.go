@@ -265,7 +265,7 @@ func (o *tUserDb) AddUser(iUid, iNewNode string) (aQid string, err error) {
          if(fetchUser(iUid) != nil) {
             aUserExists = true
          }
-    * 2. If iUid already exists, check if iNewNode exists. If iNewNode does not, 
+    * 2. If iUid already exists, check if iNewNode exists. If iNewNode does not 
     *    exist, return error.
          if(aUserExists){
             for key, value := range o.user.Nodes {
