@@ -278,6 +278,7 @@ func (o *tUserDb) AddUser(iUid, iNewNode string) (aQid string, err error) {
          o.userDoor.Lock()
          o.user[iUid].Nodes = map[string]tNode{iNewNode: tNode{defunct: false, Qid: iNewNode}}
          o.user[iUid].nonDefunctNodesCount++ // need to find someplace to initialize count to 0
+         o.userDoor.Unlock()
     * 4. Assign iNewNode to aQid
          aQid = iNewNode
     * 5. return aQid
