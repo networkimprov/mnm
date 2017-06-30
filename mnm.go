@@ -424,6 +424,25 @@ func (o *tUserDb) DropNode(iUid, iNode string) (aQid string, err error) {
     * 4. aQid = iNode
          return aQid
     */
+   
+   /* CODE
+   aUser := fetchUser(iUid, eFetchCheck)
+   aUser.door.Lock()
+   defer aUser.door.Unlock()
+
+   aQid = iNode
+   if aUser.Nodes[iNode].Qid != aQid {
+      return tUserDbErr("err msg")
+   }
+   if aUser.Nodes[iNode].Defunct {
+      return aQid
+   }
+
+   aUser.Nodes[iNode] = tNode{Defunct: true, Qid: iNode}
+   aUser.NondefunctNodesCount--
+   return aQid
+
+    */
 
    return "", nil
 }
