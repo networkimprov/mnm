@@ -309,9 +309,26 @@ aUser.Nodes[iNewNode] = tNode{Defunct: false, Qid: iNewNode}
 
     */
    
-   
+   aUser := fetchUser(iUid, eFetchMake)
 
-   return "", nil
+   aQid = iNewNode //todo generate Qid properly
+
+   aUser.door.Lock()
+   defer aUser.door.Unlock() // do this when you return no matter what
+
+   if len(aUser.Nodes) != 0 {
+      if aUser.Nodes[iNewNode].Qid == aQid {
+         return aQid
+      }
+   return tUserDbErr("err msg")
+}
+
+aUser.Nodes[iNewNode] = tNode{Defunct: false, Qid: aQid}
+aUser.NondefunctNodesCount++
+
+putRecord(eTuser, iUid, aUser)
+
+return aQid
 }
 
 func (o *tUserDb) AddNode(iUid, iNode, iNewNode string) (aQid string, err error) {
@@ -343,6 +360,35 @@ func (o *tUserDb) AddNode(iUid, iNode, iNewNode string) (aQid string, err error)
     * 6. Return aQid
          aQid = iNewNode
          return aQid   
+    */
+   
+   /*
+   aUser := fetchUser(iUid, eFetchCheck)
+   aNodeQid = iNode
+   aNewNodeQid = iNewNode
+
+   if aUser == nil {
+      return tUserDbErr("err msg")
+   }
+
+   aUser.door.Lock()
+   defer aUser.door.Unlock()
+
+   if aUser.Nodes[iNode].Qid != aNodeQid {
+      return tUserDbErr("err msg")
+   }
+   if aUser.Nodes[iNewNode].Qid == aNewNodeQid {
+      return aNewNodeQid
+   }
+   if aUser.NondefunctNodesCount == kUserNodeMax {
+      return tUserDbErr("err msg")
+   }
+
+   aUser.Nodes[iNewNode] = tNode{Defunct: false, Qid: aNewNodeQid}
+   aUser.NondefunctNodes++
+
+   return aNewNodeQid
+
     */
 
    return "", nil
