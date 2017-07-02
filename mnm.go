@@ -575,6 +575,9 @@ func (o *tUserDb) GroupJoin(iGid, iUid, iNewAlias string) error {
       return tUserDbErr("err msg")
     }
     // check if iUid has iNewAlias (this could be wrong)
+
+    aUser.door.RLock()
+    defer aUser.door.RUnlock()
     aHasAlias := false
     for int i=0; i < len(aUser.Aliases); i++ {
       if aUser.Alias[i] == iNewAlias {
