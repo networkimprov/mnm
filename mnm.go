@@ -546,6 +546,7 @@ func (o *tUserDb) GroupInvite(iGid, iAlias, iByAlias, iByUid string) error {
    return nil
 }
 
+const (eStatInvited = iota; eStatJoined; eStatBarred)
 func (o *tUserDb) GroupJoin(iGid, iUid, iNewAlias string) error {
    //: set joined status for member
    //: iUid in group
@@ -555,6 +556,40 @@ func (o *tUserDb) GroupJoin(iGid, iUid, iNewAlias string) error {
    // if not alias, iUid uses the alias they were invited by
 
    // Error-- iGid does not exist, iUid is not in group, iNewAlias does not match iUid
+
+   /* ACTION PLAN
+    * 1. Check if iGid exists. If not, return error.
+    * 2. Check if iUid is in group. If not, return error.
+    * 3. Check if iNewAlias is an alias for iUid. If not, return error.
+    * 4. Change status for iUid to joined.
+    */
+   
+    /*
+    aGroup := fetchGroup(iGid, eFetchCheck)
+    aUser := fetchUser(iUid, eFetchCheck)
+     // CHECK ERROR CASES
+    if aGroup == nil { // if group does not exist
+      return tUserDbErr("err msg")
+    }
+    if aGroup.Uid[iGid] != nil { // check if iUid is already in group
+      return tUserDbErr("err msg")
+    }
+    // check if iUid has iNewAlias (this could be wrong)
+    aHasAlias := false
+    for int i=0; i < len(aUser.Aliases); i++ {
+      if aUser.Alias[i] == iNewAlias {
+        aHasAlias = true
+        break
+      }
+    }
+    if !aHasAlias {
+      return tUserDbErr("err msg")
+    }
+
+    //CHANGE STATUS TO JOINED
+    aGroup.Uid[iUid].Status = eStatJoined
+    */
+    
    return nil
 }
 
