@@ -543,6 +543,16 @@ func (o *tUserDb) GroupInvite(iGid, iAlias, iByAlias, iByUid string) error {
 
    //: iByAlias is optional
    //: Error-- group is created, but iByAlias is not given
+   
+  /* ACTION PLAN
+   * 1. Check if iAlias exists. If not, send error.
+   * 2. Check if iByAlias exists. If not, send error.
+   * 3. Call fetchGroup with eFetchMake to see if group with iGid exists
+        (group with iGid will be created if it doesn't)
+   * 4. If iByUid is not in group, add iByUid into the group (with status joined)
+        along with iByAlias if provided
+   * 5. Add the user with iAlias into the group, make status invited.  
+    */
    return nil
 }
 
@@ -600,6 +610,12 @@ func (o *tUserDb) GroupAlias(iGid, iUid, iNewAlias string) error {
    //: update member alias
    //: iUid in group
    //: iNewAlias for iUid
+   
+   /* ACTION PLAN
+    * 1. Check if iUid is in iGid. If not, return error.
+    * 2. Check if iNewAlias belongs to iUid. If not, return error.
+    * 3. For the group, change iUid's alias to iNewAlias.
+    */
    return nil
 }
 
@@ -609,6 +625,12 @@ func (o *tUserDb) GroupDrop(iGid, iUid, iByUid string) error {
    //: iUid == iByUid, status=invited
    //: iUid != iByUid, if iUid status==joined, status=barred
    // do not drop member
+   
+   /* ACTION PLAN
+    * 1. Check if iUid is in iGid. If not, return error.
+    * 2. Check if iUid == iByUid. If yes, set iUid's status to invitied.
+    * 3. If iUid != iByUid, change iUid's status to barred.
+    */
    return nil
 }
 
