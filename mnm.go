@@ -590,7 +590,7 @@ func (o *tUserDb) GroupJoin(iGid, iUid, iNewAlias string) error {
 
    aUser.door.RLock()
    defer aUser.door.RUnlock() 
-   aLookupResult := lookup(iNewAlias)
+   aLookupResult := o.Lookup(iNewAlias)
    if aLookUpResult == nil { // if iNewAlias does not exist
       return tUserDbErr("err msg")
    }
