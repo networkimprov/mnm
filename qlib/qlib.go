@@ -209,7 +209,7 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
       o.queue = aQ
       fmt.Printf("%s link.handlemsg login user %s\n", o.uid, aQ.uid)
    case ePost:
-      aAck := tMsg{"op:":"ack", "id":iHead.Id, "type":"ok"}
+      aAck := tMsg{"op":"ack", "id":iHead.Id, "type":"ok"}
       err = o.postMsg(iHead, iData)
       if err != nil {
          aAck["type"] = "error"
@@ -228,7 +228,7 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
             err = o.postMsg(&aHead, []byte("ping from "+iHead.From))
          }
       }
-      aAck := tMsg{"op:":"ack", "id":iHead.Id, "type":"ok"}
+      aAck := tMsg{"op":"ack", "id":iHead.Id, "type":"ok"}
       if err != nil {
          aAck["type"] = "error"
          aAck["error"] = err.Error()
@@ -252,7 +252,7 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
 func (o *Link) postMsg(iHead *tHeader, iData []byte) error {
    var err error
    aMsgId := sStore.MakeId()
-   aBuf := PackMsg(tMsg{"Op":sResponseOps[iHead.Op], "Id":aMsgId, "From":o.uid}, iData)
+   aBuf := PackMsg(tMsg{"op":sResponseOps[iHead.Op], "id":aMsgId, "from":o.uid}, iData)
    err = sStore.PutFile(aMsgId, aBuf)
    if err != nil { panic(err) }
    defer sStore.RmFile(aMsgId)
