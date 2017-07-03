@@ -670,7 +670,7 @@ func (o *tUserDb) fetchUser(iUid string) *tUser {
 }
 
 /*
-func (o *tUserDb) fetchGroup(iGid string, iMake tFetch) (*tUser, error){
+func (o *tUserDb) fetchGroup(iGid string, iMake tFetch) (*tGroup, error){
   o.groupDoor.RLock() // read-lock group map
   aGroup := o.group[iGid] // lookup group in map
   o.groupDoor.RUnlock()
