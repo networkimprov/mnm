@@ -556,7 +556,10 @@ func (o *tUserDb) GroupInvite(iGid, iAlias, iByAlias, iByUid string) error {
    return nil
 }
 
-const (eStatInvited = iota; eStatJoined; eStatBarred)
+/*
+type tStatus int 
+const (_ tStatus = iota; eStatInvited; eStatBarred) 
+*/
 func (o *tUserDb) GroupJoin(iGid, iUid, iNewAlias string) error {
    //: set joined status for member
    //: iUid in group
@@ -581,7 +584,7 @@ func (o *tUserDb) GroupJoin(iGid, iUid, iNewAlias string) error {
     if aGroup == nil { // if group does not exist
       return tUserDbErr("err msg")
     }
-    if aGroup.Uid[iGid] != nil { // check if iUid is already in group
+    if aGroup.Uid[iGid].joined != eStatJoined { // check if iUid is already in group
       return tUserDbErr("err msg")
     }
     // check if iUid has iNewAlias (this could be wrong)
