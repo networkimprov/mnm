@@ -677,7 +677,7 @@ func (o *tUserDb) fetchGroup(iGid string, iMake tFetch) (*tGroup, error){
 
   if aGroup == nil { // group not in cache
     aObj, err := o.getRecord(eTgroup, iGid) 
-    if err!= nil {return nil, err}
+    if err != nil { return nil, err }
     aGroup = aObj.(*tGroup) // "type assertion" to extract *tGroup value
 
     if aGroup.Uid == nil { // group does not exist
