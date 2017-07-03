@@ -278,7 +278,7 @@ Error: existing user without new node
 -check if user has any nodes:
 -if yes: is one of them the new node?
 -if you do not have the new node, but you have the new user, error
-    * 2. If iUid already exists, check if iNewNode exists. If iNewNode does not, 
+    * 2. If iUid already exists, check if iNewNode exists. If iNewNode does not,
     *    exist, return error.
 Check if map is empty using len(user.Nodes)
 user.Nodes[iNewNode] ==> return struct ==> look at struct to see if it is valid by seeing if Qid is empty (if empty, iNewNode does not exist)
@@ -290,7 +290,7 @@ user.Nodes[iNewNode] ==> return struct ==> look at struct to see if it is valid 
             }
          }
 
-    * 3. Write-lock userDoor, add user to o.user 
+    * 3. Write-lock userDoor, add user to o.user
          o.userDoor.Lock()
          o.user[iUid].Nodes = map[string]tNode{iNewNode: tNode{Defunct: false, Qid: iNewNode}}
          o.user[iUid].NonDefunctNodesCount++ // need to find someplace to initialize count to 0
@@ -308,7 +308,7 @@ if len(aUser.Nodes) != 0 {
 aUser.Nodes[iNewNode] = tNode{Defunct: false, Qid: iNewNode}
 
     */
-   
+
    aUser := fetchUser(iUid, eFetchMake)
 
    aQid = iNewNode //todo generate Qid properly
@@ -351,7 +351,7 @@ func (o *tUserDb) AddNode(iUid, iNode, iNewNode string) (aQid string, err error)
          aQid = iNewNode
          return aQid
     * 4. Check if the length of the map <= kUserNodeMax (100). If yes, return error.
-    * 5. Lock userDoor, Add iNewNode to o.tUserDb.Nodes, set iNewNode to nondefunct, 
+    * 5. Lock userDoor, Add iNewNode to o.tUserDb.Nodes, set iNewNode to nondefunct,
          increment nonDefunctNodesCount, Unlock userDoor
          o.userDoor.lock()
          o.user.Nodes[iNewNode] = tNode{defunct: false, Qid: iNewNode}
@@ -359,9 +359,9 @@ func (o *tUserDb) AddNode(iUid, iNode, iNewNode string) (aQid string, err error)
          o.userDoor.Unlock()
     * 6. Return aQid
          aQid = iNewNode
-         return aQid   
+         return aQid
     */
-   
+
    /*
    aUser := fetchUser(iUid, eFetchCheck)
    aNodeQid = iNode
@@ -410,7 +410,7 @@ func (o *tUserDb) DropNode(iUid, iNode string) (aQid string, err error) {
 
    //: Error- iUid does not have iNode
    //: Error- you only have one node left
-   
+
    /* ACTION PLAN
     * 1. Check if iUid has iNode. If not, return error.
     * 2. Check if iNode is already defunct. If it is:
@@ -424,7 +424,7 @@ func (o *tUserDb) DropNode(iUid, iNode string) (aQid string, err error) {
     * 4. aQid = iNode
          return aQid
     */
-   
+
    /* CODE
    aUser := fetchUser(iUid, eFetchCheck)
    aUser.door.Lock()
@@ -454,12 +454,12 @@ func (o *tUserDb) AddAlias(iUid, iNode, iNat, iEn string) error {
 
    //: Error- Alias exists in o.alias
    //: Error- Aliax belongs to someone else
-   
+
    /* ACTION PLAN
     * 1. Check if iUid has iNode. If not, return error.
     * 2. Read lock o.alias, Check if iNat and iEn exist in o.alias. If yes, return error.
     * 3. Write-lock o.alias, add iNat and iEn into o.alias
-    * 4. Write-lock user, add iNat and iEn into user's map of aliases 
+    * 4. Write-lock user, add iNat and iEn into user's map of aliases
     */
 
    return nil
@@ -477,7 +477,7 @@ func (o *tUserDb) DropAlias(iUid, iNode, iAlias string) error {
    //: Call tAlias --> tUserAlias, new struct: tAlias contains string uId & bool defunct
 
    //: Error-- iNode or iAlias don't belong to user
-   
+
   /* ACTION PLAN
    * 1. Check if iNode belongs to iUid. If not, return error.
    * 2. Check if iAlias belongs to iUid. If not, return error.
@@ -519,7 +519,7 @@ func (o *tUserDb) GetNodes(iUid string) (aQids []string, err error) {
 func (o *tUserDb) Lookup(iAlias string) (aUid string, err error) {
    //: return uid for iAlias
    //: Error-- iAlias does not exist, or iAlias is defunct
-   
+
    /* ACTION PLAN
     * 1. Check if iAlias exists in map of aliases. If iAlias exists, check if is defunct.
          Return error if it is defunct. Return error if iAlias does not exist.
@@ -543,7 +543,7 @@ func (o *tUserDb) GroupInvite(iGid, iAlias, iByAlias, iByUid string) error {
 
    //: iByAlias is optional
    //: Error-- group is created, but iByAlias is not given
-   
+
   /* ACTION PLAN
    * 1. Check if iAlias exists. If not, send error.
    * 2. Check if iByAlias exists. If not, send error.
@@ -551,14 +551,14 @@ func (o *tUserDb) GroupInvite(iGid, iAlias, iByAlias, iByUid string) error {
         (group with iGid will be created if it doesn't)
    * 4. If iByUid is not in group, add iByUid into the group (with status joined)
         along with iByAlias if provided
-   * 5. Add the user with iAlias into the group, make status invited.  
+   * 5. Add the user with iAlias into the group, make status invited.
     */
    return nil
 }
 
 /*
-type tStatus int 
-const (_ tStatus = iota; eStatInvited; eStatBarred) 
+type tStatus int
+const (_ tStatus = iota; eStatInvited; eStatBarred)
 */
 func (o *tUserDb) GroupJoin(iGid, iUid, iNewAlias string) error {
    //: set joined status for member
@@ -576,7 +576,7 @@ func (o *tUserDb) GroupJoin(iGid, iUid, iNewAlias string) error {
     * 3. Check if iNewAlias is an alias for iUid. If not, return error.
     * 4. Change status for iUid to joined.
     */
-   
+
     /*
     aGroup := fetchGroup(iGid, eFetchCheck)
     aUser := fetchUser(iUid, eFetchCheck)
@@ -589,7 +589,7 @@ func (o *tUserDb) GroupJoin(iGid, iUid, iNewAlias string) error {
     }
 
    aUser.door.RLock()
-   defer aUser.door.RUnlock() 
+   defer aUser.door.RUnlock()
    aLookupResult := o.Lookup(iNewAlias)
    if aLookUpResult == nil { // if iNewAlias does not exist
       return tUserDbErr("err msg")
@@ -600,7 +600,7 @@ func (o *tUserDb) GroupJoin(iGid, iUid, iNewAlias string) error {
    //CHANGE STATUS TO JOINED
    aGroup.Uid[iUid].Status = eStatJoined
    */
-    
+
    return nil
 }
 
@@ -608,12 +608,24 @@ func (o *tUserDb) GroupAlias(iGid, iUid, iNewAlias string) error {
    //: update member alias
    //: iUid in group
    //: iNewAlias for iUid
-   
+
    /* ACTION PLAN
     * 1. Check if iUid is in iGid. If not, return error.
     * 2. Check if iNewAlias belongs to iUid. If not, return error.
     * 3. For the group, change iUid's alias to iNewAlias.
     */
+
+    aGroup := fetchGroup(iGid, eFetchCheck)\
+    // return error if iUid is not in the group
+    if aGroup.Uid[iGid].Status != eStatJoined {
+      return tUserDbErr("err msg")
+    }
+    // return error if iNewAlias does not belong to iUid
+    if o.Lookup(iNewAlias) != iUid {
+      return tUserDbErr("err msg")
+    }
+    // change iUid's alias to iNewAlias
+    aGroup.Uid[iUid].Alias = iNewAlias
    return nil
 }
 
@@ -623,12 +635,34 @@ func (o *tUserDb) GroupDrop(iGid, iUid, iByUid string) error {
    //: iUid == iByUid, status=invited
    //: iUid != iByUid, if iUid status==joined, status=barred
    // do not drop member
-   
+
    /* ACTION PLAN
     * 1. Check if iUid is in iGid. If not, return error.
-    * 2. Check if iUid == iByUid. If yes, set iUid's status to invitied.
+    * 2. Check if iUid == iByUid. If yes, set iUid's status to invited.
     * 3. If iUid != iByUid, change iUid's status to barred.
     */
+
+    aGroup := fetchGroup(iGid, eFetchCheck)
+    // return error if iUid or iByUid is not in the group
+    if aGroup.Uid[iUid].Status == eStatBarred { // iUid has already been "removed"
+      return tUserDbErr("err msg")
+    } // should if do aGroup.Uid[iUid].Alias == "" instead?
+
+    //if iUid==iByUid, set iUid's status to invited
+    if iUid == iByUid {
+      aGroup.Uid[iUid].Status = eStatJoined
+    }
+
+    // return error if iByUid is not in the group
+    if aGroup.Uid[iByUid].Status == eStatBarred {
+      return tUserDbErr("err msg")
+    } // should if do aGroup.Uid[iByUid].Alias == "" instead?
+
+    // if iUid != iByUid, changed iUid's status to barred
+    if iUid != iByUid {
+      aGroup.Uid[iUid].Status = eStatBarred
+    }
+
    return nil
 }
 
@@ -671,7 +705,7 @@ func (o *tUserDb) fetchGroup(iGid string, iMake tFetch) (*tGroup, error){
   o.groupDoor.RUnlock()
 
   if aGroup == nil { // group not in cache
-    aObj, err := o.getRecord(eTgroup, iGid) 
+    aObj, err := o.getRecord(eTgroup, iGid)
     if err != nil { return nil, err }
     aGroup = aObj.(*tGroup) // "type assertion" to extract *tGroup value
 
