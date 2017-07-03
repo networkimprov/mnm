@@ -688,7 +688,7 @@ func (o *tUserDb) fetchGroup(iGid string, iMake tFetch) (*tGroup, error){
     }
 
     o.groupDoor.Lock()
-    if aTemp:=o.group[iGid]; aTemp != nil { // recheck the map
+    if aTemp := o.group[iGid]; aTemp != nil { // recheck the map
        aGroup = aTemp
     } else {
        o.group[iGid] = aGroup // add group to map
