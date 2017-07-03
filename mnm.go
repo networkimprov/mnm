@@ -587,24 +587,19 @@ func (o *tUserDb) GroupJoin(iGid, iUid, iNewAlias string) error {
     if aGroup.Uid[iGid].Status != eStatJoined { // check if iUid is already in group
       return tUserDbErr("err msg")
     }
-    // check if iUid has iNewAlias (this could be wrong)
 
-    aUser.door.RLock()
-    defer aUser.door.RUnlock()
-    aHasAlias := false
-    for int i=0; i < len(aUser.Aliases); i++ {
-      if aUser.Alias[i] == iNewAlias {
-        aHasAlias = true
-        break
-      }
-    }
-    if !aHasAlias {
+   aUser.door.RLock()
+   defer aUser.door.RUnlock() 
+   aLookupResult := lookup(iNewAlias)
+   if aLookUpResult == nil { // if iNewAlias does not exist
       return tUserDbErr("err msg")
-    }
-
-    //CHANGE STATUS TO JOINED
-    aGroup.Uid[iUid].Status = eStatJoined
-    */
+   }
+   if aLookUpResult != iUid { // check if iNewAlias belongs to iUid
+      return tUserDbErr("err msg")
+   }
+   //CHANGE STATUS TO JOINED
+   aGroup.Uid[iUid].Status = eStatJoined
+   */
     
    return nil
 }
