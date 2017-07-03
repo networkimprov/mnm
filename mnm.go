@@ -207,7 +207,7 @@ type tGroup struct {
 
 type tMember struct {
    Alias string // invited/joined by this alias
-   Joined bool // use a date here?
+   Status int8 // use a date here?
 }
 
 type tUserDbErr string
@@ -584,7 +584,7 @@ func (o *tUserDb) GroupJoin(iGid, iUid, iNewAlias string) error {
     if aGroup == nil { // if group does not exist
       return tUserDbErr("err msg")
     }
-    if aGroup.Uid[iGid].joined != eStatJoined { // check if iUid is already in group
+    if aGroup.Uid[iGid].Status != eStatJoined { // check if iUid is already in group
       return tUserDbErr("err msg")
     }
     // check if iUid has iNewAlias (this could be wrong)
