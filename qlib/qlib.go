@@ -49,7 +49,8 @@ var (
    sMsgIncomplete      = tMsg{"op":"quit", "info":"incomplete header"}
    sMsgLengthBad       = tMsg{"op":"quit", "info":"invalid header length"}
    sMsgHeaderBad       = tMsg{"op":"quit", "info":"invalid header"}
-   sMsgOpDisallowed    = tMsg{"op":"quit", "info":"disallowed op on unauthenticated link"}
+   sMsgOpDisallowedOff = tMsg{"op":"quit", "info":"disallowed op on unauthenticated link"}
+   sMsgOpDisallowedOn  = tMsg{"op":"quit", "info":"disallowed op on connected link"}
    sMsgOpDataless      = tMsg{"op":"quit", "info":"op does not support data"}
    sMsgLoginTimeout    = tMsg{"op":"quit", "info":"login timeout"}
    sMsgLoginFailure    = tMsg{"op":"quit", "info":"login failed"}
@@ -185,8 +186,10 @@ func (o *tHeader) check() bool {
 func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
    var err error
 
-   if iHead.Op != eRegister && iHead.Op != eAddNode && iHead.Op != eLogin {
-      if o.node == "" { return sMsgOpDisallowed }
+   if iHead.Op != eRegister && iHead.Op != eLogin {
+      if o.node == "" { return sMsgOpDisallowedOff }
+   } else {
+      if o.node != "" { return sMsgOpDisallowedOn }
    }
 
    if iHead.Op != ePost && iHead.Op != eListEdit && iHead.Op != ePing {
