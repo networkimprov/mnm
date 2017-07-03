@@ -16,6 +16,8 @@ func main() {
    aDb.user["u111111"] = &tUser{Nodes: map[string]int{"111111":1}}
    aDb.user["u222222"] = &tUser{Nodes: map[string]int{"222222":1}}
    aDb.user["u333333"] = &tUser{Nodes: map[string]int{"333333":1}}
+   aDb.alias["a1"] = "u111111"
+   aDb.alias["a2"] = "u222222"
    aDb.group["g1"] = &tGroup{Uid: map[string]tMember{
       "u111111": tMember{Alias: "111"},
       "u222222": tMember{Alias: "222"},
@@ -321,11 +323,11 @@ func (o *tUserDb) GetNodes(iUid string) (aQids []string, err error) {
 func (o *tUserDb) Lookup(iAlias string) (aUid string, err error) {
    //: return uid for iAlias
    // trivial implementation for qlib testing
-   switch iAlias {
-   case "a1": return "u111111", nil
-   case "a2": return "u222222", nil
+   aUid = o.alias[iAlias]
+   if aUid == "" {
+      return "", tUserDbErr(iAlias+" not known")
    }
-   return "", tUserDbErr(iAlias+" not known")
+   return aUid, nil
 }
 
 func (o *tUserDb) GroupInvite(iGid, iAlias, iByAlias, iByUid string) error {
