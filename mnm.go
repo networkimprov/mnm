@@ -13,6 +13,10 @@ import (
 func main() {
    aDb, err := NewUserDb("./userdb")
    if err != nil { panic(err) }
+   aDb.user["u111112"] = &tUser{Nodes: map[string]int{"111112":1}}
+   aDb.user["u222223"] = &tUser{Nodes: map[string]int{"222223":1}}
+   aDb.alias["test1"] = "u111112"
+   aDb.alias["test2"] = "u222223"
    aDb.user["u111111"] = &tUser{Nodes: map[string]int{"111111":1}}
    aDb.user["u222222"] = &tUser{Nodes: map[string]int{"222222":1}}
    aDb.user["u333333"] = &tUser{Nodes: map[string]int{"333333":1}}
@@ -45,11 +49,7 @@ func main() {
    qlib.Init("qstore")
 
    fmt.Printf("Starting Test Pass\n")
-   qlib.InitTestClient(2)
-   for a := 0; true; a++ {
-      aDawdle := a == 1
-      qlib.NewLink(qlib.NewTestClient(aDawdle))
-   }
+   qlib.LocalTest(2)
 }
 
 /* moved to qlib/testclient.go
