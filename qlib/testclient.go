@@ -174,7 +174,7 @@ func (o *tTestClient) cycleRead(iBuf []byte) (int, error) {
    }
 
    aMsg := PackMsg(aHead, []byte(aData))
-   fmt.Printf("%d testclient.read %s\n", o.id, string(aMsg))
+   fmt.Printf("%d PUT %s\n", o.id, string(aMsg))
    return copy(iBuf, aMsg), nil
 }
 
@@ -208,7 +208,7 @@ func (o *tTestClient) Write(iBuf []byte) (int, error) {
          sTestVerifyGot[aI] = string(iBuf) + "\n"
       }
    } else {
-      fmt.Printf("%d testclient.write got %s\n", o.id, string(iBuf))
+      fmt.Printf("%d got %s\n", o.id, string(iBuf))
    }
 
    if aHead["from"] != nil {
