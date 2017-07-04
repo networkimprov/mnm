@@ -110,7 +110,7 @@ func (o *tTestClient) verifyRead(iBuf []byte) (int, error) {
       } else {
          select {
          case <-sTestVerifyDone:
-            return 0, &net.OpError{Op:"read", Err:tTestClientError("log out")}
+            return 0, &net.OpError{Op:"read", Err:tError("log out")}
          case aId := <-o.ack:
             aMsg = PackMsg(tMsg{"Op":eAck, "Id":aId, "Type":"n"}, nil)
          }
@@ -123,7 +123,7 @@ func (o *tTestClient) verifyRead(iBuf []byte) (int, error) {
       }
       if o.count-1 == len(o.work) {
          close(sTestVerifyDone)
-         return 0, &net.OpError{Op:"read", Err:tTestClientError("log out")}
+         return 0, &net.OpError{Op:"read", Err:tError("log out")}
       }
       aWk := o.work[o.count-1]
       sTestVerifyWant = aWk.want + "\n"
@@ -137,7 +137,7 @@ func (o *tTestClient) verifyRead(iBuf []byte) (int, error) {
 
 func (o *tTestClient) cycleRead(iBuf []byte) (int, error) {
    if o.count % 20 == 19 {
-      return 0, &net.OpError{Op:"read", Err:tTestClientError("log out")}
+      return 0, &net.OpError{Op:"read", Err:tError("log out")}
    }
 
    var aDlC <-chan time.Time
@@ -150,7 +150,7 @@ func (o *tTestClient) cycleRead(iBuf []byte) (int, error) {
    aTmr := time.NewTimer(200 * time.Millisecond)
    defer aTmr.Stop()
 
-   var aHead map[string]interface{}
+   var aHead tMsg
    var aData string
 
    select {
@@ -191,7 +191,7 @@ func (o *tTestClient) Read(iBuf []byte) (int, error) {
 func (o *tTestClient) Write(iBuf []byte) (int, error) {
    if o.closed {
       fmt.Printf("%d testclient.write was closed\n", o.id)
-      return 0, &net.OpError{Op:"write", Err:tTestClientError("closed")}
+      return 0, &net.OpError{Op:"write", Err:tError("closed")}
    }
 
    aHeadLen,_ := strconv.ParseInt(string(iBuf[:4]), 16, 0)
@@ -218,7 +218,7 @@ func (o *tTestClient) Write(iBuf []byte) (int, error) {
          aTmr.Stop()
       case <-aTmr.C:
          fmt.Printf("%d testclient.write timed out on ack\n", o.id)
-         return 0, &net.OpError{Op:"write", Err:tTestClientError("noack")}
+         return 0, &net.OpError{Op:"write", Err:tError("noack")}
       }
    }
 
@@ -258,8 +258,4 @@ type tTimeoutError struct{}
 func (o *tTimeoutError) Error() string   { return "i/o timeout" }
 func (o *tTimeoutError) Timeout() bool   { return true }
 func (o *tTimeoutError) Temporary() bool { return true }
-
-type tTestClientError string
-func (o tTestClientError) Error() string { return string(o) }
-
 
