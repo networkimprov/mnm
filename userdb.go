@@ -11,6 +11,7 @@ import (
 
 const (eStatInvited = iota; eStatJoined; eStatBarred)
 
+/*
 func main() {
 
    aDb, err := NewUserDb("./userdb")
@@ -37,6 +38,7 @@ func main() {
      qlib.NewLink(qlib.NewTestClient(aDawdle))
    }
 }
+*/
 
 /* moved to qlib/testclient.go
 const ( _=iota; eRegister; eAddNode; eLogin; eListEdit; ePost; ePing; eAck )
@@ -172,7 +174,6 @@ type tMsg map[string]interface{}
 //:   user/* & group/* files are json format
 //:   alias/* files are symlinks to Uid
 
-/*
 type tUserDb struct {
    root string // top-level directory
    temp string // temp subdirectory; write files here first
@@ -358,7 +359,6 @@ func (o *tUserDb) Test(iUid string, iGid string) error {
 
 //: below is the public api
 
-/*
   func (o *tUserDb) AddUser(iUid, iNewNode string, iAliases []string) (aAliases []string, err error) {
      //: add user if iUid not in db
 
@@ -371,10 +371,9 @@ func (o *tUserDb) Test(iUid string, iGid string) error {
      */
 
 
-/*
+
      return []string{}, nil
   }
-
 
   func (o *tUserDb) SetAliases(iUid, iNode string, iAliases []string) (aAliases []string, err error) {
      //: replace aliases if iUid in db and has iNode, and iAliases elements are unique
@@ -557,4 +556,3 @@ func (o *tUserDb) commitDir(iType tType, iPath string) error {
    err = os.Rename(iPath + ".tmp", iPath)
    return err
 }
-*/
