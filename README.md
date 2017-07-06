@@ -53,15 +53,22 @@ Four hex digits give the size of the following JSON metadata,
 which may be followed by arbitrary format 8-bit data.
 Headers shall be encrypted with public keys for transmission.
 
-1. Register creates a user and client queue  
-`in progress`
+1. Register creates a user and client queue (in progress)  
+`{"op":1, "newnode":string <,"newalias":string>}`  
+.newnode is a reference to 1st client device  
+Response `{"op":"registered", "uid":string, "nodeid":string, "ok":"ok|error" <,"error":string>}`
 
-2. AddNode creates a client queue for a registered user  
-`in progress`
+2. UserEdit updates a user (in progress)  
+_todo: dropnode and dropalias; prevent account hijacking from stolen client/nodeid_  
+`{"op":2, "uid":string, "nodeid":string <,"newnode":string &| ,"newalias":string>}`  
+.newnode is a reference to Nth client device  
+Response `{"op":"updated" <,"nodeid":string>, "ok":"ok|error" <,"error":string>}`  
+At nodes `{"op":"account", "id":string, "from":string <,"newnode":string &| ,"newalias"string>}`
 
 3. Login connects a client to its queue  
-`{"op":3, "uid":string, "node":string}`   
-Response `{"op":"info|quit" "info":string}` (also given on login timeout)
+`{"op":3, "uid":string, "node":string}`  
+Response `{"op":"info|quit" "info":string}` (also given on login timeout)  
+? At nodes `{"op":"login", "id":string, "from":string, "info":string}`
 
 4. GroupEdit creates or updates a group  
 `in progress`
