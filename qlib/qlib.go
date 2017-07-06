@@ -426,7 +426,7 @@ func runQueue(o *tQueue) {
          case aAckId := <-o.ack:
             aTimeout.Stop()
             if aAckId != aMsgId {
-               fmt.Printf("%s queue.runqueue got ack for %s, expected %s\n", aAckId, aMsgId)
+               fmt.Printf("%s queue.runqueue got ack for %s, expected %s\n", o.uid, aAckId, aMsgId)
                break
             }
             sStore.RmLink(o.uid, aMsgId)
