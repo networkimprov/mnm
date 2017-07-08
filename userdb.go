@@ -40,8 +40,14 @@ type tUserDb struct {
 
 type tUser struct {
    door sync.RWMutex
-   Nodes map[string]int // value is NodeRef
+   Nodes map[string]tNode
+   NonDefunctNodesCount int
    Aliases []tAlias // public names for the user
+}
+
+type tNode struct {
+  Defunct bool
+  Qid string
 }
 
 type tAlias struct {
@@ -104,8 +110,8 @@ func TestUserDb() {
    _ = os.RemoveAll("store-udb-test")
    aDb, err := NewUserDb("store-udb-test")
    if err != nil { panic(err) }
-   defer os.RemoveAll(aDb.root) // will comment out later for testing
 
+   //defer os.RemoveAll(aDb.root)
    aOk := true
 
    fReport := func(cMsg string) {
@@ -117,7 +123,27 @@ func TestUserDb() {
       }
    }
 
-   fReport("delete this in next commit")
+   aUid := "User1"
+   aNode1, aNode2 := "Node1", "Node2"
+
+   // IMPLEMENTING ADDUSER
+   fmt.Println("Testing AddUser") // todo drop this
+   // testing successful case
+   _, err = aDb.AddUser(aUid, aNode1)
+   if err != nil || aDb.user[aUid].Nodes[aNode1].Qid != aNode1 {
+      fReport("AddUser normal case failed")
+   }
+   _, err = aDb.AddUser(aUid, aNode1)
+   if err != nil || aDb.user[aUid].Nodes[aNode1].Qid != aNode1 {
+      fReport("AddUser normal case failed")
+   }
+   // testing error cases
+   _, err = aDb.AddUser(aUid, aNode2) // iUid that already exists
+   if err == nil {
+      fReport("AddUser error expected, got success")
+   }
+   fmt.Println("AddUser tests complete") // todo drop this
+   fmt.Println()
 
    if aOk {
       fmt.Println("UserDb tests passed")
@@ -131,6 +157,26 @@ func TestUserDb() {
 func (o *tUserDb) AddUser(iUid, iNewNode string) (aQid string, err error) {
    //: add user
    //: iUid not in o.user, or already has iNewNode
+   aUser, err := o.fetchUser(iUid, eFetchMake)
+   if err != nil { panic(err) }
+
+   aQid = iNewNode //todo generate Qid properly
+
+   aUser.door.Lock()
+   defer aUser.door.Unlock()
+
+   if len(aUser.Nodes) != 0 {
+      if aUser.Nodes[iNewNode].Qid != aQid {
+         return "", tUserDbErr{msg: fmt.Sprintf("AddUser: Uid %s found, Node %s missing", iUid, iNewNode), id: eErrMissingNode}
+      }
+      return aQid, nil
+   }
+
+   aUser.Nodes[iNewNode] = tNode{Defunct: false, Qid: aQid}
+   aUser.NonDefunctNodesCount++
+
+   err = o.putRecord(eTuser, iUid, aUser)
+   if err != nil { panic(err) }
    return aQid, nil
 }
 
@@ -234,7 +280,7 @@ func (o *tUserDb) fetchUser(iUid string, iMake tFetch) (*tUser, error) {
          if !iMake {
             return nil, nil
          }
-         aUser.Nodes = make(map[string]int) // initialize user
+         aUser.Nodes = make(map[string]tNode) // initialize user
       }
 
       o.userDoor.Lock() // write-lock user map
