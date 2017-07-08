@@ -293,6 +293,18 @@ func (o *tUserDb) Test() error {
    fmt.Println("AddNode tests complete")
    fmt.Println()
 
+   fmt.Println("Testing DropNode")
+   aDroppedNodeQid, err := o.DropNode("User1","Node1") // successful case
+   fmt.Println(aDroppedNodeQid, err)
+   aDroppedNodeQid, err = o.DropNode("Non-existant user","Node1") // error: user does not exist
+   fmt.Println(aDroppedNodeQid, err)
+   aDroppedNodeQid, err = o.DropNode("User1","Non-existant node") // error: node does not exist
+   fmt.Println(aDroppedNodeQid, err)
+   // error: only one node left
+   o.AddUser("User3","Node1")
+   aDroppedNodeQid, err = o.DropNode("User3","Node1")
+   fmt.Println(aDroppedNodeQid, err)
+   fmt.Println("DropNode tests complete")
    return nil
 }
 
@@ -368,7 +380,33 @@ func (o *tUserDb) AddNode(iUid, iNode, iNewNode string) (aQid string, err error)
 func (o *tUserDb) DropNode(iUid, iNode string) (aQid string, err error) {
    //: mark iNode defunct
    //: iUid has iNode
+   aUser, err := o.fetchUser(iUid, eFetchCheck) // need to check if user is valid, if not, return error
+   if err != nil {
+      return "", err
+   }
+   if aUser == nil { // error: user does not exist
+      return "", tUserDbErr("err msg")
+   }
+   aUser.door.Lock()
+   defer aUser.door.Unlock()
 
+   aQid = iNode
+   if aUser.Nodes[iNode].Qid != aQid { // error: node is invalid
+      return "", tUserDbErr("err msg")
+   }
+   if aUser.Nodes[iNode].Defunct { // node has already been marked defunct
+      return aQid, nil
+   }
+   if aUser.NonDefunctNodesCount <= 1 { // error: user only has one node left
+      return "", tUserDbErr("err msg")
+   }
+
+   aUser.Nodes[iNode] = tNode{Defunct: true, Qid: iNode}
+   aUser.NonDefunctNodesCount--
+   return aQid, nil
+
+   o.putRecord(eTuser, iUid, aUser)
+   return "", nil
 }
 
 func (o *tUserDb) AddAlias(iUid, iNode, iNat, iEn string) error {
