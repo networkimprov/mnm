@@ -7,6 +7,7 @@ import (
    "os"
    //"qlib"
    "sync"
+   "strconv"
 )
 
 /*
@@ -270,6 +271,27 @@ func (o *tUserDb) Test() error {
    aAddedUserQid, err = o.AddUser("User1", "Node2") // iUid that already exists
    fmt.Println(aAddedUserQid, err)
    fmt.Println("AddUser tests complete")
+   fmt.Println()
+
+   fmt.Println("Testing AddNode")
+   aAddedNodeQid, err := o.AddNode("User1", "Node1", "Node2")
+   fmt.Println(aAddedNodeQid, err)
+   // test error cases for AddNode
+   aAddedNodeQid, err = o.AddNode("User1","nodeOne","Node1") //iNode invalid
+   fmt.Println(aAddedNodeQid, err)
+   aAddedNodeQid, err = o.AddNode("User1","Node1","Node1") //iNewNode already exists (not an error)
+   fmt.Println(aAddedNodeQid, err)
+   // Try to add more than 100 nodes into a user
+   aNewiNode := "Node0"
+   o.AddUser("User2", aNewiNode)
+   for i := 1; i < 100; i++ {
+      aNewiNode = "Node" + strconv.Itoa(i)
+      o.AddNode("User2", "Node0",aNewiNode)
+   }
+   aAddedNodeQid, err = o.AddNode("User2","Node0","Node100")
+   fmt.Println(aAddedNodeQid, err)
+   fmt.Println("AddNode tests complete")
+   fmt.Println()
 
    return nil
 }
@@ -311,66 +333,42 @@ func (o *tUserDb) AddNode(iUid, iNode, iNewNode string) (aQid string, err error)
    //: add node
    //: iUid has iNode
    //: iUid may already have iNewNode
+   aUser, err := o.fetchUser(iUid, eFetchCheck)
+
+   if err != nil {
+      return "", err
+   }
+
+   aUser.door.Lock()
+   defer aUser.door.Unlock()
+
+   if aUser == nil { // if user does not exist
+      return "ERROR", tUserDbErr("err msg")
+   }
+
+   aNodeQid := iNode
+   aNewNodeQid := iNewNode
+
+   if aUser.Nodes[iNode].Qid != aNodeQid { // unexpected value of Qid for iNode (iNode invalid)
+      return "ERROR", tUserDbErr("err msg")
+   }
+   if aUser.Nodes[iNewNode].Qid == aNewNodeQid { // expected value of Qid for iNode (iNewNode already exists)
+      return aNewNodeQid, nil
+   }
+   if aUser.NonDefunctNodesCount == kUserNodeMax { // cannot add more nodes
+      return "ERROR", tUserDbErr("err msg")
+   }
+
+   aUser.Nodes[iNewNode] = tNode{Defunct: false, Qid: aNewNodeQid}
+   aUser.NonDefunctNodesCount++
+   o.putRecord(eTuser, iUid, aUser)
+   return aNewNodeQid, nil
 }
 
 func (o *tUserDb) DropNode(iUid, iNode string) (aQid string, err error) {
    //: mark iNode defunct
    //: iUid has iNode
 
-   //: Check if iUid has iNode.
-   //: Check if iNode is already defunct. If it is, return success.
-   //: Check if there are 2 non-defunct nodes in iUid. If no, error. If yes, defunct that node.
-
-   //: Requires change of tUserDb. Nodes will be map[string]struct, struct contains string Qid and bool defunct
-   //: Define new type- tNode
-
-   //: When assigning to Nodes map, make a compound literal tNode that changes either the string Qid or the bool defunct
-   //: (will have copy of one value and one changed value)
-
-   //: Error- iUid does not have iNode
-   //: Error- you only have one node left
-
-   /* ACTION PLAN
-    * 1. Check if iUid has iNode. If not, return error.
-    * 2. Check if iNode is already defunct. If it is:
-         aQid = iNode
-         return aQid
-    * 3. Lock userDoor, make iNode in Nodes map defunct, decrement nonDefunctNodesCount
-         o.userDoor.Lock()
-         o.user.Nodes[iNode] = tNode{defunct: true, Qid: iNode}
-         o.user.nonDefunctNodesCount--
-         o.userDoor.Unlock()
-    * 4. aQid = iNode
-         return aQid
-    */
-
-   aUser, err := o.fetchUser(iUid, eFetchCheck) // need to check if user is valid, if not, return error
-   if err != nil {
-     return "", err
-   }
-   if aUser == nil {
-      return "", tUserDbErr("err msg")
-   }
-   aUser.door.Lock()
-   defer aUser.door.Unlock()
-
-   aQid = iNode
-   if aUser.Nodes[iNode].Qid != aQid {
-      return "", tUserDbErr("err msg")
-   }
-   if aUser.Nodes[iNode].Defunct {
-      return aQid, nil
-   }
-   if aUser.NonDefunctNodesCount <= 1 {
-      return "", tUserDbErr("err msg")
-   }
-
-   aUser.Nodes[iNode] = tNode{Defunct: true, Qid: iNode}
-   aUser.NonDefunctNodesCount--
-   return aQid, nil
-
-   o.putRecord(eTuser, iUid, aUser)
-   return "", nil
 }
 
 func (o *tUserDb) AddAlias(iUid, iNode, iNat, iEn string) error {
