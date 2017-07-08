@@ -2,48 +2,15 @@ package main
 
 import (
    "fmt"
-   "io/ioutil"
-   "encoding/json"
-   "os"
    "qlib"
-   "sync"
+   "mnm/tst_udb"
 )
 
 
 func main() {
-   aDb, err := NewUserDb("./userdb")
+   aDb, err := tst_udb.NewUserDb("./userdb")
    if err != nil { panic(err) }
-   aDb.user["u111112"] = &tUser{Nodes: map[string]int{"111112":1}}
-   aDb.user["u222223"] = &tUser{Nodes: map[string]int{"222223":1}}
-   aDb.alias["test1"] = "u111112"
-   aDb.alias["test2"] = "u222223"
-   aDb.user["u111111"] = &tUser{Nodes: map[string]int{"111111":1}}
-   aDb.user["u222222"] = &tUser{Nodes: map[string]int{"222222":1}}
-   aDb.user["u333333"] = &tUser{Nodes: map[string]int{"333333":1}}
-   aDb.alias["a1"] = "u111111"
-   aDb.alias["a2"] = "u222222"
-   aDb.group["g1"] = &tGroup{Uid: map[string]tMember{
-      "u111111": tMember{Alias: "111"},
-      "u222222": tMember{Alias: "222"},
-      "u333333": tMember{Alias: "333"},
-   }}
-
-   if false {
-      aU, err := aDb.fetchUser("fetched", eFetchMake)
-      if err != nil { panic(err) }
-      aU.door.Lock()
-      aU.Nodes["fi"] = 44
-      aU.Aliases = append(aU.Aliases, tAlias{En:"fet"})
-      aDb.putRecord(eTuser, "fetched", aU)
-      aU.door.Unlock()
-      delete(aDb.user, "fetched")
-      aU, err = aDb.fetchUser("fetched", eFetchCheck)
-      if err != nil { panic(err) }
-      aU.door.RLock()
-      fmt.Printf("node %v, alias %v\n", aU.Nodes["fi"], aU.Aliases[0].En)
-      aU.door.RUnlock()
-      return
-   }
+   aDb.Init()
 
    qlib.UDb = aDb
    qlib.Init("qstore")
@@ -171,7 +138,7 @@ func (o tTestClientError) Error() string { return string(o) }
 type tMsg map[string]interface{}
 */
 
-
+/* moved to tudb
 //: these are instructions/guidance comments
 //: you'll implement the public api to add/edit userdb records
 //: for all ops, you look up a record in cache,
@@ -497,3 +464,4 @@ func (o *tUserDb) commitDir(iType tType, iPath string) error {
    err = os.Rename(iPath + ".tmp", iPath)
    return err
 }
+*/
