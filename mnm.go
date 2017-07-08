@@ -3,14 +3,16 @@ package main
 import (
    "fmt"
    "qlib"
-   "mnm/tst_udb"
+   // deleted"mnm/tst_udb"
 )
 
 
 func main() {
-   aDb, err := tst_udb.NewUserDb("./userdb")
+   aDb, err := NewUserDb("./userdb")
    if err != nil { panic(err) }
-   aDb.Init()
+   //aDb.Init()
+   aDb.Test()
+   return
 
    qlib.UDb = aDb
    qlib.Init("qstore")
