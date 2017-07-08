@@ -40,8 +40,14 @@ type tUserDb struct {
 
 type tUser struct {
    sync.RWMutex
-   Nodes map[string]int // value is NodeRef
+   Nodes map[string]tNode
+   NonDefunctNodesCount int
    Aliases []tAlias // public names for the user
+}
+
+type tNode struct {
+  Defunct bool
+  Qid string
 }
 
 type tAlias struct {
@@ -65,7 +71,7 @@ type tUdbError struct {
 }
 func (o *tUdbError) Error() string { return string(o.msg) }
 
-const ( _=iota; )
+const ( _=iota; eErrMissingNode; )
 
 type tType string
 const (
@@ -116,7 +122,23 @@ func TestUserDb(iPath string) {
       }
    }
 
-   fReport("delete this in next commit")
+   var aUid1, aNode1 string
+
+   // ADDUSER
+   aUid1 = "AddUserUid1"
+   aNode1 = "AddUserN1"
+   _, err = aDb.AddUser(aUid1, aNode1)
+   if err != nil || aDb.user[aUid1].Nodes[aNode1].Qid != aNode1 {
+      fReport("add case failed")
+   }
+   _, err = aDb.AddUser(aUid1, aNode1)
+   if err != nil || aDb.user[aUid1].Nodes[aNode1].Qid != aNode1 {
+      fReport("re-add case failed")
+   }
+   _, err = aDb.AddUser(aUid1, "AddUserN0")
+   if err == nil || err.(*tUdbError).id != eErrMissingNode {
+      fReport("add existing case succeeded: AddUser")
+   }
 
    if aOk {
       fmt.Println("UserDb tests passed")
@@ -130,6 +152,27 @@ func TestUserDb(iPath string) {
 func (o *tUserDb) AddUser(iUid, iNewNode string) (aQid string, err error) {
    //: add user
    //: iUid not in o.user, or already has iNewNode
+   aUser, err := o.fetchUser(iUid, eFetchMake)
+   if err != nil { panic(err) }
+
+   aUser.Lock()
+   defer aUser.Unlock()
+
+   aQid = iNewNode //todo generate Qid properly
+
+   if len(aUser.Nodes) != 0 {
+      if aUser.Nodes[iNewNode].Qid != aQid {
+         return "", &tUdbError{id: eErrMissingNode,
+                       msg: fmt.Sprintf("AddUser: Uid %s found, Node %s missing", iUid, iNewNode)}
+      }
+      return aQid, nil
+   }
+
+   aUser.Nodes[iNewNode] = tNode{Defunct: false, Qid: aQid}
+   aUser.NonDefunctNodesCount++
+
+   err = o.putRecord(eTuser, iUid, aUser)
+   if err != nil { panic(err) }
    return aQid, nil
 }
 
@@ -237,7 +280,7 @@ func (o *tUserDb) fetchUser(iUid string, iMake tFetch) (*tUser, error) {
          if !iMake {
             return nil, nil
          }
-         aUser.Nodes = make(map[string]int) // initialize user
+         aUser.Nodes = make(map[string]tNode) // initialize user
       }
 
       o.userDoor.Lock() // write-lock user map
