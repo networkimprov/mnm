@@ -112,9 +112,9 @@ func TestUserDb() {
    //: invoke from main() before tTestClient loop; stop program if tests fail
    _ = os.RemoveAll("store-udb-test")
    aDb, err := NewUserDb("store-udb-test")
-   if err != nil { panic(err) }
 
    //defer os.RemoveAll(aDb.root)
+
    aOk := true
 
    fReport := func(cMsg string) {
@@ -126,7 +126,7 @@ func TestUserDb() {
       }
    }
 
-   aUid, aUid2 := "User1", "User2"
+   aUid, aUid2, aUid3 := "User1", "User2", "User3"
    aNode1, aNode2 := "Node1", "Node2"
 
    // IMPLEMENTING ADDUSER
@@ -182,6 +182,36 @@ func TestUserDb() {
    }
    fmt.Println("AddNode tests complete") // todo drop this
    fmt.Println()
+
+   // IMPLEMENTING DROPNODE
+   fmt.Println("Testing DropNode") //todo drop this
+   // testing successful case
+   _, err = aDb.DropNode(aUid, aNode1) // successful case
+   if err != nil || ! aDb.user[aUid].Nodes[aNode1].Defunct {
+      fReport("DropNode: Error with successful case")
+   }
+
+   _, err = aDb.DropNode(aUid, aNode1) // successful case (repeated)
+   if err != nil || ! aDb.user[aUid].Nodes[aNode1].Defunct {
+      fReport("DropNode: Node should already have been dropped, error with successful case")
+   }
+
+   // testing error cases
+   _, err = aDb.DropNode("Non-existant user", "Node1") // error: user does not exist
+   if err == nil {
+      fReport("DropNode: user does not exist, error expected")
+   }
+   _, err = aDb.DropNode(aUid, "Non-existant node") // error: node does not exist
+   if err == nil {
+      fReport("DropNode: Node does not exist, error expected")
+   }
+   // error: only one node left
+   aDb.AddUser("User3", "Node1")
+   _, err = aDb.DropNode(aUid3, aNode1)
+   if err == nil {
+      fReport("DropNode: last node dropped, error expected")
+   }
+   fmt.Println("DropNode tests complete") //todo drop this
 
    if aOk {
       fmt.Println("UserDb tests passed")
@@ -257,6 +287,31 @@ func (o *tUserDb) AddNode(iUid, iNode, iNewNode string) (aQid string, err error)
 func (o *tUserDb) DropNode(iUid, iNode string) (aQid string, err error) {
    //: mark iNode defunct
    //: iUid has iNode
+   aUser, err := o.fetchUser(iUid, eFetchCheck) // need to check if user is valid, if not, return error
+   if err != nil { panic(err) }
+
+   if aUser == nil { // error: user does not exist
+      return "", tUserDbErr{msg: fmt.Sprintf("DropNode: user not found"), id: eErrUserInvalid}
+   }
+   aUser.door.Lock()
+   defer aUser.door.Unlock()
+
+   aQid = iNode
+   if aUser.Nodes[iNode].Qid != aQid { // error: node is invalid
+      return "", tUserDbErr{msg: fmt.Sprintf("DropNode: iNode %s invalid", iNode), id: eErrNodeInvalid}
+   }
+   if aUser.Nodes[iNode].Defunct { // node has already been marked defunct
+      return aQid, nil
+   }
+   if aUser.NonDefunctNodesCount <= 1 { // error: user only has one node left
+      return "", tUserDbErr{msg: fmt.Sprintf("DropNode: cannot drop last node"), id: eErrLastNode}
+   }
+
+   aUser.Nodes[iNode] = tNode{Defunct: true, Qid: iNode}
+   aUser.NonDefunctNodesCount--
+
+   o.putRecord(eTuser, iUid, aUser)
+   if err != nil { panic(err) }
    return aQid, nil
 }
 
