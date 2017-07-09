@@ -8,6 +8,8 @@ import (
    "sync"
 )
 
+const kUserNodeMax = 100
+
 
 //: these are instructions/guidance comments
 //: you'll implement the public api to add/edit userdb records
@@ -71,7 +73,7 @@ type tUdbError struct {
 }
 func (o *tUdbError) Error() string { return string(o.msg) }
 
-const ( _=iota; eErrMissingNode; )
+const ( _=iota; eErrArgument; eErrMissingNode; eErrUserInvalid; eErrNodeInvalid; eErrMaxNodes; )
 
 type tType string
 const (
@@ -122,7 +124,7 @@ func TestUserDb(iPath string) {
       }
    }
 
-   var aUid1, aNode1 string
+   var aUid1, aUid2, aNode1, aNode2 string
 
    // ADDUSER
    aUid1 = "AddUserUid1"
@@ -138,6 +140,42 @@ func TestUserDb(iPath string) {
    _, err = aDb.AddUser(aUid1, "AddUserN0")
    if err == nil || err.(*tUdbError).id != eErrMissingNode {
       fReport("add existing case succeeded: AddUser")
+   }
+
+   // ADDNODE
+   aUid1, aUid2 = "AddUserUid1", "AddNodeUid2"
+   aNode1, aNode2 = "AddUserN1", "AddNodeN2"
+   _, err = aDb.AddNode(aUid1, aNode1, aNode2)
+   if err != nil || aDb.user[aUid1].Nodes[aNode2].Qid != aNode2 {
+      fReport("add case failed")
+   }
+   _, err = aDb.AddNode(aUid1, aNode1, aNode2)
+   if err != nil || aDb.user[aUid1].Nodes[aNode2].Qid != aNode2 {
+      fReport("re-add case failed")
+   }
+   _, err = aDb.AddNode(aUid1, aNode1, aNode1)
+   if err == nil || err.(*tUdbError).id != eErrArgument {
+      fReport("iNode==iNewNode case succeeded: AddNode")
+   }
+   _, err = aDb.AddNode(aUid1, "AddNodeN0", aNode2)
+   if err == nil || err.(*tUdbError).id != eErrNodeInvalid {
+      fReport("invalid node case succeeded: AddNode")
+   }
+   _, err = aDb.AddNode("AddNodeUid0", aNode1, aNode2)
+   if err == nil || err.(*tUdbError).id != eErrUserInvalid {
+      fReport("invalid user case succeeded: AddNode")
+   }
+   aDb.AddUser(aUid2, aNode2)
+   for a := 1; a < 100; a++ {
+      _, err = aDb.AddNode(aUid2, aNode2, "AddNodeN0"+fmt.Sprint(a))
+      if err != nil {
+         fReport("add 100 case failed")
+         break
+      }
+   }
+   _, err = aDb.AddNode(aUid2, aNode2, "AddNodeN100")
+   if err == nil || err.(*tUdbError).id != eErrMaxNodes {
+      fReport("add >100 case succeeded: AddNode")
    }
 
    if aOk {
@@ -180,7 +218,38 @@ func (o *tUserDb) AddNode(iUid, iNode, iNewNode string) (aQid string, err error)
    //: add node
    //: iUid has iNode
    //: iUid may already have iNewNode
-   return aQid, nil
+   if iNode == iNewNode {
+      return "", &tUdbError{id: eErrArgument, msg: fmt.Sprintf("AddNode: iNode & iNewNode both %s", iNode)}
+   }
+
+   aUser, err := o.fetchUser(iUid, eFetchCheck)
+   if err != nil { panic(err) }
+
+   if aUser == nil {
+      return "", &tUdbError{id: eErrUserInvalid, msg: fmt.Sprintf("AddNode: iUid %s not found", iUid)}
+   }
+
+   aUser.Lock()
+   defer aUser.Unlock()
+
+   aNodeQid := iNode //todo generate properly
+   aNewNodeQid := iNewNode
+   if aUser.Nodes[iNode].Qid != aNodeQid {
+      return "", &tUdbError{id: eErrNodeInvalid, msg: fmt.Sprintf("AddNode: iNode %s invalid", iNode)}
+   }
+   if aUser.Nodes[iNewNode].Qid == aNewNodeQid {
+      return aNewNodeQid, nil
+   }
+   if aUser.NonDefunctNodesCount == kUserNodeMax {
+      return "", &tUdbError{id: eErrMaxNodes, msg: fmt.Sprintf("AddNode: Exceeds %d nodes", kUserNodeMax)}
+   }
+
+   aUser.Nodes[iNewNode] = tNode{Defunct: false, Qid: aNewNodeQid}
+   aUser.NonDefunctNodesCount++
+
+   err = o.putRecord(eTuser, iUid, aUser)
+   if err != nil { panic(err) }
+   return aNewNodeQid, nil
 }
 
 func (o *tUserDb) DropNode(iUid, iNode string) (aQid string, err error) {
