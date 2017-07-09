@@ -6,6 +6,7 @@ import (
    "encoding/json"
    "os"
    "sync"
+   "strconv"
 )
 
 
@@ -80,6 +81,8 @@ const (
    eTgroup tType = "group"
 )
 
+const kUserNodeMax = 100
+
 //: add a crash recovery pass on startup
 //: examine temp dir
 //:   complete any pending transactions
@@ -123,7 +126,7 @@ func TestUserDb() {
       }
    }
 
-   aUid := "User1"
+   aUid, aUid2 := "User1", "User2"
    aNode1, aNode2 := "Node1", "Node2"
 
    // IMPLEMENTING ADDUSER
@@ -143,6 +146,41 @@ func TestUserDb() {
       fReport("AddUser error expected, got success")
    }
    fmt.Println("AddUser tests complete") // todo drop this
+   fmt.Println()
+
+   // IMPLEMENTING ADDNODE
+   fmt.Println("Testing AddNode") // todo drop this
+   //testing successful case
+   _, err = aDb.AddNode(aUid, aNode1, aNode2)
+   if err != nil || aDb.user[aUid].Nodes[aNode2].Qid != aNode2 {
+      fReport("AddNode normal case failed")
+   }
+   _, err = aDb.AddNode(aUid, aNode1, aNode2) //repeate add  Node2
+   if err != nil || aDb.user[aUid].Nodes[aNode2].Qid != aNode2 {
+      fReport("AddNode normal case failed")
+   }
+   // test error cases for AddNode
+   _, err = aDb.AddNode(aUid, "nodeOne", aNode1) //iNode invalid
+   if err == nil {
+      fReport("AddNode error expected for invalid iNode, got success")
+   }
+   _, err = aDb.AddNode(aUid, aNode1, aNode1) // iNode == iNewNode
+   if err == nil {
+      fReport("AddNode error expected for iNode==iNewNode, got success")
+   }
+
+   // Try to add more than 100 nodes into a user
+   aNewiNode := "Node0"
+   aDb.AddUser(aUid2, aNewiNode)
+   for i := 1; i < 100; i++ {
+      aNewiNode = "Node" + strconv.Itoa(i)
+      aDb.AddNode("aUid2", "Node0", aNewiNode)
+   }
+   _, err = aDb.AddNode("aUid2", "Node0", "Node101")
+   if err == nil {
+      fReport("AddNode error expected for adding >100 nodes, got success")
+   }
+   fmt.Println("AddNode tests complete") // todo drop this
    fmt.Println()
 
    if aOk {
@@ -184,7 +222,36 @@ func (o *tUserDb) AddNode(iUid, iNode, iNewNode string) (aQid string, err error)
    //: add node
    //: iUid has iNode
    //: iUid may already have iNewNode
-   return aQid, nil
+   aUser, err := o.fetchUser(iUid, eFetchCheck)
+   if err != nil { panic(err) }
+
+   if aUser == nil { // if user does not exist
+      return "", tUserDbErr{msg: fmt.Sprintf("AddNode: Uid %s not found", iUid), id: eErrUserInvalid}
+   }
+
+   aUser.door.Lock()
+   defer aUser.door.Unlock()
+
+   aNodeQid := iNode
+   aNewNodeQid := iNewNode
+   if iNode == iNewNode {
+      return "", tUserDbErr{msg: fmt.Sprintf("AddNode: iNode cannot equal iNewNode"), id: eErrNodeInvalid}
+   }
+   if aUser.Nodes[iNode].Qid != aNodeQid { // unexpected value of Qid for iNode (iNode invalid)
+      return "", tUserDbErr{msg: fmt.Sprintf("AddNode: iNode %s invalid", iNode), id: eErrNodeInvalid}
+   }
+   if aUser.Nodes[iNewNode].Qid == aNewNodeQid { // expected value of Qid for iNode (iNewNode already exists)
+      return aNewNodeQid, nil
+   }
+   if aUser.NonDefunctNodesCount == kUserNodeMax { // cannot add more nodes
+      return "", tUserDbErr{msg: "AddNode: Exceeds max nodes", id: eErrMaxNodes}
+   }
+
+   aUser.Nodes[iNewNode] = tNode{Defunct: false, Qid: aNewNodeQid}
+   aUser.NonDefunctNodesCount++
+   err = o.putRecord(eTuser, iUid, aUser)
+   if err != nil { panic(err) }
+   return aNewNodeQid, nil
 }
 
 func (o *tUserDb) DropNode(iUid, iNode string) (aQid string, err error) {
