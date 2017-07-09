@@ -73,7 +73,12 @@ type tUdbError struct {
 }
 func (o *tUdbError) Error() string { return string(o.msg) }
 
-const ( _=iota; eErrArgument; eErrMissingNode; eErrUserInvalid; eErrNodeInvalid; eErrMaxNodes; )
+const (
+   _=iota;
+   eErrArgument;
+   eErrMissingNode;
+   eErrUserInvalid; eErrNodeInvalid; eErrMaxNodes; eErrLastNode;
+)
 
 type tType string
 const (
@@ -178,6 +183,31 @@ func TestUserDb(iPath string) {
       fReport("add >100 case succeeded: AddNode")
    }
 
+   // DROPNODE
+   aUid1, aUid2 = "AddUserUid1", "DropNodeUid2"
+   aNode1, aNode2 = "AddNodeN2", "DropNodeN2"
+   _, err = aDb.DropNode(aUid1, aNode1)
+   if err != nil || ! aDb.user[aUid1].Nodes[aNode1].Defunct {
+      fReport("drop case failed")
+   }
+   _, err = aDb.DropNode(aUid1, aNode1)
+   if err != nil || ! aDb.user[aUid1].Nodes[aNode1].Defunct {
+      fReport("re-drop case failed")
+   }
+   _, err = aDb.DropNode(aUid1, "DropNodeN0")
+   if err == nil || err.(*tUdbError).id != eErrNodeInvalid {
+      fReport("invalid node case succeeded: DropNode")
+   }
+   _, err = aDb.DropNode("DropNodeUid0", "AddUserN1")
+   if err == nil || err.(*tUdbError).id != eErrUserInvalid {
+      fReport("invalid user case succeeded: DropNode")
+   }
+   aDb.AddUser(aUid2, aNode2)
+   _, err = aDb.DropNode(aUid2, aNode2)
+   if err == nil || err.(*tUdbError).id != eErrLastNode {
+      fReport("last node case succeeded: DropNode")
+   }
+
    if aOk {
       fmt.Println("UserDb tests passed")
    }
@@ -255,6 +285,32 @@ func (o *tUserDb) AddNode(iUid, iNode, iNewNode string) (aQid string, err error)
 func (o *tUserDb) DropNode(iUid, iNode string) (aQid string, err error) {
    //: mark iNode defunct
    //: iUid has iNode
+   aUser, err := o.fetchUser(iUid, eFetchCheck)
+   if err != nil { panic(err) }
+
+   if aUser == nil {
+      return "", &tUdbError{id: eErrUserInvalid, msg: fmt.Sprintf("DropNode: iUid %s not found", iUid)}
+   }
+
+   aUser.Lock()
+   defer aUser.Unlock()
+
+   aQid = iNode //todo set properly
+   if aUser.Nodes[iNode].Qid != aQid {
+      return "", &tUdbError{id: eErrNodeInvalid, msg: fmt.Sprintf("DropNode: iNode %s invalid", iNode)}
+   }
+   if aUser.Nodes[iNode].Defunct {
+      return aQid, nil
+   }
+   if aUser.NonDefunctNodesCount <= 1 {
+      return "", &tUdbError{id: eErrLastNode, msg: "DropNode: cannot drop last node"}
+   }
+
+   aUser.Nodes[iNode] = tNode{Defunct: true, Qid: iNode}
+   aUser.NonDefunctNodesCount--
+
+   o.putRecord(eTuser, iUid, aUser)
+   if err != nil { panic(err) }
    return aQid, nil
 }
 
