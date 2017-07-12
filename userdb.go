@@ -98,10 +98,29 @@ func NewUserDb(iPath string) (*tUserDb, error) {
    return aDb, nil
 }
 
-func (o *tUserDb) Test() error {
+func TestUserDb(iPath string) {
    //: exercise the api, print diagnostics
    //: invoke from main() before tTestClient loop; stop program if tests fail
-   return nil
+   _ = os.RemoveAll(iPath)
+   aDb, err := NewUserDb(iPath)
+   if err != nil { panic(err) }
+   defer os.RemoveAll(iPath) // comment out for debugging
+
+   aOk := true
+   fReport := func(cMsg string) {
+      aOk = false
+      if err != nil {
+         fmt.Fprintf(os.Stderr, "%s: %s\n", cMsg, err.Error())
+      } else {
+         fmt.Fprintf(os.Stderr, cMsg + "\n")
+      }
+   }
+
+   fReport("delete this in next commit")
+
+   if aOk {
+      fmt.Println("UserDb tests passed")
+   }
 }
 
 //: below is the public api
