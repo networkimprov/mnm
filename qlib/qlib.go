@@ -5,9 +5,13 @@ import (
    "fmt"
    "io"
    "io/ioutil"
+   "encoding/base32"
    "encoding/json"
    "net"
    "os"
+   "crypto/rand"
+   "crypto/sha1"
+   "crypto/sha256"
    "sort"
    "strconv"
    "strings"
@@ -21,6 +25,7 @@ const kQueueIdleMax time.Duration = 28 * time.Hour
 const kStoreIdIncr = 1000
 const kMsgHeaderMinLen = len(`{"op":1}`)
 const kMsgHeaderMaxLen = 1 << 8 //todo larger?
+const kNodeIdLen = 25
 
 const ( _=iota; eRegister; eAddNode; eLogin; eListEdit; ePost; ePing; eAck; eQuit; eOpEnd )
 
@@ -59,6 +64,9 @@ var (
    sMsgLogin           = tMsg{"op":"info", "info":"login ok"}
    sMsgQuit            = tMsg{"op":"quit", "info":"logout ok"}
 )
+
+// encoding without vowels to avoid words
+var sBase32 = base32.NewEncoding("%+123456789BCDFGHJKLMNPQRSTVWXYZ")
 
 var sNode = tNodes{list: tNodeMap{}}
 var sStore = tStore{}
@@ -478,6 +486,41 @@ closed:
 
 type tError string
 func (o tError) Error() string { return string(o) }
+
+
+func makeUid() string {
+   aT := time.Now()
+   aSeed := fmt.Sprintf("%s%00d%000000000d", sStore.MakeId(), aT.Second(), aT.Nanosecond())
+   aData := sha1.Sum([]byte(aSeed))
+   return sBase32.EncodeToString(aData[:])
+}
+
+func makeNodeId() (aNodeId, aSha string) {
+   aData := make([]byte, kNodeIdLen)
+   _, err := rand.Read(aData)
+   if err != nil { panic(err) }
+   aNodeId = sBase32.EncodeToString(aData)
+   aSha = _node2sha(aData)
+   return aNodeId, aSha
+}
+
+func getNodeSha(iNode *string) (string, error) {
+   aData, err := sBase32.DecodeString(*iNode)
+   if err != nil { return "", err }
+   aSha := _node2sha(aData)
+   *iNode = "" //todo erase the internal array?
+   return aSha, nil
+}
+
+func _node2sha(iNode []byte) string {
+   aData := sha256.Sum256(iNode)
+   for a:=0; a < 22388; a++ { //todo per-user count?
+      aData = sha256.Sum256(aData[:]) //todo alternate algorithm
+   }
+   aText := sBase32.EncodeToString(aData[:])
+   if aText[len(aText)-4] != '=' { panic("padding less than 4") } //todo temp
+   return aText[:len(aText)-4] // omit padding
+}
 
 
 type tStore struct { // queue and msg storage
