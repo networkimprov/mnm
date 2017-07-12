@@ -59,8 +59,13 @@ type tMember struct {
    Joined bool // use a date here?
 }
 
-type tUserDbErr string
-func (o tUserDbErr) Error() string { return string(o) }
+type tUserDbErr struct {
+   msg string
+   id int
+}
+
+func (o tUserDbErr) Error() string { return string(o.msg) }
+const ( _= iota; eErrUserInvalid; eErrMissingNode; eErrNodeInvalid; eErrMaxNodes; eErrLastNode )
 
 type tType string
 const (
@@ -93,10 +98,30 @@ func NewUserDb(iPath string) (*tUserDb, error) {
    return aDb, nil
 }
 
-func (o *tUserDb) Test() error {
+func TestUserDb() {
    //: exercise the api, print diagnostics
    //: invoke from main() before tTestClient loop; stop program if tests fail
-   return nil
+   _ = os.RemoveAll("store-udb-test")
+   aDb, err := NewUserDb("store-udb-test")
+   if err != nil { panic(err) }
+   defer os.RemoveAll(aDb.root) // will comment out later for testing
+
+   aOk := true
+
+   fReport := func(cMsg string) {
+      aOk = false
+      if err != nil {
+         fmt.Printf("%s: %s\n", cMsg, err.Error())
+      } else {
+         fmt.Printf(cMsg + "\n")
+      }
+   }
+
+   fReport("delete this in next commit")
+
+   if aOk {
+      fmt.Println("UserDb tests passed")
+   }
 }
 
 //: below is the public api

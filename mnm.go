@@ -11,7 +11,7 @@ func main() {
    aDb, err := NewUserDb("./userdb")
    if err != nil { panic(err) }
    //aDb.Init()
-   aDb.Test()
+   TestUserDb()
    return
 
    qlib.UDb = aDb
