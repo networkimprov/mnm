@@ -140,7 +140,8 @@ func (o *tUserDb) Test() error {
 func (o *tUserDb) AddUser(iUid, iNewNode string) (aQid string, err error) {
    //: add user
    //: iUid not in o.user, or already has iNewNode
-   return "", nil
+   o.user[iUid] = &tUser{Nodes: map[string]int{iNewNode:1}}
+   return "1", nil
 }
 
 func (o *tUserDb) AddNode(iUid, iNode, iNewNode string) (aQid string, err error) {
