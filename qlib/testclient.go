@@ -74,8 +74,20 @@ func newTestClient(iAct tTestAction, iId int) *tTestClient {
           want: `0025{"info":"invalid header","op":"quit"}` ,
       },{ head: tMsg{"Op":ePost, "Id":"zyx", "For":[]tHeaderFor{{}}} ,
           want: `003c{"info":"disallowed op on unauthenticated link","op":"quit"}` ,
-      },{ head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId), "NodeId":fmt.Sprint(iId)} ,
-          want: `001f{"info":"login ok","op":"info"}` ,
+      },{ head: tMsg{"Op":eRegister, "NewNode":"blue", "NewAlias":"_"} ,
+          want: `0070{"nodeid":"#nid#","op":"registered","uid":"#uid#"}`+"\n"+
+                `001f{"info":"login ok","op":"info"}` ,
+      },{ head: tMsg{"Op":eQuit} ,
+          want: `0020{"info":"logout ok","op":"quit"}` ,
+      },{ head: tMsg{"Op":eRegister, "NewNode":"blue", "NewAlias":"LongJohn Silver"} ,
+          want: `0070{"nodeid":"#nid#","op":"registered","uid":"#uid#"}`+"\n"+
+                `001f{"info":"login ok","op":"info"}` ,
+      },{ head: tMsg{"Op":eQuit} ,
+          want: `0020{"info":"logout ok","op":"quit"}` ,
+      },{ head: tMsg{"Op":eRegister, "NewNode":"blue", "NewAlias":"short"} ,
+          want: `0099{"error":"newalias must be 8+ characters",`+
+                     `"nodeid":"#nid#","op":"registered","uid":"#uid#"}`+"\n"+
+                `001f{"info":"login ok","op":"info"}` ,
       },{ head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId), "NodeId":fmt.Sprint(iId)} ,
           want: `0036{"info":"disallowed op on connected link","op":"quit"}` ,
       },{ head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId), "NodeId":fmt.Sprint(iId)} ,
@@ -203,9 +215,12 @@ func (o *tTestClient) Write(iBuf []byte) (int, error) {
       if !(o.action == eActVerifyRecv && o.count == 1) {
          if aHead["from"] != nil {
             sTestVerifyWant = strings.Replace(sTestVerifyWant, `#id#`, aHead["id"].(string), 1)
+         } else if aHead["op"].(string) == "registered" {
+            sTestVerifyWant = strings.Replace(sTestVerifyWant, `#nid#`, aHead["nodeid"].(string), 1)
+            sTestVerifyWant = strings.Replace(sTestVerifyWant, `#uid#`, aHead["uid"].(string), 1)
          }
          aI := 0; if o.action == eActVerifyRecv { aI = 1 }
-         sTestVerifyGot[aI] = string(iBuf) + "\n"
+         sTestVerifyGot[aI] += string(iBuf) + "\n"
       }
    } else {
       fmt.Printf("%d got %s\n", o.id, string(iBuf))

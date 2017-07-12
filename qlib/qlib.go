@@ -26,13 +26,14 @@ const kStoreIdIncr = 1000
 const kMsgHeaderMinLen = len(`{"op":1}`)
 const kMsgHeaderMaxLen = 1 << 8 //todo larger?
 const kNodeIdLen = 25
+const kAliasMinLen = 8
 
 const ( _=iota; eRegister; eAddNode; eLogin; eListEdit; ePost; ePing; eAck; eQuit; eOpEnd )
 
 const ( _=iota; eForUser; eForGroupAll; eForGroupExcl; eForSelf )
 
 var sHeaderDefs = [...]tHeader{
-   eRegister: { Uid:"1", NewNode:"1", Aliases:"1"    },
+   eRegister: { NewNode:"1", NewAlias:"1"            },
    eAddNode : { Uid:"1", NodeId:"1", NewNode:"1"     },
    eLogin   : { Uid:"1", NodeId:"1"                  },
    eListEdit: { Id:"1", To:"1", Type:"1", Member:"1" },
@@ -58,6 +59,7 @@ var (
    sMsgOpDisallowedOff = tMsg{"op":"quit", "info":"disallowed op on unauthenticated link"}
    sMsgOpDisallowedOn  = tMsg{"op":"quit", "info":"disallowed op on connected link"}
    sMsgOpDataless      = tMsg{"op":"quit", "info":"op does not support data"}
+   sMsgRegisterFailure = tMsg{"op":"quit", "info":"register failure"} //todo details
    sMsgLoginTimeout    = tMsg{"op":"quit", "info":"login timeout"}
    sMsgLoginFailure    = tMsg{"op":"quit", "info":"login failed"}
    sMsgLoginNodeOnline = tMsg{"op":"quit", "info":"node already connected"}
@@ -167,8 +169,7 @@ type tHeader struct {
    Uid string
    Id string
    NodeId, NewNode string
-   Aliases string
-   From, To string // alias
+   NewAlias, From, To string // alias
    Type string
    Member string
    For []tHeaderFor
@@ -180,16 +181,16 @@ func (o *tHeader) check() bool {
    if o.Op == 0 || o.Op >= eOpEnd { return false }
    aDef := &sHeaderDefs[o.Op]
    aFail :=
-      len(aDef.Uid)     > 0 && len(o.Uid)     == 0 ||
-      len(aDef.Id)      > 0 && len(o.Id)      == 0 ||
-      len(aDef.NodeId)  > 0 && len(o.NodeId)  == 0 ||
-      len(aDef.NewNode) > 0 && len(o.NewNode) == 0 ||
-      len(aDef.Aliases) > 0 && len(o.Aliases) == 0 ||
-      len(aDef.From)    > 0 && len(o.From)    == 0 ||
-      len(aDef.To)      > 0 && len(o.To)      == 0 ||
-      len(aDef.Type)    > 0 && len(o.Type)    == 0 ||
-      len(aDef.Member)  > 0 && len(o.Member)  == 0 ||
-      len(aDef.For)     > 0 && len(o.For)     == 0
+      len(aDef.Uid)      > 0 && len(o.Uid)      == 0 ||
+      len(aDef.Id)       > 0 && len(o.Id)       == 0 ||
+      len(aDef.NodeId)   > 0 && len(o.NodeId)   == 0 ||
+      len(aDef.NewNode)  > 0 && len(o.NewNode)  == 0 ||
+      len(aDef.NewAlias) > 0 && len(o.NewAlias) == 0 ||
+      len(aDef.From)     > 0 && len(o.From)     == 0 ||
+      len(aDef.To)       > 0 && len(o.To)       == 0 ||
+      len(aDef.Type)     > 0 && len(o.Type)     == 0 ||
+      len(aDef.Member)   > 0 && len(o.Member)   == 0 ||
+      len(aDef.For)      > 0 && len(o.For)      == 0
    return !aFail
 }
 
@@ -207,6 +208,29 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
    }
 
    switch iHead.Op {
+   case eRegister:
+      aUid := makeUid()
+      aNodeId, aNodeSha := makeNodeId()
+      _, err := UDb.AddUser(aUid, aNodeSha) //todo iHead.NewNode
+      if err != nil {
+         fmt.Printf("%s link.handlemsg register %s\n", o.uid, err.Error())
+         return sMsgRegisterFailure
+      }
+      aAck := tMsg{"op":sResponseOps[iHead.Op], "uid":aUid, "nodeid":aNodeId}
+      if iHead.NewAlias != "_" {
+         if len(iHead.NewAlias) < kAliasMinLen {
+            aAck["error"] = fmt.Sprintf("newalias must be %d+ characters", kAliasMinLen)
+         } else {
+            err = UDb.AddAlias(aUid, aNodeSha, "", iHead.NewAlias)
+            if err != nil {
+               aAck["error"] = err.Error()
+            }
+         }
+      }
+      o.conn.Write(PackMsg(aAck, nil))
+      iHead.Uid = aUid
+      iHead.NodeId = aNodeSha //todo aNodeId
+      fallthrough
    case eLogin:
       _, err = UDb.Verify(iHead.Uid, iHead.NodeId)
       if err != nil {
