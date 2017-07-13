@@ -22,7 +22,7 @@ const kStoreIdIncr = 1000
 const kMsgHeaderMinLen = len(`{"op":1}`)
 const kMsgHeaderMaxLen = 1 << 8 //todo larger?
 
-const ( _=iota; eRegister; eAddNode; eLogin; eListEdit; ePost; ePing; eAck; eOpEnd )
+const ( _=iota; eRegister; eAddNode; eLogin; eListEdit; ePost; ePing; eAck; eQuit; eOpEnd )
 
 const ( _=iota; eForUser; eForGroupAll; eForGroupExcl; eForSelf )
 
@@ -34,6 +34,7 @@ var sHeaderDefs = [...]tHeader{
    ePost    : { Id:"1", For:[]tHeaderFor{{}}         },
    ePing    : { Id:"1", From:"1", To:"1"             },
    eAck     : { Id:"1", Type:"1"                     },
+   eQuit    : {                                      },
 }
 
 var sResponseOps = [...]string{
@@ -56,6 +57,7 @@ var (
    sMsgLoginFailure    = tMsg{"op":"quit", "info":"login failed"}
    sMsgLoginNodeOnline = tMsg{"op":"quit", "info":"node already connected"}
    sMsgLogin           = tMsg{"op":"info", "info":"login ok"}
+   sMsgQuit            = tMsg{"op":"quit", "info":"logout ok"}
 )
 
 var sNode = tNodes{list: tNodeMap{}}
@@ -246,6 +248,8 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
       case <-aTmr.C:
          fmt.Printf("%s link.handlemsg timed out waiting on ack\n", o.uid)
       }
+   case eQuit:
+      return sMsgQuit
    default:
       panic(fmt.Sprintf("checkHeader failure, op %d", iHead.Op))
    }
