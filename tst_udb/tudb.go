@@ -43,6 +43,21 @@ func (o *tUserDb) Init() {
    }
 }
 
+func (o *tUserDb) TempUser(iUid, iNewNode string) {
+   o.user[iUid] = &tUser{Nodes: map[string]int{iNewNode: 1}}
+}
+
+func (o *tUserDb) TempAlias(iUid, iNewAlias string) {
+   o.alias[iNewAlias] = iUid
+}
+
+func (o *tUserDb) TempGroup(iGid, iUid, iAlias string) {
+   if o.group[iGid] == nil {
+      o.group[iGid] = &tGroup{Uid: map[string]tMember{}}
+   }
+   o.group[iGid].Uid[iUid] = tMember{Alias: iAlias}
+}
+
 //: these are instructions/guidance comments
 //: you'll implement the public api to add/edit userdb records
 //: for all ops, you look up a record in cache,

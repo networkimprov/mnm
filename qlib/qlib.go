@@ -99,6 +99,11 @@ type UserDatabase interface {
    GroupAlias(iGid, iUid, iNewAlias string) error
    GroupDrop(iGid, iUid, iByUid string) error
    GroupGetUsers(iGid, iByUid string) (aUids []string, err error)
+
+   // for test purposes
+   TempUser(iUid, iNewNode string)
+   TempAlias(iUid, iNewAlias string)
+   TempGroup(iGid, iUid, iAlias string)
 }
 
 

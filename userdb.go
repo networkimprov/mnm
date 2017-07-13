@@ -191,6 +191,10 @@ func (o *tUserDb) GroupGetUsers(iGid, iByUid string) (aUids []string, err error)
    return aUids, nil
 }
 
+func (*tUserDb) TempUser(iUid, iNewNode string) {}
+func (*tUserDb) TempAlias(iUid, iNewAlias string) {}
+func (*tUserDb) TempGroup(iGid, iUid, iAlias string) {}
+
 type tFetch bool
 const eFetchCheck, eFetchMake tFetch = false, true
 
