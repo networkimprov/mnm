@@ -10,21 +10,6 @@ import (
 
 
 func (o *tUserDb) Init() {
-   o.user["u111112"] = &tUser{Nodes: map[string]int{"111112":1}}
-   o.user["u222223"] = &tUser{Nodes: map[string]int{"222223":1}}
-   o.alias["test1"] = "u111112"
-   o.alias["test2"] = "u222223"
-   o.user["u111111"] = &tUser{Nodes: map[string]int{"111111":1}}
-   o.user["u222222"] = &tUser{Nodes: map[string]int{"222222":1}}
-   o.user["u333333"] = &tUser{Nodes: map[string]int{"333333":1}}
-   o.alias["a1"] = "u111111"
-   o.alias["a2"] = "u222222"
-   o.group["g1"] = &tGroup{Uid: map[string]tMember{
-      "u111111": tMember{Alias: "111"},
-      "u222222": tMember{Alias: "222"},
-      "u333333": tMember{Alias: "333"},
-   }}
-
    if false {
       aU, err := o.fetchUser("fetched", eFetchMake)
       if err != nil { panic(err) }

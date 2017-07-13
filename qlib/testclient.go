@@ -22,13 +22,25 @@ func LocalTest(i int) {
    sTestVerifyWant = "\n"
    sTestVerifyGot[1] = "\n"
 
-   //todo call UDb.AddUser(...)
+   UDb.TempUser("u111112", "111112")
+   UDb.TempUser("u222223", "222223")
+   UDb.TempAlias("u111112", "test1")
+   UDb.TempAlias("u222223", "test2")
 
    NewLink(newTestClient(eActVerifyRecv, 222223))
    NewLink(newTestClient(eActVerifySend, 111112))
    <-sTestVerifyDone
    time.Sleep(10 * time.Millisecond)
    fmt.Printf("Verify pass complete, starting cycle\n\n")
+
+   UDb.TempUser("u111111", "111111")
+   UDb.TempUser("u222222", "222222")
+   UDb.TempUser("u333333", "333333")
+   UDb.TempAlias("u111111", "a1")
+   UDb.TempAlias("u222222", "a2")
+   UDb.TempGroup("g1", "u111111", "111")
+   UDb.TempGroup("g1", "u222222", "222")
+   UDb.TempGroup("g1", "u333333", "333")
 
    sTestClientId = make(chan int, i)
    for a := 1; a <= i; a++ {
