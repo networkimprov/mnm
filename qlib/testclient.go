@@ -109,18 +109,18 @@ func newTestClient(iAct tTestAction, iId int) *tTestClient {
           want: `0099{"error":"newalias must be 8+ characters",`+
                      `"nodeid":"#nid#","op":"registered","uid":"#uid#"}`+"\n"+
                 `001f{"info":"login ok","op":"info"}` ,
-      },{ head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId), "NodeId":sTestNodeIds[iId]} ,
+      },{ head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId), "Node":sTestNodeIds[iId]} ,
           want: `0036{"info":"disallowed op on connected link","op":"quit"}` ,
-      },{ head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId), "NodeId":sTestNodeIds[iId]} ,
+      },{ head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId), "Node":sTestNodeIds[iId]} ,
           data: `extra data` ,
           want: `002f{"info":"op does not support data","op":"quit"}` ,
-      },{ head: tMsg{"Op":eLogin, "Uid":"noone", "NodeId":"none"} ,
+      },{ head: tMsg{"Op":eLogin, "Uid":"noone", "Node":"none"} ,
           want: `002b{"info":"corrupt base32 value","op":"quit"}` ,
-      },{ head: tMsg{"Op":eLogin, "Uid":"noone", "NodeId":"LB27ML46"} ,
+      },{ head: tMsg{"Op":eLogin, "Uid":"noone", "Node":"LB27ML46"} ,
           want: `0023{"info":"login failed","op":"quit"}` ,
-      },{ head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId+111111), "NodeId":sTestNodeIds[iId+111111]} ,
+      },{ head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId+111111), "Node":sTestNodeIds[iId+111111]} ,
           want: `002d{"info":"node already connected","op":"quit"}` ,
-      },{ head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId), "NodeId":sTestNodeIds[iId]} ,
+      },{ head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId), "Node":sTestNodeIds[iId]} ,
           want: `001f{"info":"login ok","op":"info"}` ,
       },{ head: tMsg{"Op":ePost, "Id":"zyx", "For":[]tHeaderFor{
                        {Id:"u"+fmt.Sprint(iId+111111), Type:eForUser} }} ,
@@ -141,7 +141,7 @@ func (o *tTestClient) verifyRead(iBuf []byte) (int, error) {
 
    if o.action == eActVerifyRecv {
       if o.count == 1 {
-         aMsg = PackMsg(tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(o.id), "NodeId":sTestNodeIds[o.id]}, nil)
+         aMsg = PackMsg(tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(o.id), "Node":sTestNodeIds[o.id]}, nil)
       } else {
          select {
          case <-sTestVerifyDone:
@@ -194,7 +194,7 @@ func (o *tTestClient) cycleRead(iBuf []byte) (int, error) {
    case <-aTmr.C:
       o.count++
       if o.count == 1 {
-         aHead = tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(o.id), "NodeId":sTestNodeIds[o.id]}
+         aHead = tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(o.id), "Node":sTestNodeIds[o.id]}
       } else if o.id == 222222 && o.count % 20 == 2 {
          aHead = tMsg{"Op":ePing, "Id":fmt.Sprint(o.count), "From":"a2", "To":"a1"}
       } else {

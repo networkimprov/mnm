@@ -34,8 +34,8 @@ const ( _=iota; eForUser; eForGroupAll; eForGroupExcl; eForSelf )
 
 var sHeaderDefs = [...]tHeader{
    eRegister: { NewNode:"1", NewAlias:"1"            },
-   eAddNode : { Uid:"1", NodeId:"1", NewNode:"1"     },
-   eLogin   : { Uid:"1", NodeId:"1"                  },
+   eAddNode : { Uid:"1", Node:"1", NewNode:"1"       },
+   eLogin   : { Uid:"1", Node:"1"                    },
    eListEdit: { Id:"1", To:"1", Type:"1", Member:"1" },
    ePost    : { Id:"1", For:[]tHeaderFor{{}}         },
    ePing    : { Id:"1", From:"1", To:"1"             },
@@ -174,7 +174,7 @@ type tHeader struct {
    Op uint8
    Uid string
    Id string
-   NodeId, NewNode string
+   Node, NewNode string
    NewAlias, From, To string // alias
    Type string
    Member string
@@ -189,7 +189,7 @@ func (o *tHeader) check() bool {
    aFail :=
       len(aDef.Uid)      > 0 && len(o.Uid)      == 0 ||
       len(aDef.Id)       > 0 && len(o.Id)       == 0 ||
-      len(aDef.NodeId)   > 0 && len(o.NodeId)   == 0 ||
+      len(aDef.Node)     > 0 && len(o.Node)     == 0 ||
       len(aDef.NewNode)  > 0 && len(o.NewNode)  == 0 ||
       len(aDef.NewAlias) > 0 && len(o.NewAlias) == 0 ||
       len(aDef.From)     > 0 && len(o.From)     == 0 ||
@@ -235,10 +235,10 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
       }
       o.conn.Write(PackMsg(aAck, nil))
       iHead.Uid = aUid
-      iHead.NodeId = aNodeId
+      iHead.Node = aNodeId
       fallthrough
    case eLogin:
-      aNodeSha, err := getNodeSha(&iHead.NodeId)
+      aNodeSha, err := getNodeSha(&iHead.Node)
       if err != nil {
          return sMsgBase32Bad
       }
@@ -254,7 +254,7 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
       o.uid = iHead.Uid
       o.node = aNodeSha
       o.queue = aQ
-      fmt.Printf("%s link.handlemsg login user %s\n", o.uid, aQ.uid)
+      fmt.Printf("%s link.handlemsg login user %.7s\n", o.uid, aQ.node)
    case ePost:
       aAck := tMsg{"op":"ack", "id":iHead.Id, "type":"ok"}
       err = o.postMsg(iHead, iData)
@@ -384,26 +384,26 @@ type tNode struct {
    queue *tQueue // instantiated on login //todo free on idle
 }
 
-func GetNode(iUid string) *tNode {
+func GetNode(iNode string) *tNode {
    sNode.create.RLock() //todo drop for sync.map
-   aNd := sNode.list[iUid]
+   aNd := sNode.list[iNode]
    sNode.create.RUnlock()
    if aNd != nil {
       return aNd
    }
    sNode.create.Lock()
-   aNd = sNode.list[iUid]
+   aNd = sNode.list[iNode]
    if aNd == nil {
-      fmt.Printf("%s getnode make node\n", iUid)
+      fmt.Printf("%.7s getnode make node\n", iNode)
       aNd = new(tNode)
-      sNode.list[iUid] = aNd
+      sNode.list[iNode] = aNd
    }
    sNode.create.Unlock()
    return aNd
 }
 
 type tQueue struct {
-   uid string
+   node string
    conn net.Conn // client ref
    connDoor sync.Mutex // control access to conn
    ack chan string // forwards acks from client
@@ -413,26 +413,26 @@ type tQueue struct {
    hasConn int32 // in use by Link
 }
 
-func QueueLink(iUid string, iConn net.Conn) *tQueue {
-   aNd := GetNode(iUid)
+func QueueLink(iNode string, iConn net.Conn) *tQueue {
+   aNd := GetNode(iNode)
    if aNd.queue == nil {
       aNd.dir.Lock()
       if aNd.queue != nil {
          aNd.dir.Unlock()
-         fmt.Printf(iUid+" newqueue attempt to recreate queue\n")
+         fmt.Printf("%.7s newqueue attempt to recreate queue\n", iNode)
       } else {
          aNd.queue = new(tQueue)
          aQ := aNd.queue
-         aQ.uid = iUid
+         aQ.node = iNode
          aQ.connDoor.Lock()
          aQ.ack = make(chan string, 10)
          aQ.in = make(chan string)
          aQ.out = make(chan string)
          var err error
-         aQ.buf, err = sStore.GetDir(iUid)
+         aQ.buf, err = sStore.GetDir(iNode)
          if err != nil { panic(err) }
          aNd.dir.Unlock()
-         fmt.Printf(iUid+" newqueue create queue\n")
+         fmt.Printf("%.7s newqueue create queue\n", iNode)
          go runElasticChan(aQ)
          go runQueue(aQ)
       }
@@ -463,7 +463,7 @@ func runQueue(o *tQueue) {
    aMsgId := <-o.out
    aConn := o.waitForConn()
    for {
-      aMsg, err := sStore.GetFile(o.uid, aMsgId)
+      aMsg, err := sStore.GetFile(o.node, aMsgId)
       if err != nil { panic(err) }
       _, err = aConn.Write(aMsg)
       if err == nil {
@@ -472,20 +472,20 @@ func runQueue(o *tQueue) {
          case aAckId := <-o.ack:
             aTimeout.Stop()
             if aAckId != aMsgId {
-               fmt.Printf("%s queue.runqueue got ack for %s, expected %s\n", o.uid, aAckId, aMsgId)
+               fmt.Printf("%.7s queue.runqueue got ack for %s, expected %s\n", o.node, aAckId, aMsgId)
                break
             }
-            sStore.RmLink(o.uid, aMsgId)
+            sStore.RmLink(o.node, aMsgId)
             aMsgId = <-o.out
             aConn = o.waitForConn()
          case <-aTimeout.C:
-            fmt.Printf("%s queue.runqueue timed out awaiting ack\n", o.uid)
+            fmt.Printf("%.7s queue.runqueue timed out awaiting ack\n", o.node)
          }
       } else if false { //todo transient
          time.Sleep(10 * time.Millisecond)
       } else {
          aConn = o.waitForConn()
-         fmt.Printf("%s runqueue resumed\n", o.uid)
+         fmt.Printf("%.7s runqueue resumed\n", o.node)
       }
    }
 }
