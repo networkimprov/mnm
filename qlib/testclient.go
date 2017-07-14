@@ -16,14 +16,15 @@ var sTestClientId chan int
 var sTestVerifyDone chan int
 var sTestVerifyWant string // expected results of verifyRead()
 var sTestVerifyGot [2]string // actual results of verifyRead()
+var sTestNodeIds map[int]string = make(map[int]string)
 
 func LocalTest(i int) {
    sTestVerifyDone = make(chan int)
    sTestVerifyWant = "\n"
    sTestVerifyGot[1] = "\n"
 
-   UDb.TempUser("u111112", "111112")
-   UDb.TempUser("u222223", "222223")
+   UDb.TempUser(testMakeUser(111112))
+   UDb.TempUser(testMakeUser(222223))
    UDb.TempAlias("u111112", "test1")
    UDb.TempAlias("u222223", "test2")
 
@@ -33,9 +34,9 @@ func LocalTest(i int) {
    time.Sleep(10 * time.Millisecond)
    fmt.Printf("Verify pass complete, starting cycle\n\n")
 
-   UDb.TempUser("u111111", "111111")
-   UDb.TempUser("u222222", "222222")
-   UDb.TempUser("u333333", "333333")
+   UDb.TempUser(testMakeUser(111111))
+   UDb.TempUser(testMakeUser(222222))
+   UDb.TempUser(testMakeUser(333333))
    UDb.TempAlias("u111111", "a1")
    UDb.TempAlias("u222222", "a2")
    UDb.TempGroup("g1", "u111111", "111")
@@ -51,6 +52,14 @@ func LocalTest(i int) {
       if a == 1 { aAct = eActDeferLogin }
       NewLink(newTestClient(aAct, <-sTestClientId))
    }
+}
+
+func testMakeUser(id int) (string, string) {
+   aNodeId := sBase32.EncodeToString([]byte(fmt.Sprint(id)))
+   sTestNodeIds[id] = aNodeId
+   aNodeSha, err := getNodeSha(&aNodeId)
+   if err != nil { panic(err) }
+   return "u"+fmt.Sprint(id), aNodeSha
 }
 
 type tTestClient struct {
@@ -100,16 +109,18 @@ func newTestClient(iAct tTestAction, iId int) *tTestClient {
           want: `0099{"error":"newalias must be 8+ characters",`+
                      `"nodeid":"#nid#","op":"registered","uid":"#uid#"}`+"\n"+
                 `001f{"info":"login ok","op":"info"}` ,
-      },{ head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId), "NodeId":fmt.Sprint(iId)} ,
+      },{ head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId), "NodeId":sTestNodeIds[iId]} ,
           want: `0036{"info":"disallowed op on connected link","op":"quit"}` ,
-      },{ head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId), "NodeId":fmt.Sprint(iId)} ,
+      },{ head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId), "NodeId":sTestNodeIds[iId]} ,
           data: `extra data` ,
           want: `002f{"info":"op does not support data","op":"quit"}` ,
       },{ head: tMsg{"Op":eLogin, "Uid":"noone", "NodeId":"none"} ,
+          want: `002b{"info":"corrupt base32 value","op":"quit"}` ,
+      },{ head: tMsg{"Op":eLogin, "Uid":"noone", "NodeId":"LB27ML46"} ,
           want: `0023{"info":"login failed","op":"quit"}` ,
-      },{ head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId+111111), "NodeId":fmt.Sprint(iId+111111)} ,
+      },{ head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId+111111), "NodeId":sTestNodeIds[iId+111111]} ,
           want: `002d{"info":"node already connected","op":"quit"}` ,
-      },{ head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId), "NodeId":fmt.Sprint(iId)} ,
+      },{ head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId), "NodeId":sTestNodeIds[iId]} ,
           want: `001f{"info":"login ok","op":"info"}` ,
       },{ head: tMsg{"Op":ePost, "Id":"zyx", "For":[]tHeaderFor{
                        {Id:"u"+fmt.Sprint(iId+111111), Type:eForUser} }} ,
@@ -130,7 +141,7 @@ func (o *tTestClient) verifyRead(iBuf []byte) (int, error) {
 
    if o.action == eActVerifyRecv {
       if o.count == 1 {
-         aMsg = PackMsg(tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(o.id), "NodeId":fmt.Sprint(o.id)}, nil)
+         aMsg = PackMsg(tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(o.id), "NodeId":sTestNodeIds[o.id]}, nil)
       } else {
          select {
          case <-sTestVerifyDone:
@@ -183,7 +194,7 @@ func (o *tTestClient) cycleRead(iBuf []byte) (int, error) {
    case <-aTmr.C:
       o.count++
       if o.count == 1 {
-         aHead = tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(o.id), "NodeId":fmt.Sprint(o.id)}
+         aHead = tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(o.id), "NodeId":sTestNodeIds[o.id]}
       } else if o.id == 222222 && o.count % 20 == 2 {
          aHead = tMsg{"Op":ePing, "Id":fmt.Sprint(o.count), "From":"a2", "To":"a1"}
       } else {

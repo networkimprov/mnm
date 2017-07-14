@@ -56,6 +56,7 @@ var (
    sMsgIncomplete      = tMsg{"op":"quit", "info":"incomplete header"}
    sMsgLengthBad       = tMsg{"op":"quit", "info":"invalid header length"}
    sMsgHeaderBad       = tMsg{"op":"quit", "info":"invalid header"}
+   sMsgBase32Bad       = tMsg{"op":"quit", "info":"corrupt base32 value"}
    sMsgOpDisallowedOff = tMsg{"op":"quit", "info":"disallowed op on unauthenticated link"}
    sMsgOpDisallowedOn  = tMsg{"op":"quit", "info":"disallowed op on connected link"}
    sMsgOpDataless      = tMsg{"op":"quit", "info":"op does not support data"}
@@ -234,20 +235,24 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
       }
       o.conn.Write(PackMsg(aAck, nil))
       iHead.Uid = aUid
-      iHead.NodeId = aNodeSha //todo aNodeId
+      iHead.NodeId = aNodeId
       fallthrough
    case eLogin:
-      _, err = UDb.Verify(iHead.Uid, iHead.NodeId)
+      aNodeSha, err := getNodeSha(&iHead.NodeId)
+      if err != nil {
+         return sMsgBase32Bad
+      }
+      _, err = UDb.Verify(iHead.Uid, aNodeSha)
       if err != nil {
          return sMsgLoginFailure
       }
-      aQ := QueueLink(iHead.NodeId, o.conn)
+      aQ := QueueLink(aNodeSha, o.conn)
       if aQ == nil {
          return sMsgLoginNodeOnline
       }
       o.conn.SetReadDeadline(time.Time{})
       o.uid = iHead.Uid
-      o.node = iHead.NodeId
+      o.node = aNodeSha
       o.queue = aQ
       fmt.Printf("%s link.handlemsg login user %s\n", o.uid, aQ.uid)
    case ePost:
