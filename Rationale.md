@@ -25,8 +25,11 @@ in academia and government. It cannot cope with the 21st Century.
 
 _Safer Modern Messaging..._
 
-Every organization, whether tiny or enormous, needs a members-only messaging service. 
-For a small organization, its cost should be negligible. 
+Every organization, whether tiny or enormous, needs a members-only messaging service, 
+that cannot receive traffic from external or unapproved senders. 
+Organizations which need to let certain members communicate with the general public could 
+establish a separate service instance for that purpose. 
+For a small organization, the service cost should be negligible. 
 
 To prevent destructive correspondence (in the case of an organization with non-restrictive membership) 
 members with whom you are not acquainted must be prevented from sending you arbitrary content. 
