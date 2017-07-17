@@ -54,13 +54,17 @@ e.g. laptop, mobile phone, tablet, smartwatch.
 If one of your messaging devices is lost or stolen, you must be able to bar it from further access to your 
 messaging accounts. A compromised device must not be able to hijack your accounts. 
 
-The messaging app on your devices must keep track of any number of messaging services to which you belong. 
-The app must clearly indicate the service that is the source of each incoming message. 
-When you setup a new device for messaging, the app must transfer your message history to the device in a peer-to-peer manner. 
-The app should encrypt your message history on local storage. 
-The app should automatically backup your message history to secondary local storage when available, 
-e.g. a flash drive or microSD card. 
-The app should run on virtually any computing device you own. 
+Since messaging services are organization-specific, and you may participate in multiple organizations, 
+the messaging app on your devices must connect to any number of messaging services. 
+The app should present separate inboxes for each service, and adjust the look of inbox & message views 
+(e.g. fonts, colors, background graphics) according to the service's skin settings (which you may revise). 
+
 For sensitive business data which cannot transit a network unencrypted, the app 
 should allow encryption prior to send and decryption on receipt, using public or shared keys.
+The app should also allow encryption of your message history on local storage. 
+The app should automatically backup your message history to secondary local storage when available, 
+e.g. a flash drive or microSD card. 
+When you setup an additional device for messaging, 
+the app must transfer your message history to the device in a peer-to-peer manner. 
+The app should run on virtually any computing device you own. 
 
