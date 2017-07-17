@@ -9,14 +9,14 @@ law enforcement. Many are quietly supported by their national governments.
 For the foreseeable future, this crime wave will worsen.
 
 One of the most devastating weapons in the cybercriminal's arsenal is an Internet application 
-which millions of us willingly use every day: e-mail. It enables criminals to...
+which millions of us willingly use every day: **e-mail**. It enables criminals to...
 
 1. Send you messages that appear to be from people you trust
 2. Send you any content on first contact, including:  
    a) links to hostile websites masquerading as trusted ones  
    b) executable programs, i.e. malware  
    c) attractively-designed disinformation and scam offers  
-3. Send you unlimited messages
+3. Send you unlimited messages without your consent
 4. Steal all your past correspondence by discovering a simple password
 5. Steal all your organization's correspondence by breaking into a single server
 
@@ -31,33 +31,33 @@ _Safer Modern Messaging_
 
 Some requirements for a messaging system that doesn't have e-mail's failings...
 
-Every organization, whether tiny or enormous, needs a members-only messaging service 
+Every organization, whether tiny or enormous, needs a **members-only messaging service** 
 that cannot receive traffic from external or unapproved senders. 
-Organizations which need to let certain members hear from the general public, 
+Organizations that need to let certain members hear from the general public, 
 or communicate with untrusted (perhaps anonymous) customers, 
-could establish a separate service instance for that purpose. 
+would establish a separate service instance for that purpose. 
 For a small organization, the cost of the messaging service should be negligible. 
 
 To prevent destructive correspondence (in the case of an organization with non-restrictive membership) 
-members with whom you are not acquainted must be prevented from sending you arbitrary content. 
+the service must prevent members with whom you are not acquainted from sending you arbitrary content. 
 
 To prevent theft of correspondence in the event of compromised accounts or servers, the messaging service 
-must store only messages which have not yet been delivered or returned as undeliverable. 
+must only **store messages that have not yet been delivered** or returned as undeliverable. 
 Where archiving is required, the service should encrypt the traffic of designated accounts 
 with a public key, and forward it to an archive service.
 
-The messaging service must also support message distribution lists/groups and IM/chat, 
+The messaging service must also support message distribution lists (aka groups) and IM/chat, 
 as existing services providing these features are just as unsafe as plain e-mail. 
 
-The messaging service must reliably deliver each message to every one of your devices that runs a messaging app, 
+The messaging service must reliably deliver each message to **every one of your devices** that runs a messaging app, 
 e.g. laptop, mobile phone, tablet, smartwatch. 
 If one of your messaging devices is lost or stolen, you must be able to bar it from further access to your 
 messaging accounts. A compromised device must not be able to hijack your accounts. 
 
 Since messaging services are organization-specific, and you may participate in multiple organizations, 
 the messaging app on your devices must connect to any number of messaging services. 
-The app should present separate inboxes for each service, and adjust the look of inbox & message views 
-(e.g. fonts, colors, background graphics) according to the service's skin settings (which you may revise). 
+The app should present a **separate inbox for each service**, and adjust the look of inbox & message views 
+(e.g. fonts, colors, background graphics) according to the service's skin settings, which you may revise. 
 
 For sensitive business data which cannot transit a network unencrypted, the app 
 should allow encryption prior to send and decryption on receipt, using public or shared keys.
