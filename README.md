@@ -2,7 +2,7 @@
 
 _Mnm is Not Mail_
 
-Nor is it a message queue. But it is similar to e-mail! See [Rationale.md](the Rationale).
+Nor is it a message queue. But it is similar to e-mail! See [the Rationale](Rationale.md).
 
 mnm is to be a general purpose message relay server. It provides:
 - Reliable message storage (via fsync) and delivery (via ack)
