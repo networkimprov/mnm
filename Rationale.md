@@ -41,13 +41,13 @@ For a small organization, the cost of the messaging service should be negligible
 To prevent destructive correspondence (in the case of an organization with non-restrictive membership) 
 the service must prevent members with whom you are not acquainted from sending you arbitrary content. 
 
-To prevent theft of correspondence in the event of compromised accounts or servers, the messaging service 
-must only **store messages that have not yet been delivered** or returned as undeliverable. 
+To prevent theft of correspondence (in the event of a compromised account or server) the messaging service 
+must **store only messages that have not yet been delivered** or returned as undeliverable. 
 Where archiving is required, the service should encrypt the traffic of designated accounts 
 with a public key, and forward it to an archive service.
 
-The messaging service must also support message distribution lists (aka groups) and IM/chat, 
-as existing services providing these features are just as unsafe as plain e-mail. 
+The messaging service must also support message distribution lists (aka groups) and instant messaging (aka chat), 
+as these features are natural extensions of a messaging system. 
 
 The messaging service must reliably deliver each message to **every one of your devices** that runs a messaging app, 
 e.g. laptop, mobile phone, tablet, smartwatch. 
