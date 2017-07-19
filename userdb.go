@@ -416,6 +416,34 @@ func (o *tUserDb) fetchUser(iUid string, iMake tFetch) (*tUser, error) {
    return aUser, nil // do .door.[R]Lock() on return value before use
 }
 
+func (o *tUserDb) fetchGroup(iGid string, iMake tFetch) (*tGroup, error){
+   o.groupDoor.RLock() // read-lock group map
+   aGroup := o.group[iGid] // lookup group in map
+   o.groupDoor.RUnlock()
+
+   if aGroup == nil { // group not in cache
+      aObj, err := o.getRecord(eTgroup, iGid)
+      if err != nil { return nil, err }
+      aGroup = aObj.(*tGroup) // "type assertion" to extract *tGroup value
+
+      if aGroup.Uid == nil { // group does not exist
+         if !iMake {
+            return nil, nil
+         }
+         aGroup.Uid = make(map[string]tMember) // initialize map of members
+      }
+
+      o.groupDoor.Lock()
+      if aTemp := o.group[iGid]; aTemp != nil { // recheck the map
+         aGroup = aTemp
+      } else {
+         o.group[iGid] = aGroup // add group to map
+      }
+      o.groupDoor.Unlock()
+   }
+   return aGroup, nil
+}
+
 // pull a file into a cache object
 func (o *tUserDb) getRecord(iType tType, iId string) (interface{}, error) {
    var err error
