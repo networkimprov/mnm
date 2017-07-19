@@ -99,6 +99,11 @@ _todo: limit number of pings per user per 24h_
 Response `{"op":"ack", "id":string, "ok":"ok|error" <,"error":string>}`  
 At recipient `{"op":"ping", "id":string, "from":string}`
 
+7. Ohi notifies chat contacts of presence (in progress)  
+`{"op":n, "id":string, "for":[{"id":string}, ...]}`  
+Response `{"op":"ack", "id":string, "ok":"ok|error" <,"error":string>}`  
+At recipient `{"op":"ohi", "id":string, "from":string}`
+
 7. Ack acknowledges receipt of a message  
 `{"op":7, "id":string, "type":string}`
 
