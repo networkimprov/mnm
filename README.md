@@ -2,10 +2,8 @@
 
 _Mnm is Not Mail_
 
-But it is similar to e-mail! See [the Rationale](Rationale.md).
-
-mnm is a person-to-person message relay server, 
-implementing an original protocol, Modern Messaging Transfer Protocol (MMTP). 
+mnm is a person-to-person message relay server, implementing an original protocol. 
+See [the Rationale](Rationale.md).
 
 mnm provides:
 - Members-only access
@@ -57,9 +55,9 @@ qstore/: queued messages awaiting delivery
 2. go run mnm #currently starts test sequence  
 _todo: prompt for key (or --key option) to decrypt userdb directory_
 
-### Modern Messaging Transfer Protocol
+### MMTP Specification
 
-MMTP defines a simple client/server exchange scheme; 
+"Modern Messaging Transfer Protocol" defines a simple client/server exchange scheme; 
 it needs no other protocol in the way that POP & IMAP need SMTP. 
 MMTP may be conveyed by any reliable transport protocol, e.g. TCP, 
 or tunneled through another protocol, e.g. HTTP. 
