@@ -82,18 +82,18 @@ _todo: integrate with third party authentication services_
 Response _same as Login_  
 At node `{"op":"registered", "uid":string, "nodeid":string <,"error":string>}`
 
-2. UserEdit updates a user (in progress)  
-_todo: dropnode and dropalias; prevent account hijacking from stolen client/nodeid_  
-`{"op":2, "uid":string, "nodeid":string <,"newnode":string &| ,"newalias":string>}`  
-.newnode is a reference to Nth client device  
-Response `{"op":"updated" <,"nodeid":string>, "ok":"ok|error" <,"error":string>}`  
-At nodes `{"op":"account", "id":string, "from":string <,"newnode":string &| ,"newalias"string>}`
-
-3. Login connects a client to its queue  
+2. Login connects a client to its queue  
 _todo: notify other nodes_  
 `{"op":3, "uid":string, "node":string}`  
 Response `{"op":"info|quit" "info":string}` (also given on login timeout)  
 ? At nodes `{"op":"login", "id":string, "from":string, "info":string}`
+
+3. UserEdit updates a user (in progress)  
+_todo: dropnode and dropalias; prevent account hijacking from stolen client/nodeid_  
+`{"op":n, "uid":string, "nodeid":string <,"newnode":string &| ,"newalias":string>}`  
+.newnode is a reference to Nth client device  
+Response `{"op":"updated" <,"nodeid":string>, "ok":"ok|error" <,"error":string>}`  
+At nodes `{"op":"account", "id":string, "from":string <,"newnode":string &| ,"newalias"string>}`
 
 4. GroupEdit creates or updates a group  
 `in progress`
