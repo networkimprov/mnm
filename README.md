@@ -67,13 +67,12 @@ or tunneled through another protocol, e.g. HTTP.
 A client may simultaneously contact multiple TMTP servers. 
 After the client completes a login or register request, either side may contact the other.
 
-0. Headers precede every message  
-`001f{ ... <,"dataLen":uint> }dataLen 8-bit bytes of data`  
-Four hex digits give the size of the following JSON metadata,
-which may be followed by arbitrary format 8-bit data.
-Headers shall be encrypted with public keys for transmission.
+Each message starts with a header, wherein four hex digits give the size of a JSON metadata object, 
+which may be followed by arbitrary format 8-bit data:  
+`001f{ ... <,"dataLen":uint> }dataLen 8-bit bytes of data`
 
-_todo: protocol version request/response_
+0. Protocol gives latest protocol version understood by client  
+`in progress`
 
 1. Register creates a user and client queue  
 _todo: receive-only accounts which cannot ping or post_  
