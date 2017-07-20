@@ -68,7 +68,7 @@ should allow encryption prior to send and decryption on receipt, using public or
 The app should also allow encryption of your message history on local storage. 
 The app should automatically backup your message history to secondary local storage when available, 
 e.g. a flash drive or microSD card. 
-The app should run on virtually any computing device you own. 
+The app should run on virtually **any computing device you own**. 
 When you setup an additional device for messaging, 
 the app must transfer your message history to the device in a peer-to-peer manner. 
 The app should provide a peer-to-peer method to let people in face-to-face contact exchange invitations to messaging services. 
