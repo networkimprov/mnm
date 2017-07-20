@@ -2,8 +2,10 @@
 
 _Mnm is Not Mail_
 
+Internet mail is facilitating an unprecedented wave of industrial espionage and organized crime around the world. 
+It's time to move Internet messaging out of their reach. See [why mnm?](Rationale.md)
+
 mnm is a person-to-person message relay server, based on a new client/server protocol. 
-See [the Rationale](Rationale.md).
 
 mnm provides:
 - Members-only access
@@ -30,7 +32,7 @@ mnm shall be accessible via several network frontends:
 - Arbitrary Golang frontend invoking qlib package
 
 Written in Go (which compiles to an executable), mnm is intended to be
-lightweight, fast, and dependency-free.
+lightweight, fast, dependency-free, and free-of-charge.
 
 The author previously prototyped this in Node.js.
 (Based on that experience, he can't recommend Node.js.)
@@ -55,13 +57,13 @@ qstore/: queued messages awaiting delivery
 2. go run mnm #currently starts test sequence  
 _todo: prompt for key (or --key option) to decrypt userdb directory_
 
-### MMTP Summary
+### TMTP Summary
 
-"Modern Messaging Transfer Protocol" defines a simple client/server exchange scheme; 
+"Trusted Messaging Transfer Protocol" defines a simple client/server exchange scheme; 
 it needs no other protocol in the way that POP & IMAP need SMTP. 
-MMTP may be conveyed by any reliable transport protocol, e.g. TCP, 
+TMTP may be conveyed by any reliable transport protocol, e.g. TCP, 
 or tunneled through another protocol, e.g. HTTP. 
-A client may simultaneously contact multiple MMTP servers. 
+A client may simultaneously contact multiple TMTP servers. 
 After the client completes a login or register request, either side may contact the other.
 
 0. Headers precede every message  
