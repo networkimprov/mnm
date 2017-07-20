@@ -55,7 +55,7 @@ qstore/: queued messages awaiting delivery
 2. go run mnm #currently starts test sequence  
 _todo: prompt for key (or --key option) to decrypt userdb directory_
 
-### MMTP Specification
+### MMTP Summary
 
 "Modern Messaging Transfer Protocol" defines a simple client/server exchange scheme; 
 it needs no other protocol in the way that POP & IMAP need SMTP. 
