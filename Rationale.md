@@ -27,7 +27,7 @@ attackers, as they create a false sense of security.
 SMTP, the protocol at the root of these problems, 
 originated at a time when the links between Internet sites were slow and intermittent, 
 and the only people using the Internet were friendly researchers in academia and government. 
-SMTP cannot cope with the 21st Century, and must be replaced.
+SMTP cannot cope with the 21st Century, and must be phased out.
 
 _Safer Modern Messaging_
 
