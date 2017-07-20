@@ -8,10 +8,12 @@ mnm is a person-to-person message relay server,
 implementing an original protocol, Modern Messaging Transfer Protocol (MMTP). 
 
 mnm provides:
+- Members-only access
 - Reliable message storage (via fsync) and delivery (via ack)
 - Message storage only until all recipients have ack'd receipt
 - In-order message delivery from any given sender
 - Distribution groups, with invitations and blockable members
+- Instant messaging presence notifications
 - Unlimited aliases per user (including single-use aliases)
 - Multiple clients/devices per user
 - Per-client strong (200 bit) passwords
@@ -105,7 +107,7 @@ At recipient `{"op":"delivery", "id":string, "from":string}`
 
 6. Ping sends a short text message via a user's alias.
 A reply establishes contact between the parties.  
-_todo: limit number of pings per user per 24h_  
+_todo: limit number of pings per 24h and consecutive failed pings_  
 `{"op":6, "id":string, "from":string, "to":string}`  
 .from & .to are user aliases  
 Response `{"op":"ack", "id":string, "ok":"ok|error" <,"error":string>}`  
