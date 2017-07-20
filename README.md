@@ -2,7 +2,7 @@
 
 _Mnm is Not Mail_
 
-mnm is a person-to-person message relay server, implementing an original protocol. 
+mnm is a person-to-person message relay server, based on a new client/server protocol. 
 See [the Rationale](Rationale.md).
 
 mnm provides:
