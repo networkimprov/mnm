@@ -68,7 +68,7 @@ A client may simultaneously contact multiple TMTP servers.
 After the client completes a login or register request, either side may contact the other.
 
 Each message starts with a header, wherein four hex digits give the size of a JSON metadata object, 
-which may be followed by arbitrary format 8-bit data:  
+which may be followed by arbitrary format 8-bit data: 
 `001f{ ... <,"dataLen":uint> }dataLen 8-bit bytes of data`
 
 0. Protocol gives latest protocol version understood by client  
