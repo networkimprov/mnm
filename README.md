@@ -5,7 +5,7 @@ _Mnm is Not Mail_
 Internet mail is facilitating an unprecedented wave of industrial espionage and organized crime around the world. 
 It's time to move Internet messaging out of their reach. See [why mnm?](Rationale.md)
 
-mnm is a person-to-person message relay server, based on a new client/server protocol. 
+mnm is a person-to-person message relay server, based on a new client/server protocol. (It's not a web app.) 
 
 mnm provides:
 - Members-only access
