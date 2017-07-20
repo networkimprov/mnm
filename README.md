@@ -4,7 +4,7 @@ _Mnm is Not Mail_
 
 But it is similar to e-mail! See [the Rationale](Rationale.md).
 
-mnm is to be a general purpose message relay server, 
+mnm is a person-to-person message relay server, 
 implementing an original protocol, Modern Messaging Transfer Protocol (MMTP). 
 
 mnm provides:
@@ -61,7 +61,7 @@ MMTP defines a simple client/server exchange scheme;
 it needs no other protocol in the way that POP & IMAP need SMTP. 
 MMTP may be conveyed by any reliable transport protocol, e.g. TCP, 
 or tunneled through another protocol, e.g. HTTP. 
-MMTP clients may simultaneously contact multiple MMTP servers. 
+A client may simultaneously contact multiple MMTP servers. 
 After the client completes a login or register request, either side may contact the other.
 
 0. Headers precede every message  
