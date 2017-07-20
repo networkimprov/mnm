@@ -1,4 +1,4 @@
-### Why mnm?
+### Why mnm & MMTP?
 
 _The Internet Crime Wave_
 
@@ -24,12 +24,14 @@ These vulnerabilities have forced the adoption of spam filters that inevitably b
 messages, yet fail to block carefully crafted or targeted attacks. Spam filters may even help such 
 attackers, as they create a false sense of security.
 
-E-mail originated when the only people on the Internet were friendly researchers 
-in academia and government. E-mail cannot cope with the 21st Century, and must be replaced.
+SMTP, the protocol at the root of these problems, 
+originated at a time when the links between Internet sites were slow and intermittent, 
+and the only people using the Internet were friendly researchers in academia and government. 
+SMTP cannot cope with the 21st Century, and must be replaced.
 
 _Safer Modern Messaging_
 
-Some requirements for a messaging system that doesn't have e-mail's failings...
+Some requirements for a messaging system that doesn't have the above failings...
 
 Every organization, whether tiny or enormous, needs a **members-only messaging service** 
 that cannot receive traffic from external or unapproved senders. 
