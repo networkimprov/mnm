@@ -41,10 +41,11 @@ http://github.com/networkimprov/websocket.MQ
 
 ### What's here
 
-- qlib/qlib.go: package with simple API to the reciever & sender threads.
-- qlib/testclient.go: in-process test client, invoked from main().
-- mnm.go: main(), frontends (in progress), temporary home of tUserDb.
-- vendor/qlib: symlink to qlib/ to simplify build
+- qlib/qlib.go: package with simple API to the reciever & sender threads
+- qlib/testclient.go: in-process test client, invoked from main()
+- userdb.go: user records management
+- mnm.go: main(), frontends (coming soon)
+- codestyle.txt: how to make Go source much more clear
 - After build & run:  
 mnm: the app!  
 userdb/: user & group data  
