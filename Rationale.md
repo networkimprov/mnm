@@ -1,4 +1,4 @@
-### Why mnm & MMTP?
+### Why mnm & TMTP?
 
 _The Internet Crime Wave_
 
@@ -29,7 +29,7 @@ originated at a time when the links between Internet sites were slow and intermi
 and the only people using the Internet were friendly researchers in academia and government. 
 SMTP cannot cope with the 21st Century, and must be phased out.
 
-_Safer Modern Messaging_
+_Trusted Messaging for Today's Internet_
 
 Some requirements for a messaging system that doesn't have the above failings...
 
