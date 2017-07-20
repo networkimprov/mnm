@@ -2,9 +2,12 @@
 
 _Mnm is Not Mail_
 
-Nor is it a message queue. But it is similar to e-mail! See [the Rationale](Rationale.md).
+But it is similar to e-mail! See [the Rationale](Rationale.md).
 
-mnm is to be a general purpose message relay server. It provides:
+mnm is to be a general purpose message relay server, 
+implementing an original protocol, Modern Messaging Transfer Protocol (MMTP). 
+
+mnm provides:
 - Reliable message storage (via fsync) and delivery (via ack)
 - Message storage only until all recipients have ack'd receipt
 - In-order message delivery from any given sender
@@ -52,13 +55,22 @@ qstore/: queued messages awaiting delivery
 2. go run mnm #currently starts test sequence  
 _todo: prompt for key (or --key option) to decrypt userdb directory_
 
-### Protocol
+### Modern Messaging Transfer Protocol
+
+MMTP defines a simple client/server exchange scheme; 
+it needs no other protocol in the way that POP & IMAP need SMTP. 
+MMTP may be conveyed by any reliable transport protocol, e.g. TCP, 
+or tunneled through another protocol, e.g. HTTP. 
+MMTP clients may simultaneously contact multiple MMTP servers. 
+After the client completes a login or register request, either side may contact the other.
 
 0. Headers precede every message  
 `001f{ ... <,"dataLen":uint> }dataLen 8-bit bytes of data`  
 Four hex digits give the size of the following JSON metadata,
 which may be followed by arbitrary format 8-bit data.
 Headers shall be encrypted with public keys for transmission.
+
+_todo: protocol version request/response_
 
 1. Register creates a user and client queue  
 _todo: receive-only accounts which cannot ping or post_  
