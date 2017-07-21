@@ -70,7 +70,7 @@ Each message starts with a header, wherein four hex digits give the size of a JS
 which may be followed by arbitrary format 8-bit data: 
 `001f{ ... <,"dataLen":uint> }dataLen 8-bit bytes of data`
 
-0. Protocol gives the latest recognized protocol version  
+0. TmtpRev gives the latest recognized protocol version  
 `in progress`
 
 1. Register creates a user and client queue  
