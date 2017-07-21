@@ -463,9 +463,8 @@ func runQueue(o *tQueue) {
    aMsgId := <-o.out
    aConn := o.waitForConn()
    for {
-      aMsg, err := sStore.GetFile(o.node, aMsgId)
-      if err != nil { panic(err) }
-      _, err = aConn.Write(aMsg)
+      err := sStore.SendFile(o.node, aMsgId, aConn)
+      if _,ok := err.(*os.PathError); ok { panic(err) } //todo move to sStore?
       if err == nil {
          aTimeout := time.NewTimer(kQueueAckTimeout)
          select {
@@ -680,8 +679,12 @@ func (o *tStore) SyncDirs(iNode string) error {
    return err
 }
 
-func (o *tStore) GetFile(iNode, iId string) ([]byte, error) {
-   return ioutil.ReadFile(o.nodeSub(iNode)+"/"+iId)
+func (o *tStore) SendFile(iNode, iId string, iConn net.Conn) error {
+   aFd, err := os.Open(o.nodeSub(iNode)+"/"+iId)
+   if err != nil { return err }
+   defer aFd.Close()
+   _,err = io.Copy(iConn, aFd) // calls sendfile(2) in iConn.ReadFrom()
+   return err
 }
 
 func (o *tStore) GetDir(iNode string) (ret []string, err error) {
