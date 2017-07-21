@@ -10,9 +10,10 @@ mnm is a person-to-person message relay server, based on a new client/server pro
 mnm provides:
 - Members-only access
 - Member aliases (including single-use aliases) to limit first-contact content
+- Authorization for receive/send or receive-only
 - Distribution groups, with invitations and member blocking
 - IM/chat presence notifications
-- Multiple messaging clients/devices per user
+- Multiple messaging clients/devices per member
 - Per-client strong (200 bit) passwords
 - Reliable message storage (via fsync) and delivery (via ack)
 - Message storage only until all recipients have ack'd receipt
