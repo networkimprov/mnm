@@ -1,4 +1,4 @@
-### Why mnm?
+### Why mnm & TMTP?
 
 _The Internet Crime Wave_
 
@@ -22,14 +22,18 @@ which millions of us willingly use every day: **e-mail**. It enables criminals t
 
 These vulnerabilities have forced the adoption of spam filters that inevitably bury legitimate 
 messages, yet fail to block carefully crafted or targeted attacks. Spam filters may even help such 
-attackers, as they create a false sense of security.
+attackers, as they create a false sense of security. 
+In desperation, organizations have turned to proprietary SaaS messaging products, 
+which lock them into a closed-source system built for the convenience of the vendor, not its customers.
 
-E-mail originated when the only people on the Internet were friendly researchers 
-in academia and government. E-mail cannot cope with the 21st Century, and must be replaced.
+SMTP, the protocol at the root of these problems, 
+originated at a time when the links between Internet sites were slow and intermittent, 
+and the only people using the Internet were friendly researchers in academia and government. 
+SMTP cannot cope with the 21st Century, and must be phased out.
 
-_Safer Modern Messaging_
+_Trusted Messaging for Today's Internet_
 
-Some requirements for a messaging system that doesn't have e-mail's failings...
+Some requirements for a messaging system that doesn't have the above failings...
 
 Every organization, whether tiny or enormous, needs a **members-only messaging service** 
 that cannot receive traffic from external or unapproved senders. 
@@ -64,7 +68,7 @@ should allow encryption prior to send and decryption on receipt, using public or
 The app should also allow encryption of your message history on local storage. 
 The app should automatically backup your message history to secondary local storage when available, 
 e.g. a flash drive or microSD card. 
+The app should run on virtually **any computing device you own**. 
 When you setup an additional device for messaging, 
 the app must transfer your message history to the device in a peer-to-peer manner. 
-The app should run on virtually any computing device you own. 
-
+The app should provide a peer-to-peer method to let people in face-to-face contact exchange invitations to messaging services. 

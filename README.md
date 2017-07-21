@@ -2,22 +2,30 @@
 
 _Mnm is Not Mail_
 
-Nor is it a message queue. But it is similar to e-mail! See [the Rationale](Rationale.md).
+You choose the websites you visit; now choose who can send you mail. 
+See [Why mnm?](Rationale.md)
 
-mnm is to be a general purpose message relay server. It provides:
+mnm is a person-to-person (or app-to-app) message relay server, based on a new client/server protocol. 
+(It's not a web app.) 
+Written in Go, mnm aims to be lightweight, fast, dependency-free, and free of charge.
+
+mnm provides:
+- Members-only access
+- Member aliases (including single-use aliases) to limit first-contact content
+- Authorization for receive/send or receive-only
+- Distribution groups, with invitations and member blocking
+- IM/chat presence notifications
+- Multiple messaging clients/devices per member
+- Per-client strong (200 bit) passwords
 - Reliable message storage (via fsync) and delivery (via ack)
 - Message storage only until all recipients have ack'd receipt
 - In-order message delivery from any given sender
-- Distribution groups, with invitations and blockable members
-- Unlimited aliases per user (including single-use aliases)
-- Multiple clients/devices per user
-- Per-client strong (200 bit) passwords
 
 mnm does not provide:
 - Message encryption; clients are responsible for encryption before/after transmission
 
 mnm may provide:
-- a gateway to whitelisted mnm & SMTP sites
+- Gateways to whitelisted mnm & SMTP sites
 
 mnm shall be accessible via several network frontends:
 - TCP server
@@ -26,9 +34,6 @@ mnm shall be accessible via several network frontends:
 - Unix domain sockets
 - Arbitrary Golang frontend invoking qlib package
 
-Written in Go (which compiles to an executable), mnm is intended to be
-lightweight, fast, and dependency-free.
-
 The author previously prototyped this in Node.js.
 (Based on that experience, he can't recommend Node.js.)
 _Warning, unreadable Javascript hackery follows._
@@ -36,10 +41,11 @@ http://github.com/networkimprov/websocket.MQ
 
 ### What's here
 
-- qlib/qlib.go: package with simple API to the reciever & sender threads.
-- qlib/testclient.go: in-process test client, invoked from main().
-- mnm.go: main(), frontends (in progress), temporary home of tUserDb.
-- vendor/qlib: symlink to qlib/ to simplify build
+- qlib/qlib.go: package with simple API to the reciever & sender threads
+- qlib/testclient.go: in-process test client, invoked from main()
+- userdb.go: user records management
+- mnm.go: main(), frontends (coming soon)
+- codestyle.txt: how to make Go source much more clear
 - After build & run:  
 mnm: the app!  
 userdb/: user & group data  
@@ -52,13 +58,21 @@ qstore/: queued messages awaiting delivery
 2. go run mnm #currently starts test sequence  
 _todo: prompt for key (or --key option) to decrypt userdb directory_
 
-### Protocol
+### TMTP Summary
 
-0. Headers precede every message  
-`001f{ ... <,"dataLen":uint> }dataLen 8-bit bytes of data`  
-Four hex digits give the size of the following JSON metadata,
-which may be followed by arbitrary format 8-bit data.
-Headers shall be encrypted with public keys for transmission.
+"Trusted Messaging Transfer Protocol" defines a simple client/server exchange scheme; 
+it needs no other protocol in the way that POP & IMAP need SMTP. 
+TMTP may be conveyed by any reliable transport protocol, e.g. TCP, 
+or tunneled through another protocol, e.g. HTTP. 
+A client may simultaneously contact multiple TMTP servers. 
+After the client completes a login or register request, either side may contact the other.
+
+Each message starts with a header, wherein four hex digits give the size of a JSON metadata object, 
+which may be followed by arbitrary format 8-bit data: 
+`001f{ ... <,"dataLen":uint> }dataLen 8-bit bytes of data`
+
+0. TmtpRev gives the latest recognized protocol version  
+`in progress`
 
 1. Register creates a user and client queue  
 _todo: receive-only accounts which cannot ping or post_  
@@ -68,18 +82,18 @@ _todo: integrate with third party authentication services_
 Response _same as Login_  
 At node `{"op":"registered", "uid":string, "nodeid":string <,"error":string>}`
 
-2. UserEdit updates a user (in progress)  
-_todo: dropnode and dropalias; prevent account hijacking from stolen client/nodeid_  
-`{"op":2, "uid":string, "nodeid":string <,"newnode":string &| ,"newalias":string>}`  
-.newnode is a reference to Nth client device  
-Response `{"op":"updated" <,"nodeid":string>, "ok":"ok|error" <,"error":string>}`  
-At nodes `{"op":"account", "id":string, "from":string <,"newnode":string &| ,"newalias"string>}`
-
-3. Login connects a client to its queue  
+2. Login connects a client to its queue  
 _todo: notify other nodes_  
 `{"op":3, "uid":string, "node":string}`  
 Response `{"op":"info|quit" "info":string}` (also given on login timeout)  
 ? At nodes `{"op":"login", "id":string, "from":string, "info":string}`
+
+3. UserEdit updates a user (in progress)  
+_todo: dropnode and dropalias; prevent account hijacking from stolen client/nodeid_  
+`{"op":n, "uid":string, "nodeid":string <,"newnode":string &| ,"newalias":string>}`  
+.newnode is a reference to Nth client device  
+Response `{"op":"updated" <,"nodeid":string>, "ok":"ok|error" <,"error":string>}`  
+At nodes `{"op":"account", "id":string, "from":string <,"newnode":string &| ,"newalias"string>}`
 
 4. GroupEdit creates or updates a group  
 `in progress`
@@ -93,7 +107,7 @@ At recipient `{"op":"delivery", "id":string, "from":string}`
 
 6. Ping sends a short text message via a user's alias.
 A reply establishes contact between the parties.  
-_todo: limit number of pings per user per 24h_  
+_todo: limit number of pings per 24h and consecutive failed pings_  
 `{"op":6, "id":string, "from":string, "to":string}`  
 .from & .to are user aliases  
 Response `{"op":"ack", "id":string, "ok":"ok|error" <,"error":string>}`  
