@@ -6,6 +6,7 @@ Internet mail is facilitating an unprecedented wave of industrial espionage and 
 It's time to move Internet messaging out of their reach. See [Why mnm?](Rationale.md)
 
 mnm is a person-to-person message relay server, based on a new client/server protocol. (It's not a web app.) 
+Written in Go, mnm aims to be lightweight, fast, dependency-free, and free of charge.
 
 mnm provides:
 - Members-only access
@@ -31,9 +32,6 @@ mnm shall be accessible via several network frontends:
 - HTTP + Websockets
 - Unix domain sockets
 - Arbitrary Golang frontend invoking qlib package
-
-Written in Go (which compiles to an executable), mnm is intended to be
-lightweight, fast, dependency-free, and free-of-charge.
 
 The author previously prototyped this in Node.js.
 (Based on that experience, he can't recommend Node.js.)
