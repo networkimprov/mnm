@@ -22,7 +22,7 @@ mnm does not provide:
 - Message encryption; clients are responsible for encryption before/after transmission
 
 mnm may provide:
-- a gateway to whitelisted mnm & SMTP sites
+- Gateways to whitelisted mnm & SMTP sites
 
 mnm shall be accessible via several network frontends:
 - TCP server
