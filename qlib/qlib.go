@@ -23,8 +23,8 @@ const kLoginTimeout time.Duration =  5 * time.Second
 const kQueueAckTimeout time.Duration = 3 * time.Second
 const kQueueIdleMax time.Duration = 28 * time.Hour
 const kStoreIdIncr = 1000
-const kMsgHeaderMinLen = len(`{"op":1}`)
-const kMsgHeaderMaxLen = 1 << 8 //todo larger?
+const kMsgHeaderMinLen = int64(len(`{"op":1}`))
+const kMsgHeaderMaxLen = int64(1 << 16)
 const kNodeIdLen = 25
 const kAliasMinLen = 8
 
@@ -33,14 +33,14 @@ const ( _=iota; eRegister; eAddNode; eLogin; eListEdit; ePost; ePing; eAck; eQui
 const ( _=iota; eForUser; eForGroupAll; eForGroupExcl; eForSelf )
 
 var sHeaderDefs = [...]tHeader{
-   eRegister: { NewNode:"1", NewAlias:"1"            },
-   eAddNode : { Uid:"1", Node:"1", NewNode:"1"       },
-   eLogin   : { Uid:"1", Node:"1"                    },
-   eListEdit: { Id:"1", To:"1", Type:"1", Member:"1" },
-   ePost    : { Id:"1", For:[]tHeaderFor{{}}         },
-   ePing    : { Id:"1", From:"1", To:"1"             },
-   eAck     : { Id:"1", Type:"1"                     },
-   eQuit    : {                                      },
+   eRegister: { NewNode:"1", NewAlias:"1"               },
+   eAddNode : { Uid:"1", Node:"1", NewNode:"1"          },
+   eLogin   : { Uid:"1", Node:"1"                       },
+   eListEdit: { Id:"1", To:"1", Type:"1", Member:"1"    },
+   ePost    : { Id:"1", DataLen:1, For:[]tHeaderFor{{}} },
+   ePing    : { Id:"1", DataLen:1, From:"1", To:"1"     },
+   eAck     : { Id:"1", Type:"1"                        },
+   eQuit    : {                                         },
 }
 
 var sResponseOps = [...]string{
@@ -53,13 +53,11 @@ var sResponseOps = [...]string{
 }
 
 var (
-   sMsgIncomplete      = tMsg{"op":"quit", "info":"incomplete header"}
    sMsgLengthBad       = tMsg{"op":"quit", "info":"invalid header length"}
    sMsgHeaderBad       = tMsg{"op":"quit", "info":"invalid header"}
    sMsgBase32Bad       = tMsg{"op":"quit", "info":"corrupt base32 value"}
    sMsgOpDisallowedOff = tMsg{"op":"quit", "info":"disallowed op on unauthenticated link"}
    sMsgOpDisallowedOn  = tMsg{"op":"quit", "info":"disallowed op on connected link"}
-   sMsgOpDataless      = tMsg{"op":"quit", "info":"op does not support data"}
    sMsgRegisterFailure = tMsg{"op":"quit", "info":"register failure"} //todo details
    sMsgLoginTimeout    = tMsg{"op":"quit", "info":"login timeout"}
    sMsgLoginFailure    = tMsg{"op":"quit", "info":"login failed"}
@@ -121,12 +119,13 @@ func NewLink(iConn net.Conn) *Link {
 }
 
 func runLink(o *Link) {
+   aBuf := make([]byte, kMsgHeaderMaxLen+4) //todo start smaller, realloc as needed
+   var aPos, aHeadEnd int64
    var aQuitMsg tMsg
-   aBuf := make([]byte, kMsgHeaderMaxLen+4)
 
    o.conn.SetReadDeadline(time.Now().Add(kLoginTimeout))
    for {
-      aLen, err := o.conn.Read(aBuf)
+      aLen, err := o.conn.Read(aBuf[aPos:])
       if err != nil {
          //todo if recoverable continue
          if err.(net.Error).Timeout() {
@@ -136,15 +135,21 @@ func runLink(o *Link) {
          }
          break
       }
-      if aLen < kMsgHeaderMinLen+4 {
-         aQuitMsg = sMsgIncomplete
-         break
+      aPos += int64(aLen)
+   Parse:
+      if aPos < kMsgHeaderMinLen+4 {
+         continue
       }
-      aUi,_ := strconv.ParseUint(string(aBuf[:4]), 16, 0)
-      aHeadEnd := int(aUi)+4
-      if aHeadEnd-4 < kMsgHeaderMinLen || aHeadEnd > aLen {
-         aQuitMsg = sMsgLengthBad
-         break
+      if aHeadEnd == 0 {
+         aUi,_ := strconv.ParseUint(string(aBuf[:4]), 16, 0)
+         aHeadEnd = int64(aUi)+4
+         if aHeadEnd-4 < kMsgHeaderMinLen {
+            aQuitMsg = sMsgLengthBad
+            break
+         }
+      }
+      if aHeadEnd > aPos {
+         continue
       }
       aHead := new(tHeader)
       err = json.Unmarshal(aBuf[4:aHeadEnd], aHead)
@@ -153,11 +158,20 @@ func runLink(o *Link) {
          break
       }
       var aData []byte
-      if aLen > aHeadEnd {
-         aData = aBuf[aHeadEnd:aLen]
+      if aPos > aHeadEnd && aHead.DataLen > 0 {
+         aEnd := aHeadEnd + aHead.DataLen; if aPos < aEnd { aEnd = aPos }
+         aData = aBuf[aHeadEnd:aEnd]
       }
       aQuitMsg = o.HandleMsg(aHead, aData)
-      if aQuitMsg != nil { break }
+      if aQuitMsg != nil {
+         break
+      }
+      if aPos > aHeadEnd + aHead.DataLen {
+         aPos = int64(copy(aBuf, aBuf[aHeadEnd + aHead.DataLen : aPos]))
+         aHeadEnd = 0
+         goto Parse
+      }
+      aPos, aHeadEnd = 0,0
    }
 
    if aQuitMsg != nil {
@@ -172,6 +186,7 @@ func runLink(o *Link) {
 
 type tHeader struct {
    Op uint8
+   DataLen int64
    Uid string
    Id string
    Node, NewNode string
@@ -187,6 +202,8 @@ func (o *tHeader) check() bool {
    if o.Op == 0 || o.Op >= eOpEnd { return false }
    aDef := &sHeaderDefs[o.Op]
    aFail :=
+      o.DataLen < 0                                  ||
+      (aDef.DataLen == 0)    != (o.DataLen == 0)     ||
       len(aDef.Uid)      > 0 && len(o.Uid)      == 0 ||
       len(aDef.Id)       > 0 && len(o.Id)       == 0 ||
       len(aDef.Node)     > 0 && len(o.Node)     == 0 ||
@@ -207,10 +224,6 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
       if o.node == "" { return sMsgOpDisallowedOff }
    } else {
       if o.node != "" { return sMsgOpDisallowedOn }
-   }
-
-   if iHead.Op != ePost && iHead.Op != eListEdit && iHead.Op != ePing {
-      if iData != nil { return sMsgOpDataless }
    }
 
    switch iHead.Op {
@@ -271,8 +284,9 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
       } else {
          aUid, err = UDb.Lookup(iHead.To)
          if err == nil {
-            aHead := tHeader{Op:ePing, Id:iHead.Id, For:[]tHeaderFor{{Id:aUid, Type:eForUser}}}
-            err = o.postMsg(&aHead, []byte("ping from "+iHead.From))
+            aHead := tHeader{Op:ePing, DataLen:iHead.DataLen, Id:iHead.Id,
+                             For:[]tHeaderFor{{Id:aUid, Type:eForUser}}}
+            err = o.postMsg(&aHead, iData)
          }
       }
       aAck := tMsg{"op":"ack", "id":iHead.Id, "type":"ok"}
@@ -301,8 +315,8 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
 func (o *Link) postMsg(iHead *tHeader, iData []byte) error {
    var err error
    aMsgId := sStore.MakeId()
-   aBuf := PackMsg(tMsg{"op":sResponseOps[iHead.Op], "id":aMsgId, "from":o.uid}, iData)
-   err = sStore.PutFile(aMsgId, aBuf)
+   aBuf := PackMsg(tMsg{"op":sResponseOps[iHead.Op], "id":aMsgId, "from":o.uid, "datalen":iHead.DataLen}, nil)
+   err = sStore.RecvFile(aMsgId, aBuf, iData, o.conn, iHead.DataLen)
    if err != nil { panic(err) }
    defer sStore.RmFile(aMsgId)
    aForNodes := make(map[string]bool, len(iHead.For)) //todo x2 or more?
@@ -621,14 +635,18 @@ func (o *tStore) MakeId() string {
    return fmt.Sprintf("%016x", aN)
 }
 
-func (o *tStore) PutFile(iId string, iBuf []byte) error {
+func (o *tStore) RecvFile(iId string, iHead, iData []byte, iStream io.Reader, iLen int64) error {
    aFd, err := os.OpenFile(o.temp+iId, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
    if err != nil { return err }
    defer aFd.Close()
-   for aPos, aLen := 0,0; aPos < len(iBuf); aPos += aLen {
-      aLen, err = aFd.Write(iBuf[aPos:])
+   _,err = aFd.Write(iHead)
+   if err != nil { return err }
+   for aPos, aLen := 0,0; aPos < len(iData); aPos += aLen {
+      aLen, err = aFd.Write(iData[aPos:])
       if err != nil && err != io.ErrShortWrite { return err }
    }
+   _,err = io.CopyN(aFd, iStream, iLen - int64(len(iData)))
+   if err != nil { return err }
    err = aFd.Sync()
    return err
 }

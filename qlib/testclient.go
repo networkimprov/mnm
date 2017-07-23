@@ -86,15 +86,14 @@ func newTestClient(iAct tTestAction, iId int) *tTestClient {
    }
    if iAct == eActVerifySend {
       aTc.work = []tTestWork{
-        { msg : []byte(`0007{"O":0}`) ,
-          want: `0028{"info":"incomplete header","op":"quit"}` ,
-      },{ msg : []byte(`00z1{"Op":3, "Uid":"noone"}`) ,
+        { msg : []byte(`00z1{"Op":3, "Uid":"noone"}`) ,
           want: `002c{"info":"invalid header length","op":"quit"}` ,
       },{ msg : []byte(`000a{"Op":12f3`) ,
           want: `0025{"info":"invalid header","op":"quit"}` ,
       },{ head: tMsg{"Op":eLogin, "Uid":"noone", "NoId":"none"} ,
           want: `0025{"info":"invalid header","op":"quit"}` ,
-      },{ head: tMsg{"Op":ePost, "Id":"zyx", "For":[]tHeaderFor{{}}} ,
+      },{ head: tMsg{"Op":ePost, "Id":"zyx", "Datalen":1, "For":[]tHeaderFor{{}}} ,
+          data: `1` ,
           want: `003c{"info":"disallowed op on unauthenticated link","op":"quit"}` ,
       },{ head: tMsg{"Op":eRegister, "NewNode":"blue", "NewAlias":"_"} ,
           want: `0070{"nodeid":"#nid#","op":"registered","uid":"#uid#"}`+"\n"+
@@ -112,9 +111,9 @@ func newTestClient(iAct tTestAction, iId int) *tTestClient {
                 `001f{"info":"login ok","op":"info"}` ,
       },{ head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId), "Node":sTestNodeIds[iId]} ,
           want: `0036{"info":"disallowed op on connected link","op":"quit"}` ,
-      },{ head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId), "Node":sTestNodeIds[iId]} ,
-          data: `extra data` ,
-          want: `002f{"info":"op does not support data","op":"quit"}` ,
+      },{ head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId), "Node":sTestNodeIds[iId], "Datalen":5} ,
+          data: `extra` ,
+          want: `0025{"info":"invalid header","op":"quit"}` ,
       },{ head: tMsg{"Op":eLogin, "Uid":"noone", "Node":"none"} ,
           want: `002b{"info":"corrupt base32 value","op":"quit"}` ,
       },{ head: tMsg{"Op":eLogin, "Uid":"noone", "Node":"LB27ML46"} ,
@@ -123,14 +122,28 @@ func newTestClient(iAct tTestAction, iId int) *tTestClient {
           want: `002d{"info":"node already connected","op":"quit"}` ,
       },{ head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId), "Node":sTestNodeIds[iId]} ,
           want: `001f{"info":"login ok","op":"info"}` ,
-      },{ head: tMsg{"Op":ePost, "Id":"zyx", "For":[]tHeaderFor{
+      },{ head: tMsg{"Op":ePost, "Id":"zyx", "Datalen":15, "For":[]tHeaderFor{
                        {Id:"u"+fmt.Sprint(iId+111111), Type:eForUser} }} ,
           data: `data for Id:zyx` ,
           want: `0023{"id":"zyx","op":"ack","type":"ok"}`+"\n"+
-                `003a{"from":"u`+fmt.Sprint(iId)+`","id":"#id#","op":"delivery"}data for Id:zyx` ,
-      },{ head: tMsg{"Op":ePing, "Id":"123", "From":"test1", "To":"test2"} ,
+                `0047{"datalen":15,"from":"u`+fmt.Sprint(iId)+`","id":"#id#","op":"delivery"}data for Id:zyx` ,
+      },{ head: tMsg{"Op":ePing, "Id":"123", "Datalen":1, "From":"test1", "To":"test2"} ,
+          data: `1` ,
           want: `0023{"id":"123","op":"ack","type":"ok"}`+"\n"+
-                `0036{"from":"u`+fmt.Sprint(iId)+`","id":"#id#","op":"ping"}ping from test1` ,
+                `0042{"datalen":1,"from":"u`+fmt.Sprint(iId)+`","id":"#id#","op":"ping"}1` ,
+      },{ head: tMsg{"Op":eQuit} ,
+          want: `0020{"info":"logout ok","op":"quit"}` ,
+      },{ msg : []byte(`0034{"Op":3, "Uid":"u`+fmt.Sprint(iId)+`", "Node":"`+sTestNodeIds[iId]+`"}`+
+                       `003f{"Op":6, "Id":"123", "Datalen":1, "From":"test1", "To":"test2"}1`) ,
+          want: `001f{"info":"login ok","op":"info"}`+"\n"+
+                `0023{"id":"123","op":"ack","type":"ok"}`+"\n"+
+                `0042{"datalen":1,"from":"u`+fmt.Sprint(iId)+`","id":"#id#","op":"ping"}1` ,
+      },{ head: tMsg{"Op":ePost, "Id":"zyx", "Datalen":15, "For":[]tHeaderFor{
+                       {Id:"u"+fmt.Sprint(iId+111111), Type:eForUser} }} ,
+          data: `data for Id` ,
+      },{ msg : []byte(`:zyx`) ,
+          want: `0023{"id":"zyx","op":"ack","type":"ok"}`+"\n"+
+                `0047{"datalen":15,"from":"u`+fmt.Sprint(iId)+`","id":"#id#","op":"delivery"}data for Id:zyx` ,
       }}
    }
    return aTc
@@ -163,7 +176,8 @@ func (o *tTestClient) verifyRead(iBuf []byte) (int, error) {
          return 0, &net.OpError{Op:"read", Err:tError("log out")}
       }
       aWk := o.work[o.count-1]
-      sTestVerifyWant = aWk.want + "\n"
+      aNl := "\n"; if aWk.want == "" { aNl = "" }
+      sTestVerifyWant = aWk.want + aNl
       sTestVerifyGot[0] = ""
       sTestVerifyGot[1] = ""
       aMsg = aWk.msg
@@ -198,13 +212,14 @@ func (o *tTestClient) cycleRead(iBuf []byte) (int, error) {
       if o.count == 1 {
          aHead = tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(o.id), "Node":sTestNodeIds[o.id]}
       } else if o.id == 222222 && o.count % 20 == 2 {
-         aHead = tMsg{"Op":ePing, "Id":fmt.Sprint(o.count), "From":"a2", "To":"a1"}
+         aHead = tMsg{"Op":ePing, "Id":fmt.Sprint(o.count), "Datalen":1, "From":"a2", "To":"a1"}
+         aData = "1"
       } else {
          aFor := tHeaderFor{Id:"u"+fmt.Sprint(o.to), Type:eForUser}
          if o.count % 20 >= 18 { aFor = tHeaderFor{Id:"g1", Type:eForGroupAll} }
          if o.count % 20 == 19 { aFor.Type = eForGroupExcl }
-         aHead = tMsg{"Op":ePost, "Id":fmt.Sprint(o.count), "For":[]tHeaderFor{aFor}}
-         aData = fmt.Sprintf(" |msg %d|", o.count)
+         aHead = tMsg{"Op":ePost, "Id":fmt.Sprint(o.count), "Datalen":10, "For":[]tHeaderFor{aFor}}
+         aData = fmt.Sprintf(" |msg %3d|", o.count)
       }
    case <-aDlC:
       return 0, &net.OpError{Op:"read", Err:&tTimeoutError{}}
