@@ -28,11 +28,12 @@ const kMsgHeaderMaxLen = int64(1 << 16)
 const kNodeIdLen = 25
 const kAliasMinLen = 8
 
-const ( _=iota; eRegister; eAddNode; eLogin; eListEdit; ePost; ePing; eAck; eQuit; eOpEnd )
+const ( eTmtpRev=iota; eRegister; eAddNode; eLogin; eListEdit; ePost; ePing; eAck; eQuit; eOpEnd )
 
 const ( _=iota; eForUser; eForGroupAll; eForGroupExcl; eForSelf )
 
 var sHeaderDefs = [...]tHeader{
+   eTmtpRev : { Id:"1"                                  },
    eRegister: { NewNode:"1", NewAlias:"1"               },
    eAddNode : { Uid:"1", Node:"1", NewNode:"1"          },
    eLogin   : { Uid:"1", Node:"1"                       },
@@ -56,8 +57,10 @@ var (
    sMsgLengthBad       = tMsg{"op":"quit", "info":"invalid header length"}
    sMsgHeaderBad       = tMsg{"op":"quit", "info":"invalid header"}
    sMsgBase32Bad       = tMsg{"op":"quit", "info":"corrupt base32 value"}
+   sMsgOpRedundant     = tMsg{"op":"quit", "info":"disallowed op repetition"}
    sMsgOpDisallowedOff = tMsg{"op":"quit", "info":"disallowed op on unauthenticated link"}
    sMsgOpDisallowedOn  = tMsg{"op":"quit", "info":"disallowed op on connected link"}
+   sMsgNeedTmtpRev     = tMsg{"op":"quit", "info":"tmtprev was omitted"}
    sMsgRegisterFailure = tMsg{"op":"quit", "info":"register failure"} //todo details
    sMsgLoginTimeout    = tMsg{"op":"quit", "info":"login timeout"}
    sMsgLoginFailure    = tMsg{"op":"quit", "info":"login failed"}
@@ -109,6 +112,7 @@ type UserDatabase interface {
 type Link struct { // network client msg handler
    conn net.Conn // link to client
    queue *tQueue
+   tmtprev string
    uid, node string
 }
 
@@ -151,7 +155,7 @@ func runLink(o *Link) {
       if aHeadEnd > aPos {
          continue
       }
-      aHead := new(tHeader)
+      aHead := &tHeader{Op:eOpEnd}
       err = json.Unmarshal(aBuf[4:aHeadEnd], aHead)
       if err != nil || !aHead.check() {
          aQuitMsg = sMsgHeaderBad
@@ -199,7 +203,7 @@ type tHeader struct {
 type tHeaderFor struct { Id string; Type int8 }
 
 func (o *tHeader) check() bool {
-   if o.Op == 0 || o.Op >= eOpEnd { return false }
+   if o.Op >= eOpEnd { return false }
    aDef := &sHeaderDefs[o.Op]
    aFail :=
       o.DataLen < 0                                  ||
@@ -220,13 +224,25 @@ func (o *tHeader) check() bool {
 func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
    var err error
 
-   if iHead.Op != eRegister && iHead.Op != eLogin {
-      if o.node == "" { return sMsgOpDisallowedOff }
-   } else {
-      if o.node != "" { return sMsgOpDisallowedOn }
+   switch iHead.Op {
+   case eTmtpRev:
+      if o.tmtprev != "" { return sMsgOpRedundant }
+   case eRegister, eLogin:
+      if o.tmtprev == "" { return sMsgNeedTmtpRev }
+      if o.node    != "" { return sMsgOpDisallowedOn }
+   default:
+      if o.node    == "" { return sMsgOpDisallowedOff }
    }
 
    switch iHead.Op {
+   case eTmtpRev:
+      switch iHead.Id {
+      case "1":
+         o.tmtprev = iHead.Id
+      default:
+         o.tmtprev = "1"
+      }
+      o.conn.Write(PackMsg(tMsg{"op":"tmtprev", "id":o.tmtprev}, nil))
    case eRegister:
       aUid := makeUid()
       aNodeId, aNodeSha := makeNodeId()

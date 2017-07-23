@@ -85,6 +85,10 @@ func newTestClient(iAct tTestAction, iId int) *tTestClient {
       ack: make(chan string, 10),
    }
    if iAct == eActVerifySend {
+      aTmtpRev := tTestWork{
+         head: tMsg{"Op":eTmtpRev, "Id":"1"} ,
+         want: `0019{"id":"1","op":"tmtprev"}` ,
+      }
       aTc.work = []tTestWork{
         { msg : []byte(`00z1{"Op":3, "Uid":"noone"}`) ,
           want: `002c{"info":"invalid header length","op":"quit"}` ,
@@ -92,35 +96,48 @@ func newTestClient(iAct tTestAction, iId int) *tTestClient {
           want: `0025{"info":"invalid header","op":"quit"}` ,
       },{ head: tMsg{"Op":eLogin, "Uid":"noone", "NoId":"none"} ,
           want: `0025{"info":"invalid header","op":"quit"}` ,
+      },  aTmtpRev,
+        { head: tMsg{"Op":eTmtpRev, "Id":"1"} ,
+          want: `002f{"info":"disallowed op repetition","op":"quit"}` ,
+      },{ head: tMsg{"Op":eLogin, "Uid":"noone", "Node":"none"} ,
+          want: `002a{"info":"tmtprev was omitted","op":"quit"}` ,
       },{ head: tMsg{"Op":ePost, "Id":"zyx", "Datalen":1, "For":[]tHeaderFor{{}}} ,
           data: `1` ,
           want: `003c{"info":"disallowed op on unauthenticated link","op":"quit"}` ,
-      },{ head: tMsg{"Op":eRegister, "NewNode":"blue", "NewAlias":"_"} ,
+      },  aTmtpRev,
+        { head: tMsg{"Op":eRegister, "NewNode":"blue", "NewAlias":"_"} ,
           want: `0070{"nodeid":"#nid#","op":"registered","uid":"#uid#"}`+"\n"+
                 `001f{"info":"login ok","op":"info"}` ,
       },{ head: tMsg{"Op":eQuit} ,
           want: `0020{"info":"logout ok","op":"quit"}` ,
-      },{ head: tMsg{"Op":eRegister, "NewNode":"blue", "NewAlias":"LongJohn Silver"} ,
+      },  aTmtpRev,
+        { head: tMsg{"Op":eRegister, "NewNode":"blue", "NewAlias":"LongJohn Silver"} ,
           want: `0070{"nodeid":"#nid#","op":"registered","uid":"#uid#"}`+"\n"+
                 `001f{"info":"login ok","op":"info"}` ,
       },{ head: tMsg{"Op":eQuit} ,
           want: `0020{"info":"logout ok","op":"quit"}` ,
-      },{ head: tMsg{"Op":eRegister, "NewNode":"blue", "NewAlias":"short"} ,
+      },  aTmtpRev,
+        { head: tMsg{"Op":eRegister, "NewNode":"blue", "NewAlias":"short"} ,
           want: `0099{"error":"newalias must be 8+ characters",`+
                      `"nodeid":"#nid#","op":"registered","uid":"#uid#"}`+"\n"+
                 `001f{"info":"login ok","op":"info"}` ,
       },{ head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId), "Node":sTestNodeIds[iId]} ,
           want: `0036{"info":"disallowed op on connected link","op":"quit"}` ,
-      },{ head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId), "Node":sTestNodeIds[iId], "Datalen":5} ,
+      },  aTmtpRev,
+        { head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId), "Node":sTestNodeIds[iId], "Datalen":5} ,
           data: `extra` ,
           want: `0025{"info":"invalid header","op":"quit"}` ,
-      },{ head: tMsg{"Op":eLogin, "Uid":"noone", "Node":"none"} ,
+      },  aTmtpRev,
+        { head: tMsg{"Op":eLogin, "Uid":"noone", "Node":"none"} ,
           want: `002b{"info":"corrupt base32 value","op":"quit"}` ,
-      },{ head: tMsg{"Op":eLogin, "Uid":"noone", "Node":"LB27ML46"} ,
+      },  aTmtpRev,
+        { head: tMsg{"Op":eLogin, "Uid":"noone", "Node":"LB27ML46"} ,
           want: `0023{"info":"login failed","op":"quit"}` ,
-      },{ head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId+111111), "Node":sTestNodeIds[iId+111111]} ,
+      },  aTmtpRev,
+        { head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId+111111), "Node":sTestNodeIds[iId+111111]} ,
           want: `002d{"info":"node already connected","op":"quit"}` ,
-      },{ head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId), "Node":sTestNodeIds[iId]} ,
+      },  aTmtpRev,
+        { head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId), "Node":sTestNodeIds[iId]} ,
           want: `001f{"info":"login ok","op":"info"}` ,
       },{ head: tMsg{"Op":ePost, "Id":"zyx", "Datalen":15, "For":[]tHeaderFor{
                        {Id:"u"+fmt.Sprint(iId+111111), Type:eForUser} }} ,
@@ -133,7 +150,8 @@ func newTestClient(iAct tTestAction, iId int) *tTestClient {
                 `0042{"datalen":1,"from":"u`+fmt.Sprint(iId)+`","id":"#id#","op":"ping"}1` ,
       },{ head: tMsg{"Op":eQuit} ,
           want: `0020{"info":"logout ok","op":"quit"}` ,
-      },{ msg : []byte(`0034{"Op":3, "Uid":"u`+fmt.Sprint(iId)+`", "Node":"`+sTestNodeIds[iId]+`"}`+
+      },  aTmtpRev,
+        { msg : []byte(`0034{"Op":3, "Uid":"u`+fmt.Sprint(iId)+`", "Node":"`+sTestNodeIds[iId]+`"}`+
                        `003f{"Op":6, "Id":"123", "Datalen":1, "From":"test1", "To":"test2"}1`) ,
           want: `001f{"info":"login ok","op":"info"}`+"\n"+
                 `0023{"id":"123","op":"ack","type":"ok"}`+"\n"+
@@ -156,6 +174,7 @@ func (o *tTestClient) verifyRead(iBuf []byte) (int, error) {
    if o.action == eActVerifyRecv {
       if o.count == 1 {
          aMsg = PackMsg(tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(o.id), "Node":sTestNodeIds[o.id]}, nil)
+         aMsg = PackMsg(tMsg{"Op":eTmtpRev, "Id":"1"}, aMsg)
       } else {
          select {
          case <-sTestVerifyDone:
@@ -210,8 +229,10 @@ func (o *tTestClient) cycleRead(iBuf []byte) (int, error) {
    case <-aTmr.C:
       o.count++
       if o.count == 1 {
+         aHead = tMsg{"Op":eTmtpRev, "Id":"1"}
+      } else if o.count == 2 {
          aHead = tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(o.id), "Node":sTestNodeIds[o.id]}
-      } else if o.id == 222222 && o.count % 20 == 2 {
+      } else if o.id == 222222 && o.count % 20 == 3 {
          aHead = tMsg{"Op":ePing, "Id":fmt.Sprint(o.count), "Datalen":1, "From":"a2", "To":"a1"}
          aData = "1"
       } else {
