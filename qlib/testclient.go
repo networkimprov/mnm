@@ -16,6 +16,7 @@ var sTestClientId chan int
 var sTestVerifyDone chan int
 var sTestVerifyWant string // expected results of verifyRead()
 var sTestVerifyGot [2]string // actual results of verifyRead()
+var sTestVerifyFail int
 var sTestNodeIds map[int]string = make(map[int]string)
 
 func LocalTest(i int) {
@@ -32,7 +33,7 @@ func LocalTest(i int) {
    NewLink(newTestClient(eActVerifySend, 111112))
    <-sTestVerifyDone
    time.Sleep(10 * time.Millisecond)
-   fmt.Printf("Verify pass complete, starting cycle\n\n")
+   fmt.Printf("%d verify pass failures, starting cycle\n\n", sTestVerifyFail)
 
    UDb.TempUser(testMakeUser(111111))
    UDb.TempUser(testMakeUser(222222))
@@ -153,6 +154,7 @@ func (o *tTestClient) verifyRead(iBuf []byte) (int, error) {
    } else {
       time.Sleep(20 * time.Millisecond)
       if sTestVerifyGot[0] + sTestVerifyGot[1] != sTestVerifyWant {
+         sTestVerifyFail++
          fmt.Printf("Verify FAIL:\n  want: %s   got: %s%s", sTestVerifyWant,
                     sTestVerifyGot[0], sTestVerifyGot[1])
       }
