@@ -71,8 +71,9 @@ Each message starts with a header, wherein four hex digits give the size of a JS
 which may be followed by arbitrary format 8-bit data: 
 `001f{ ... <,"dataLen":uint> }dataLen 8-bit bytes of data`
 
-0. TmtpRev gives the latest recognized protocol version  
-`in progress`
+0. TmtpRev gives the latest recognized protocol version; it must be the first message  
+`{"op":0, "id":"1"}`  
+Response `{"op":"tmtprev", "id":"1"}`
 
 1. Register creates a user and client queue  
 _todo: receive-only accounts which cannot ping or post_  
@@ -100,18 +101,18 @@ At nodes `{"op":"account", "id":string, "from":string <,"newnode":string &| ,"ne
 
 5. Post sends a message to users and/or groups  
 _todo: return undelivered messages after N hours_  
-`{"op":5, "id":string, "for":[{"id":string, "type":uint}, ...]}`  
+`{"op":5, "id":string, "datalen":uint, "for":[{"id":string, "type":uint}, ...]}`  
 .for[i].type: 1) user_id, 2) group_id (include self) 3) group_id (exclude self)  
 Response `{"op":"ack", "id":string, "ok":"ok|error" <,"error":string>}`  
-At recipient `{"op":"delivery", "id":string, "from":string}`
+At recipient `{"op":"delivery", "id":string, "from":string, "datalen":uint}`
 
 6. Ping sends a short text message via a user's alias.
 A reply establishes contact between the parties.  
 _todo: limit number of pings per 24h and consecutive failed pings_  
-`{"op":6, "id":string, "from":string, "to":string}`  
+`{"op":6, "id":string, "datalen":uint, "from":string, "to":string}`  
 .from & .to are user aliases  
 Response `{"op":"ack", "id":string, "ok":"ok|error" <,"error":string>}`  
-At recipient `{"op":"ping", "id":string, "from":string}`
+At recipient `{"op":"ping", "id":string, "from":string, "datalen":uint}`
 
 7. Ohi notifies chat contacts of presence (in progress)  
 `{"op":n, "id":string, "for":[{"id":string}, ...]}`  
