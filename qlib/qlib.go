@@ -96,10 +96,10 @@ type UserDatabase interface {
    GetNodes(iUid string) (aQids []string, err error)
    Lookup(iAlias string) (aUid string, err error)
 
-   GroupInvite(iGid, iAlias, iByAlias, iByUid string) error
-   GroupJoin(iGid, iUid, iNewAlias string) error
-   GroupAlias(iGid, iUid, iNewAlias string) error
-   GroupDrop(iGid, iUid, iByUid string) error
+   GroupInvite(iGid, iAlias, iByAlias, iByUid string) (aUid string, err error)
+   GroupJoin(iGid, iUid, iNewAlias string) (aAlias string, err error)
+   GroupAlias(iGid, iUid, iNewAlias string) (aAlias string, err error)
+   GroupDrop(iGid, iAlias, iByUid string) (aUid string, err error)
    GroupGetUsers(iGid, iByUid string) (aUids []string, err error)
 
    // for test purposes
