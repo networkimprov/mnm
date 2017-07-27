@@ -40,7 +40,8 @@ func (o *tUserDb) TempGroup(iGid, iUid, iAlias string) {
    if o.group[iGid] == nil {
       o.group[iGid] = &tGroup{Uid: map[string]tMember{}}
    }
-   o.group[iGid].Uid[iUid] = tMember{Alias: iAlias}
+   var aS uint8 = eStatJoined; if iGid == "blab" { aS = eStatInvited }
+   o.group[iGid].Uid[iUid] = tMember{Alias: iAlias, Status: aS}
 }
 
 //: these are instructions/guidance comments
@@ -90,8 +91,10 @@ type tGroup struct {
 
 type tMember struct {
    Alias string // invited/joined by this alias
-   Joined bool // use a date here?
+   Status uint8
 }
+
+const ( _=iota; eStatInvited; eStatJoined; eStatBlocked )
 
 type tUserDbErr string
 func (o tUserDbErr) Error() string { return string(o) }
@@ -208,6 +211,14 @@ func (o *tUserDb) GroupInvite(iGid, iAlias, iByAlias, iByUid string) (aUid strin
    //: iGid exists, iByUid in group, iByAlias ignored
    //: iGid !exists, make iGid and add iByUid with iByAlias
    //: iByAlias for iByUid
+   aUid, err = o.Lookup(iAlias)
+   if err != nil { return "", err }
+   if o.group[iGid] == nil {
+      o.group[iGid] = &tGroup{Uid: map[string]tMember{iByUid: {Alias:iByAlias, Status:eStatJoined}}}
+   } else if o.group[iGid].Uid[iByUid].Status == 0 {
+      return "", tUserDbErr("Invitor "+iByUid+" is not a group member")
+   }
+   o.group[iGid].Uid[aUid] = tMember{Alias:iAlias, Status:eStatInvited}
    return aUid, nil
 }
 
@@ -215,13 +226,33 @@ func (o *tUserDb) GroupJoin(iGid, iUid, iNewAlias string) (aAlias string, err er
    //: set joined status for member
    //: iUid in group
    //: iNewAlias optional for iUid
-   return aAlias, nil
+   if o.group[iGid] == nil {
+      return "", tUserDbErr("no such group "+iGid)
+   }
+   if o.group[iGid].Uid[iUid].Status == 0 {
+      return "", tUserDbErr("group "+iGid+" has no such user "+iUid)
+   }
+   if iNewAlias == "" {
+      iNewAlias = o.group[iGid].Uid[iUid].Alias
+   }
+   o.group[iGid].Uid[iUid] = tMember{Alias:iNewAlias, Status:eStatJoined}
+   return iNewAlias, nil
 }
 
 func (o *tUserDb) GroupAlias(iGid, iUid, iNewAlias string) (aAlias string, err error) {
    //: update member alias
    //: iUid in group
    //: iNewAlias for iUid
+   if o.group[iGid] == nil {
+      return "", tUserDbErr("no such group "+iGid)
+   }
+   if o.group[iGid].Uid[iUid].Status == 0 {
+      return "", tUserDbErr("group "+iGid+" has no such user "+iUid)
+   }
+   _, err = o.Lookup(iNewAlias)
+   if err != nil { return "", err }
+   aAlias = o.group[iGid].Uid[iUid].Alias
+   o.group[iGid].Uid[iUid] = tMember{Alias:iNewAlias, Status:o.group[iGid].Uid[iUid].Status}
    return aAlias, nil
 }
 
@@ -230,14 +261,36 @@ func (o *tUserDb) GroupDrop(iGid, iAlias, iByUid string) (aUid string, err error
    //: iAlias in group, iByUid same or in group
    //: iAlias -> iByUid, status=invited
    //: otherwise, if iAlias status==joined, status=barred else delete member
+   if o.group[iGid] == nil {
+      return "", tUserDbErr("no such group "+iGid)
+   }
+   aUid, err = o.Lookup(iAlias)
+   if err != nil { return "", err }
+   if o.group[iGid].Uid[aUid].Status == 0 {
+      return "", tUserDbErr("group "+iGid+" has no such user "+aUid)
+   }
+   aM := o.group[iGid].Uid[aUid]
+   var aStat uint8
+   if aUid == iByUid {
+      aStat = eStatJoined
+   } else if aM.Status == eStatJoined {
+      aStat = eStatBlocked
+   }
+   if aStat != 0 {
+      o.group[iGid].Uid[aUid] = tMember{Alias:aM.Alias, Status:aStat}
+   } else {
+      delete(o.group[iGid].Uid, aUid)
+   }
    return aUid, nil
 }
 
 func (o *tUserDb) GroupGetUsers(iGid, iByUid string) (aUids []string, err error) {
    //: return uids in iGid
    //: iByUid is member
-   for a,_ := range o.group["g1"].Uid {
-      aUids = append(aUids, a)
+   for aK, aV := range o.group[iGid].Uid {
+      if aV.Status == eStatJoined {
+         aUids = append(aUids, aK)
+      }
    }
    return aUids, nil
 }
