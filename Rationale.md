@@ -42,8 +42,14 @@ or communicate with untrusted (perhaps anonymous) customers,
 would establish a separate service instance for that purpose. 
 For a small organization, the cost of the messaging service should be negligible. 
 
-To prevent destructive correspondence (in the case of an organization with non-restrictive membership) 
-the service must prevent members with whom you are not acquainted from sending you arbitrary content. 
+Every individual needs a **single messaging app** that runs on all your computing devices, 
+and regularly connects to the messaging services of the organizations you belong to, 
+using a common network protocol. 
+The app should present a separate inbox for each service, and adjust the look of inbox & message views 
+(e.g. fonts, colors, background graphics) according to the service's skin settings, which you may revise. 
+
+To prevent destructive correspondence (in the case of organizations with non-restrictive membership) 
+messaging services must prevent members with whom you are not acquainted from sending you arbitrary content. 
 
 To prevent theft of correspondence (in the event of a compromised account or server) the messaging service 
 must **store only messages that have not yet been delivered** or returned as undeliverable. 
@@ -58,12 +64,7 @@ e.g. laptop, mobile phone, tablet, smartwatch.
 If one of your messaging devices is lost or stolen, you must be able to bar it from further access to your 
 messaging accounts. A compromised device must not be able to hijack your accounts. 
 
-Since messaging services are organization-specific, and you may participate in multiple organizations, 
-the messaging app on your devices must connect to any number of messaging services. 
-The app should present a **separate inbox for each service**, and adjust the look of inbox & message views 
-(e.g. fonts, colors, background graphics) according to the service's skin settings, which you may revise. 
-
-For sensitive business data which cannot transit a network unencrypted, the app 
+For sensitive business data which cannot transit a network unencrypted, the messaging app 
 should allow encryption prior to send and decryption on receipt, using public or shared keys.
 The app should also allow encryption of your message history on local storage. 
 The app should automatically backup your message history to secondary local storage when available, 
