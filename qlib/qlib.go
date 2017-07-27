@@ -28,29 +28,38 @@ const kMsgHeaderMaxLen = int64(1 << 16)
 const kNodeIdLen = 25
 const kAliasMinLen = 8
 
-const ( eTmtpRev=iota; eRegister; eAddNode; eLogin; eListEdit; ePost; ePing; eAck; eQuit; eOpEnd )
+const (
+   eTmtpRev = iota
+   eRegister; eLogin
+   eAddNode; eGroupInvite; eGroupEdit
+   ePost; ePing
+   eAck; eQuit
+   eOpEnd
+)
 
 const ( _=iota; eForUser; eForGroupAll; eForGroupExcl; eForSelf )
 
 var sHeaderDefs = [...]tHeader{
-   eTmtpRev : { Id:"1"                                  },
-   eRegister: { NewNode:"1", NewAlias:"1"               },
-   eAddNode : { Uid:"1", Node:"1", NewNode:"1"          },
-   eLogin   : { Uid:"1", Node:"1"                       },
-   eListEdit: { Id:"1", To:"1", Type:"1", Member:"1"    },
-   ePost    : { Id:"1", DataLen:1, For:[]tHeaderFor{{}} },
-   ePing    : { Id:"1", DataLen:1, From:"1", To:"1"     },
-   eAck     : { Id:"1", Type:"1"                        },
-   eQuit    : {                                         },
+   eTmtpRev    : { Id:"1"                                  },
+   eRegister   : { NewNode:"1", NewAlias:"1"               },
+   eLogin      : { Uid:"1", Node:"1"                       },
+   eAddNode    : { Uid:"1", Node:"1", NewNode:"1"          },
+   eGroupInvite: { Id:"1", DataLen:1, Gid:"1"              },
+   eGroupEdit  : { Id:"1", Act:"1", Gid:"1"                },
+   ePost       : { Id:"1", DataLen:1, For:[]tHeaderFor{{}} },
+   ePing       : { Id:"1", DataLen:1, From:"1", To:"1"     },
+   eAck        : { Id:"1", Type:"1"                        },
+   eQuit       : {                                         },
 }
 
 var sResponseOps = [...]string{
-   eRegister: "registered",
-   eAddNode:  "nodeAdded",
-   eListEdit: "listEdited",
-   ePost:     "delivery",
-   ePing:     "ping",
-   eOpEnd:    "",
+   eRegister:    "registered",
+   eAddNode:     "nodeAdded",
+   eGroupInvite: "invite",
+   eGroupEdit:   "member",
+   ePost:        "delivery",
+   ePing:        "ping",
+   eOpEnd:       "",
 }
 
 var (
@@ -191,12 +200,12 @@ func runLink(o *Link) {
 type tHeader struct {
    Op uint8
    DataLen int64
-   Uid string
+   Uid, Gid string
    Id string
    Node, NewNode string
    NewAlias, From, To string // alias
    Type string
-   Member string
+   Act string
    For []tHeaderFor
 }
 
@@ -209,6 +218,7 @@ func (o *tHeader) check() bool {
       o.DataLen < 0                                  ||
       (aDef.DataLen == 0)    != (o.DataLen == 0)     ||
       len(aDef.Uid)      > 0 && len(o.Uid)      == 0 ||
+      len(aDef.Gid)      > 0 && len(o.Gid)      == 0 ||
       len(aDef.Id)       > 0 && len(o.Id)       == 0 ||
       len(aDef.Node)     > 0 && len(o.Node)     == 0 ||
       len(aDef.NewNode)  > 0 && len(o.NewNode)  == 0 ||
@@ -216,7 +226,7 @@ func (o *tHeader) check() bool {
       len(aDef.From)     > 0 && len(o.From)     == 0 ||
       len(aDef.To)       > 0 && len(o.To)       == 0 ||
       len(aDef.Type)     > 0 && len(o.Type)     == 0 ||
-      len(aDef.Member)   > 0 && len(o.Member)   == 0 ||
+      len(aDef.Act)      > 0 && len(o.Act)      == 0 ||
       len(aDef.For)      > 0 && len(o.For)      == 0
    return !aFail
 }
@@ -284,9 +294,49 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
       o.node = aNodeSha
       o.queue = aQ
       fmt.Printf("%s link.handlemsg login user %.7s\n", o.uid, aQ.node)
+   case eGroupInvite:
+      iHead.Act = "invite"
+      fallthrough
+   case eGroupEdit:
+      var aUid, aAlias, aNewAlias string
+      switch iHead.Act {
+      case "invite":
+         if iHead.From == "" || iHead.To == "" { return sMsgHeaderBad }
+         aUid, err = UDb.GroupInvite(iHead.Gid, iHead.To, iHead.From, o.uid)
+         if err == nil {
+            iHead.For = []tHeaderFor{{Id:aUid, Type:eForUser}}
+            err = o.postMsg(iHead, tMsg{"gid":iHead.Gid, "to":iHead.To}, iData)
+            aAlias = iHead.To
+         }
+      case "join":
+         aAlias, err = UDb.GroupJoin(iHead.Gid, o.uid, iHead.NewAlias)
+      case "alias":
+         if iHead.NewAlias == "" { return sMsgHeaderBad }
+         aAlias, err = UDb.GroupAlias(iHead.Gid, o.uid, iHead.NewAlias)
+         aNewAlias = iHead.NewAlias
+      case "drop":
+         if iHead.To == "" { return sMsgHeaderBad }
+         aUid, err = UDb.GroupDrop(iHead.Gid, iHead.To, o.uid)
+         aAlias = iHead.To
+      default:
+         return sMsgHeaderBad
+      }
+      if err == nil {
+         aEtc := tMsg{"gid":iHead.Gid, "act":iHead.Act, "alias":aAlias}
+         if aNewAlias != "" {
+            aEtc["newalias"] = aNewAlias
+         }
+         aHead := &tHeader{Op: eGroupEdit, For: []tHeaderFor{{Id:iHead.Gid, Type:eForGroupAll}}}
+         err = o.postMsg(aHead, aEtc, nil)
+      }
+      aAck := tMsg{"op":"ack", "id":iHead.Id}
+      if err != nil {
+         aAck["error"] = err.Error()
+      }
+      o.conn.Write(PackMsg(aAck, nil))
    case ePost:
       aAck := tMsg{"op":"ack", "id":iHead.Id, "type":"ok"}
-      err = o.postMsg(iHead, iData)
+      err = o.postMsg(iHead, nil, iData)
       if err != nil {
          aAck["type"] = "error"
          aAck["error"] = err.Error()
@@ -302,7 +352,7 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
          if err == nil {
             aHead := tHeader{Op:ePing, DataLen:iHead.DataLen, Id:iHead.Id,
                              For:[]tHeaderFor{{Id:aUid, Type:eForUser}}}
-            err = o.postMsg(&aHead, iData)
+            err = o.postMsg(&aHead, nil, iData)
          }
       }
       aAck := tMsg{"op":"ack", "id":iHead.Id, "type":"ok"}
@@ -328,11 +378,13 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
    return nil
 }
 
-func (o *Link) postMsg(iHead *tHeader, iData []byte) error {
-   var err error
+func (o *Link) postMsg(iHead *tHeader, iEtc tMsg, iData []byte) error {
    aMsgId := sStore.MakeId()
-   aBuf := PackMsg(tMsg{"op":sResponseOps[iHead.Op], "id":aMsgId, "from":o.uid, "datalen":iHead.DataLen}, nil)
-   err = sStore.RecvFile(aMsgId, aBuf, iData, o.conn, iHead.DataLen)
+   aHead := tMsg{"op":sResponseOps[iHead.Op], "id":aMsgId, "from":o.uid, "datalen":iHead.DataLen}
+   if iEtc != nil {
+      for aK, aV := range iEtc { aHead[aK] = aV }
+   }
+   err := sStore.RecvFile(aMsgId, PackMsg(aHead, nil), iData, o.conn, iHead.DataLen)
    if err != nil { panic(err) }
    defer sStore.RmFile(aMsgId)
    aForNodes := make(map[string]bool, len(iHead.For)) //todo x2 or more?
@@ -380,23 +432,13 @@ func (o *Link) postMsg(iHead *tHeader, iData []byte) error {
 type tMsg map[string]interface{}
 
 func PackMsg(iJso tMsg, iData []byte) []byte {
-   var err error
-   var aEtc []byte
-   aEtcdata := iJso["etcdata"]
-   if aEtcdata != nil {
-      delete(iJso, "etcdata")
-      aEtc, err = json.Marshal(aEtcdata)
-      if err != nil { panic(err) }
-      iJso["etc"] = len(aEtc)
-   }
-   aReq, err := json.Marshal(iJso)
+   aHead, err := json.Marshal(iJso)
    if err != nil { panic(err) }
-   aLen := fmt.Sprintf("%04x", len(aReq))
-   if len(aLen) > 4 { panic("packmsg json input too long") }
-   aBuf := make([]byte, 0, len(aLen)+len(aReq)+len(aEtc)+len(iData))
+   aLen := fmt.Sprintf("%04x", len(aHead))
+   if len(aLen) != 4 { panic("packmsg json input too long") }
+   aBuf := make([]byte, 0, 4+len(aHead)+len(iData))
    aBuf = append(aBuf, aLen...)
-   aBuf = append(aBuf, aReq...)
-   aBuf = append(aBuf, aEtc...)
+   aBuf = append(aBuf, aHead...)
    aBuf = append(aBuf, iData...)
    return aBuf
 }

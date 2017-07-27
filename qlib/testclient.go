@@ -27,7 +27,9 @@ func LocalTest(i int) {
    UDb.TempUser(testMakeUser(111112))
    UDb.TempUser(testMakeUser(222223))
    UDb.TempAlias("u111112", "test1")
+   UDb.TempAlias("u111112", "test11")
    UDb.TempAlias("u222223", "test2")
+   UDb.TempGroup("blab", "u111112", "test1") // Status eStatInvited
 
    NewLink(newTestClient(eActVerifyRecv, 222223))
    NewLink(newTestClient(eActVerifySend, 111112))
@@ -148,11 +150,25 @@ func newTestClient(iAct tTestAction, iId int) *tTestClient {
           data: `1` ,
           want: `0023{"id":"123","op":"ack","type":"ok"}`+"\n"+
                 `0042{"datalen":1,"from":"u`+fmt.Sprint(iId)+`","id":"#id#","op":"ping"}1` ,
+      },{ head: tMsg{"Op":eGroupEdit, "Id":"0", "Gid":"blab", "Act":"join"} ,
+          want: `0015{"id":"0","op":"ack"}`+"\n"+
+                `006e{"act":"join","alias":"test1","datalen":0,"from":"u`+fmt.Sprint(iId)+`","gid":"blab","id":"#sid#","op":"member"}` ,
+      },{ head: tMsg{"Op":eGroupEdit, "Id":"0", "Gid":"blab", "Act":"drop", "To":"test1"} ,
+          want: `0015{"id":"0","op":"ack"}`+"\n"+
+                `006e{"act":"drop","alias":"test1","datalen":0,"from":"u`+fmt.Sprint(iId)+`","gid":"blab","id":"#sid#","op":"member"}` ,
+      },{ head: tMsg{"Op":eGroupInvite, "Id":"0", "Gid":"talk", "Datalen":5, "From":"test1", "To":"test2"} ,
+          data: `hello` ,
+          want: `0015{"id":"0","op":"ack"}`+"\n"+
+                `0070{"act":"invite","alias":"test2","datalen":0,"from":"u`+fmt.Sprint(iId)+`","gid":"talk","id":"#sid#","op":"member"}`+"\n"+
+                `005e{"datalen":5,"from":"u`+fmt.Sprint(iId)+`","gid":"talk","id":"#id#","op":"invite","to":"test2"}hello` ,
+      },{ head: tMsg{"Op":eGroupEdit, "Id":"0", "Gid":"talk", "Act":"alias", "Newalias":"test11"} ,
+          want: `0015{"id":"0","op":"ack"}`+"\n"+
+                `0083{"act":"alias","alias":"test1","datalen":0,"from":"u`+fmt.Sprint(iId)+`","gid":"talk","id":"#sid#","newalias":"test11","op":"member"}` ,
       },{ head: tMsg{"Op":eQuit} ,
           want: `0020{"info":"logout ok","op":"quit"}` ,
       },  aTmtpRev,
-        { msg : []byte(`0034{"Op":3, "Uid":"u`+fmt.Sprint(iId)+`", "Node":"`+sTestNodeIds[iId]+`"}`+
-                       `003f{"Op":6, "Id":"123", "Datalen":1, "From":"test1", "To":"test2"}1`) ,
+        { msg : []byte(`0034{"Op":2, "Uid":"u`+fmt.Sprint(iId)+`", "Node":"`+sTestNodeIds[iId]+`"}`+
+                       `003f{"Op":7, "Id":"123", "Datalen":1, "From":"test1", "To":"test2"}1`) ,
           want: `001f{"info":"login ok","op":"info"}`+"\n"+
                 `0023{"id":"123","op":"ack","type":"ok"}`+"\n"+
                 `0042{"datalen":1,"from":"u`+fmt.Sprint(iId)+`","id":"#id#","op":"ping"}1` ,
@@ -201,6 +217,11 @@ func (o *tTestClient) verifyRead(iBuf []byte) (int, error) {
       sTestVerifyGot[1] = ""
       aMsg = aWk.msg
       if aMsg == nil { aMsg = PackMsg(aWk.head, []byte(aWk.data)) }
+      select {
+      case aId := <-o.ack:
+         aMsg = PackMsg(tMsg{"Op":eAck, "Id":aId, "Type":"n"}, aMsg)
+      default:
+      }
    }
    return copy(iBuf, aMsg), nil
 }
@@ -275,7 +296,8 @@ func (o *tTestClient) Write(iBuf []byte) (int, error) {
    if o.action >= eActVerifySend {
       if !(o.action == eActVerifyRecv && o.count == 1) {
          if aHead["from"] != nil {
-            sTestVerifyWant = strings.Replace(sTestVerifyWant, `#id#`, aHead["id"].(string), 1)
+            aRepl := `#id#`; if o.action == eActVerifySend { aRepl = `#sid#` }
+            sTestVerifyWant = strings.Replace(sTestVerifyWant, aRepl, aHead["id"].(string), 1)
          } else if aHead["op"].(string) == "registered" {
             sTestVerifyWant = strings.Replace(sTestVerifyWant, `#nid#`, aHead["nodeid"].(string), 1)
             sTestVerifyWant = strings.Replace(sTestVerifyWant, `#uid#`, aHead["uid"].(string), 1)
