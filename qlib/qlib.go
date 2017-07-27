@@ -47,7 +47,7 @@ var sHeaderDefs = [...]tHeader{
    eGroupInvite: { Id:"1", DataLen:1, Gid:"1"              },
    eGroupEdit  : { Id:"1", Act:"1", Gid:"1"                },
    ePost       : { Id:"1", DataLen:1, For:[]tHeaderFor{{}} },
-   ePing       : { Id:"1", DataLen:1, From:"1", To:"1"     },
+   ePing       : { Id:"1", DataLen:1, To:"1"               },
    eAck        : { Id:"1", Type:"1"                        },
    eQuit       : {                                         },
 }
@@ -344,16 +344,10 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
       }
       o.conn.Write(PackMsg(aAck, nil))
    case ePing:
-      aUid, err := UDb.Lookup(iHead.From)
-      if aUid != o.uid {
-         err = tError(iHead.From+" is not an alias for sender")
-      } else {
-         aUid, err = UDb.Lookup(iHead.To)
-         if err == nil {
-            aHead := tHeader{Op:ePing, DataLen:iHead.DataLen, Id:iHead.Id,
-                             For:[]tHeaderFor{{Id:aUid, Type:eForUser}}}
-            err = o.postMsg(&aHead, nil, iData)
-         }
+      aUid, err := UDb.Lookup(iHead.To)
+      if err == nil {
+         iHead.For = []tHeaderFor{{Id:aUid, Type:eForUser}}
+         err = o.postMsg(iHead, tMsg{"to":iHead.To}, iData)
       }
       aAck := tMsg{"op":"ack", "id":iHead.Id, "type":"ok"}
       if err != nil {

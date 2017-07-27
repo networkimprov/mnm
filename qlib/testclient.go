@@ -146,10 +146,10 @@ func newTestClient(iAct tTestAction, iId int) *tTestClient {
           data: `data for Id:zyx` ,
           want: `0023{"id":"zyx","op":"ack","type":"ok"}`+"\n"+
                 `0047{"datalen":15,"from":"u`+fmt.Sprint(iId)+`","id":"#id#","op":"delivery"}data for Id:zyx` ,
-      },{ head: tMsg{"Op":ePing, "Id":"123", "Datalen":1, "From":"test1", "To":"test2"} ,
+      },{ head: tMsg{"Op":ePing, "Id":"123", "Datalen":1, "To":"test2"} ,
           data: `1` ,
           want: `0023{"id":"123","op":"ack","type":"ok"}`+"\n"+
-                `0042{"datalen":1,"from":"u`+fmt.Sprint(iId)+`","id":"#id#","op":"ping"}1` ,
+                `004f{"datalen":1,"from":"u`+fmt.Sprint(iId)+`","id":"#id#","op":"ping","to":"test2"}1` ,
       },{ head: tMsg{"Op":eGroupEdit, "Id":"0", "Gid":"blab", "Act":"join"} ,
           want: `0015{"id":"0","op":"ack"}`+"\n"+
                 `006e{"act":"join","alias":"test1","datalen":0,"from":"u`+fmt.Sprint(iId)+`","gid":"blab","id":"#sid#","op":"member"}` ,
@@ -168,10 +168,10 @@ func newTestClient(iAct tTestAction, iId int) *tTestClient {
           want: `0020{"info":"logout ok","op":"quit"}` ,
       },  aTmtpRev,
         { msg : []byte(`0034{"Op":2, "Uid":"u`+fmt.Sprint(iId)+`", "Node":"`+sTestNodeIds[iId]+`"}`+
-                       `003f{"Op":7, "Id":"123", "Datalen":1, "From":"test1", "To":"test2"}1`) ,
+                       `002f{"Op":7, "Id":"123", "Datalen":1, "To":"test2"}1`) ,
           want: `001f{"info":"login ok","op":"info"}`+"\n"+
                 `0023{"id":"123","op":"ack","type":"ok"}`+"\n"+
-                `0042{"datalen":1,"from":"u`+fmt.Sprint(iId)+`","id":"#id#","op":"ping"}1` ,
+                `004f{"datalen":1,"from":"u`+fmt.Sprint(iId)+`","id":"#id#","op":"ping","to":"test2"}1` ,
       },{ head: tMsg{"Op":ePost, "Id":"zyx", "Datalen":15, "For":[]tHeaderFor{
                        {Id:"u"+fmt.Sprint(iId+111111), Type:eForUser} }} ,
           data: `data for Id` ,
