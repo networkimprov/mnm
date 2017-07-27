@@ -201,35 +201,35 @@ func (o *tUserDb) Lookup(iAlias string) (aUid string, err error) {
    return aUid, nil
 }
 
-func (o *tUserDb) GroupInvite(iGid, iAlias, iByAlias, iByUid string) error {
+func (o *tUserDb) GroupInvite(iGid, iAlias, iByAlias, iByUid string) (aUid string, err error) {
    //: add member to group, possibly create group
    //: iAlias exists
    //: iGid exists, iByUid in group, iByAlias ignored
    //: iGid !exists, make iGid and add iByUid with iByAlias
    //: iByAlias for iByUid
-   return nil
+   return aUid, nil
 }
 
-func (o *tUserDb) GroupJoin(iGid, iUid, iNewAlias string) error {
+func (o *tUserDb) GroupJoin(iGid, iUid, iNewAlias string) (aAlias string, err error) {
    //: set joined status for member
    //: iUid in group
    //: iNewAlias optional for iUid
-   return nil
+   return aAlias, nil
 }
 
-func (o *tUserDb) GroupAlias(iGid, iUid, iNewAlias string) error {
+func (o *tUserDb) GroupAlias(iGid, iUid, iNewAlias string) (aAlias string, err error) {
    //: update member alias
    //: iUid in group
    //: iNewAlias for iUid
-   return nil
+   return aAlias, nil
 }
 
-func (o *tUserDb) GroupDrop(iGid, iUid, iByUid string) error {
+func (o *tUserDb) GroupDrop(iGid, iAlias, iByUid string) (aUid string, err error) {
    //: change member status of member with iUid
-   //: iUid in group, iByUid same or in group
-   //: iUid == iByUid, status=invited
-   //: iUid != iByUid, if iUid status==joined, status=barred else delete member
-   return nil
+   //: iAlias in group, iByUid same or in group
+   //: iAlias -> iByUid, status=invited
+   //: otherwise, if iAlias status==joined, status=barred else delete member
+   return aUid, nil
 }
 
 func (o *tUserDb) GroupGetUsers(iGid, iByUid string) (aUids []string, err error) {
