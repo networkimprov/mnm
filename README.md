@@ -121,10 +121,9 @@ At recipient `{"op":"delivery", "id":string, "from":string, "datalen":uint}`
 7. Ping sends a short text message via a user's alias.
 A reply establishes contact between the parties.  
 _todo: limit number of pings per 24h and consecutive failed pings_  
-`{"op":7, "id":string, "datalen":uint, "from":string, "to":string}`  
-.from & .to are user aliases  
+`{"op":7, "id":string, "datalen":uint, "to":string}`  
 Response `{"op":"ack", "id":string, "ok":"ok|error" <,"error":string>}`  
-At recipient `{"op":"ping", "id":string, "from":string, "datalen":uint}`
+At recipient `{"op":"ping", "id":string, "from":string, "datalen":uint, "to":string}`
 
 8. Ohi notifies chat contacts of presence (in progress)  
 `{"op":8, "id":string, "for":[{"id":string}, ...]}`  
