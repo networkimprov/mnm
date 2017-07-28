@@ -329,33 +329,26 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
          aHead := &tHeader{Op: eGroupEdit, For: []tHeaderFor{{Id:iHead.Gid, Type:eForGroupAll}}}
          err = o.postMsg(aHead, aEtc, nil)
       }
-      aAck := tMsg{"op":"ack", "id":iHead.Id}
       if err != nil {
-         aAck["error"] = err.Error()
+         fmt.Printf("%s link.handlemsg group %s\n", o.uid, err.Error())
       }
-      o.conn.Write(PackMsg(aAck, nil))
+      o.ack(iHead.Id, err)
    case ePost:
-      aAck := tMsg{"op":"ack", "id":iHead.Id, "type":"ok"}
       err = o.postMsg(iHead, nil, iData)
       if err != nil {
-         aAck["type"] = "error"
-         aAck["error"] = err.Error()
          fmt.Printf("%s link.handlemsg post %s\n", o.uid, err.Error())
       }
-      o.conn.Write(PackMsg(aAck, nil))
+      o.ack(iHead.Id, err)
    case ePing:
       aUid, err := UDb.Lookup(iHead.To)
       if err == nil {
          iHead.For = []tHeaderFor{{Id:aUid, Type:eForUser}}
          err = o.postMsg(iHead, tMsg{"to":iHead.To}, iData)
       }
-      aAck := tMsg{"op":"ack", "id":iHead.Id, "type":"ok"}
       if err != nil {
-         aAck["type"] = "error"
-         aAck["error"] = err.Error()
          fmt.Printf("%s link.handlemsg ping %s\n", o.uid, err.Error())
       }
-      o.conn.Write(PackMsg(aAck, nil))
+      o.ack(iHead.Id, err)
    case eAck:
       aTmr := time.NewTimer(2 * time.Second)
       select {
@@ -370,6 +363,14 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
       panic(fmt.Sprintf("checkHeader failure, op %d", iHead.Op))
    }
    return nil
+}
+
+func (o *Link) ack(iId string, iErr error) {
+   aMsg := tMsg{"op":"ack", "id":iId}
+   if iErr != nil {
+      aMsg["error"] = iErr.Error()
+   }
+   o.conn.Write(PackMsg(aMsg, nil))
 }
 
 func (o *Link) postMsg(iHead *tHeader, iEtc tMsg, iData []byte) error {
