@@ -233,6 +233,7 @@ func (o *tHeader) check() bool {
 
 func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
    var err error
+   var aMid string
 
    switch iHead.Op {
    case eTmtpRev:
@@ -305,7 +306,7 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
          aUid, err = UDb.GroupInvite(iHead.Gid, iHead.To, iHead.From, o.uid)
          if err == nil {
             iHead.For = []tHeaderFor{{Id:aUid, Type:eForUser}}
-            err = o.postMsg(iHead, tMsg{"gid":iHead.Gid, "to":iHead.To}, iData)
+            _,err = o.postMsg(iHead, tMsg{"gid":iHead.Gid, "to":iHead.To}, iData)
             aAlias = iHead.To
          }
       case "join":
@@ -327,28 +328,28 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
             aEtc["newalias"] = aNewAlias
          }
          aHead := &tHeader{Op: eGroupEdit, For: []tHeaderFor{{Id:iHead.Gid, Type:eForGroupAll}}}
-         err = o.postMsg(aHead, aEtc, nil)
+         aMid, err = o.postMsg(aHead, aEtc, nil)
       }
       if err != nil {
          fmt.Printf("%s link.handlemsg group %s\n", o.uid, err.Error())
       }
-      o.ack(iHead.Id, err)
+      o.ack(iHead.Id, aMid, err)
    case ePost:
-      err = o.postMsg(iHead, nil, iData)
+      aMid, err = o.postMsg(iHead, nil, iData)
       if err != nil {
          fmt.Printf("%s link.handlemsg post %s\n", o.uid, err.Error())
       }
-      o.ack(iHead.Id, err)
+      o.ack(iHead.Id, aMid, err)
    case ePing:
       aUid, err := UDb.Lookup(iHead.To)
       if err == nil {
          iHead.For = []tHeaderFor{{Id:aUid, Type:eForUser}}
-         err = o.postMsg(iHead, tMsg{"to":iHead.To}, iData)
+         aMid, err = o.postMsg(iHead, tMsg{"to":iHead.To}, iData)
       }
       if err != nil {
          fmt.Printf("%s link.handlemsg ping %s\n", o.uid, err.Error())
       }
-      o.ack(iHead.Id, err)
+      o.ack(iHead.Id, aMid, err)
    case eAck:
       aTmr := time.NewTimer(2 * time.Second)
       select {
@@ -365,21 +366,21 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
    return nil
 }
 
-func (o *Link) ack(iId string, iErr error) {
-   aMsg := tMsg{"op":"ack", "id":iId}
+func (o *Link) ack(iId, iMsgId string, iErr error) {
+   aMsg := tMsg{"op":"ack", "id":iId, "msgid":iMsgId}
    if iErr != nil {
       aMsg["error"] = iErr.Error()
    }
    o.conn.Write(PackMsg(aMsg, nil))
 }
 
-func (o *Link) postMsg(iHead *tHeader, iEtc tMsg, iData []byte) error {
-   aMsgId := sStore.MakeId()
+func (o *Link) postMsg(iHead *tHeader, iEtc tMsg, iData []byte) (aMsgId string, err error) {
+   aMsgId = sStore.MakeId()
    aHead := tMsg{"op":sResponseOps[iHead.Op], "id":aMsgId, "from":o.uid, "datalen":iHead.DataLen}
    if iEtc != nil {
       for aK, aV := range iEtc { aHead[aK] = aV }
    }
-   err := sStore.RecvFile(aMsgId, PackMsg(aHead, nil), iData, o.conn, iHead.DataLen)
+   err = sStore.RecvFile(aMsgId, PackMsg(aHead, nil), iData, o.conn, iHead.DataLen)
    if err != nil { panic(err) }
    defer sStore.RmFile(aMsgId)
    aForNodes := make(map[string]bool, len(iHead.For)) //todo x2 or more?
@@ -390,7 +391,7 @@ func (o *Link) postMsg(iHead *tHeader, iEtc tMsg, iData []byte) error {
       switch aTo.Type {
       case eForGroupAll, eForGroupExcl:
          aUids, err = UDb.GroupGetUsers(aTo.Id, o.uid)
-         if err != nil { return err }
+         if err != nil { return "", err }
       default:
          aUids = []string{aTo.Id}
       }
@@ -399,7 +400,7 @@ func (o *Link) postMsg(iHead *tHeader, iEtc tMsg, iData []byte) error {
             continue
          }
          aNodes, err := UDb.GetNodes(aUid)
-         if err != nil { return err }
+         if err != nil { return "", err }
          for _, aNd := range aNodes {
             aForNodes[aNd] = true
          }
@@ -421,7 +422,7 @@ func (o *Link) postMsg(iHead *tHeader, iEtc tMsg, iData []byte) error {
       }
       aNd.dir.RUnlock()
    }
-   return nil
+   return aMsgId, nil
 }
 
 type tMsg map[string]interface{}
