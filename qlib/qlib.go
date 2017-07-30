@@ -31,7 +31,7 @@ const kAliasMinLen = 8
 const (
    eTmtpRev = iota
    eRegister; eLogin
-   eAddNode; eGroupInvite; eGroupEdit
+   eUserEdit; eGroupInvite; eGroupEdit
    ePost; ePing
    eAck; eQuit
    eOpEnd
@@ -43,7 +43,7 @@ var sHeaderDefs = [...]tHeader{
    eTmtpRev    : { Id:"1"                                  },
    eRegister   : { NewNode:"1", NewAlias:"1"               },
    eLogin      : { Uid:"1", Node:"1"                       },
-   eAddNode    : { Uid:"1", Node:"1", NewNode:"1"          },
+   eUserEdit   : { Id:"1"                                  },
    eGroupInvite: { Id:"1", DataLen:1, Gid:"1"              },
    eGroupEdit  : { Id:"1", Act:"1", Gid:"1"                },
    ePost       : { Id:"1", DataLen:1, For:[]tHeaderFor{{}} },
@@ -54,7 +54,7 @@ var sHeaderDefs = [...]tHeader{
 
 var sResponseOps = [...]string{
    eRegister:    "registered",
-   eAddNode:     "nodeAdded",
+   eUserEdit:    "user",
    eGroupInvite: "invite",
    eGroupEdit:   "member",
    ePost:        "delivery",
@@ -264,7 +264,7 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
       }
       aAck := tMsg{"op":sResponseOps[iHead.Op], "uid":aUid, "nodeid":aNodeId}
       if iHead.NewAlias != "_" {
-         if len(iHead.NewAlias) < kAliasMinLen {
+         if len(iHead.NewAlias) < kAliasMinLen { //todo enforce in userdb
             aAck["error"] = fmt.Sprintf("newalias must be %d+ characters", kAliasMinLen)
          } else {
             err = UDb.AddAlias(aUid, aNodeSha, "", iHead.NewAlias)
@@ -295,6 +295,35 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
       o.node = aNodeSha
       o.queue = aQ
       fmt.Printf("%s link.handlemsg login user %.7s\n", o.uid, aQ.node)
+   case eUserEdit:
+      if iHead.NewNode == "" && iHead.NewAlias == "" { return sMsgHeaderBad }
+      if iHead.NewNode != "" && iHead.NewAlias != "" { return sMsgHeaderBad }
+      aEtc := tMsg{}
+      if iHead.NewAlias != "" {
+         err = UDb.AddAlias(o.uid, o.node, "", iHead.NewAlias)
+         if err == nil {
+            aEtc["newalias"] = iHead.NewAlias
+         }
+      } else {
+         aNodeId, aNodeSha := makeNodeId()
+         _,err = UDb.AddNode(o.uid, o.node, aNodeSha)
+         if err == nil {
+            aNd := GetNode(o.node)
+            aNd.dir.Lock()
+            err = sStore.CopyDir(o.node, aNodeSha)
+            if err != nil { panic(err) }
+            aNd.dir.Unlock()
+            aEtc["nodeid"] = aNodeId
+         }
+      }
+      if err == nil {
+         iHead.For = []tHeaderFor{{Id:o.uid, Type:eForUser}}
+         aMid, err = o.postMsg(iHead, aEtc, nil)
+      }
+      if err != nil {
+         fmt.Printf("%s link.handlemsg useredit %s\n", o.uid, err.Error())
+      }
+      o.ack(iHead.Id, aMid, err)
    case eGroupInvite:
       iHead.Act = "invite"
       fallthrough
@@ -770,6 +799,20 @@ func (o *tStore) GetDir(iNode string) (ret []string, err error) {
    sort.Slice(ret, func(i, j int) bool { return ret[i] < ret[j] })
    aFd.Close()
    return
+}
+
+func (o *tStore) CopyDir(iNode, iToNode string) error {
+   aDirs, err := o.GetDir(iNode)
+   if err != nil { return err }
+   if len(aDirs) == 0 {
+      return nil
+   }
+   os.MkdirAll(o.nodeSub(iToNode), 0700)
+   for _, aId := range aDirs {
+      err = os.Link(o.nodeSub(iNode)+"/"+aId, o.nodeSub(iToNode)+"/"+aId)
+      if err != nil && !os.IsNotExist(err) && !os.IsExist(err) { return err }
+   }
+   return nil
 }
 
 func (o *tStore) rootSub(iNode string) string {

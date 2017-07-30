@@ -15,14 +15,14 @@ const kTestLoginWait time.Duration = 6 * time.Second
 var sTestClientId chan int
 var sTestVerifyDone chan int
 var sTestVerifyWant string // expected results of verifyRead()
-var sTestVerifyGot [2]string // actual results of verifyRead()
+var sTestVerifyGot [3]string // actual results of verifyRead()
 var sTestVerifyFail int
 var sTestNodeIds map[int]string = make(map[int]string)
 
 func LocalTest(i int) {
    sTestVerifyDone = make(chan int)
    sTestVerifyWant = "\n"
-   sTestVerifyGot[1] = "\n"
+   sTestVerifyGot[2] = "\n"
 
    UDb.TempUser(testMakeUser(111112))
    UDb.TempUser(testMakeUser(222223))
@@ -150,6 +150,12 @@ func newTestClient(iAct tTestAction, iId int) *tTestClient {
           data: `1` ,
           want: `0032{"id":"123","msgid":"#mid#","op":"ack"}`+"\n"+
                 `004f{"datalen":1,"from":"u`+fmt.Sprint(iId)+`","id":"#id#","op":"ping","to":"test2"}1` ,
+      },{ head: tMsg{"Op":eUserEdit, "Id":"0", "Newalias":"sam walker"} ,
+          want: `0030{"id":"0","msgid":"#mid#","op":"ack"}`+"\n"+
+                `005a{"datalen":0,"from":"u`+fmt.Sprint(iId)+`","id":"#sid#","newalias":"sam walker","op":"user"}` ,
+      },{ head: tMsg{"Op":eUserEdit, "Id":"0", "Newnode":"ref"} ,
+          want: `0030{"id":"0","msgid":"#mid#","op":"ack"}`+"\n"+
+                `0076{"datalen":0,"from":"u`+fmt.Sprint(iId)+`","id":"#sid#","nodeid":"#nid#","op":"user"}` ,
       },{ head: tMsg{"Op":eGroupEdit, "Id":"0", "Gid":"blab", "Act":"join"} ,
           want: `0030{"id":"0","msgid":"#mid#","op":"ack"}`+"\n"+
                 `006e{"act":"join","alias":"test1","datalen":0,"from":"u`+fmt.Sprint(iId)+`","gid":"blab","id":"#sid#","op":"member"}` ,
@@ -201,10 +207,10 @@ func (o *tTestClient) verifyRead(iBuf []byte) (int, error) {
       }
    } else {
       time.Sleep(20 * time.Millisecond)
-      if sTestVerifyGot[0] + sTestVerifyGot[1] != sTestVerifyWant {
+      aGot := strings.Join(sTestVerifyGot[:], "")
+      if aGot != sTestVerifyWant {
          sTestVerifyFail++
-         fmt.Printf("Verify FAIL:\n  want: %s   got: %s%s", sTestVerifyWant,
-                    sTestVerifyGot[0], sTestVerifyGot[1])
+         fmt.Printf("Verify FAIL:\n  want: %s   got: %s", sTestVerifyWant, aGot)
       }
       if o.count-1 == len(o.work) {
          close(sTestVerifyDone)
@@ -213,8 +219,7 @@ func (o *tTestClient) verifyRead(iBuf []byte) (int, error) {
       aWk := o.work[o.count-1]
       aNl := "\n"; if aWk.want == "" { aNl = "" }
       sTestVerifyWant = aWk.want + aNl
-      sTestVerifyGot[0] = ""
-      sTestVerifyGot[1] = ""
+      sTestVerifyGot[0], sTestVerifyGot[1], sTestVerifyGot[2] = "","",""
       aMsg = aWk.msg
       if aMsg == nil { aMsg = PackMsg(aWk.head, []byte(aWk.data)) }
       select {
@@ -295,16 +300,18 @@ func (o *tTestClient) Write(iBuf []byte) (int, error) {
 
    if o.action >= eActVerifySend {
       if !(o.action == eActVerifyRecv && o.count == 1) {
+         aI := 0; if o.action == eActVerifyRecv { aI = 2 }
          if aHead["msgid"] != nil {
             sTestVerifyWant = strings.Replace(sTestVerifyWant, `#mid#`, aHead["msgid"].(string), 1)
          } else if aHead["from"] != nil {
-            aRepl := `#id#`; if o.action == eActVerifySend { aRepl = `#sid#` }
+            aRepl := `#id#`; if o.action == eActVerifySend { aRepl = `#sid#`; aI = 1 }
             sTestVerifyWant = strings.Replace(sTestVerifyWant, aRepl, aHead["id"].(string), 1)
          } else if aHead["op"].(string) == "registered" {
-            sTestVerifyWant = strings.Replace(sTestVerifyWant, `#nid#`, aHead["nodeid"].(string), 1)
             sTestVerifyWant = strings.Replace(sTestVerifyWant, `#uid#`, aHead["uid"].(string), 1)
          }
-         aI := 0; if o.action == eActVerifyRecv { aI = 1 }
+         if aHead["nodeid"] != nil {
+            sTestVerifyWant = strings.Replace(sTestVerifyWant, `#nid#`, aHead["nodeid"].(string), 1)
+         }
          sTestVerifyGot[aI] += string(iBuf) + "\n"
       }
    } else {
