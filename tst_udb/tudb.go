@@ -151,6 +151,7 @@ func (o *tUserDb) AddNode(iUid, iNode, iNewNode string) (aQid string, err error)
    //: add node
    //: iUid has iNode
    //: iUid may already have iNewNode
+   o.user[iUid].Nodes[iNewNode] = 1
    return "", nil
 }
 
@@ -164,6 +165,9 @@ func (o *tUserDb) AddAlias(iUid, iNode, iNat, iEn string) error {
    //: add aliases to iUid and o.alias
    //: iUid has iNode
    //: iNat != iEn, iNat or iEn != ""
+   o.user[iUid].Aliases = append(o.user[iUid].Aliases, tAlias{Nat: iNat, En: iEn})
+   if iNat != "" { o.alias[iNat] = iUid }
+   if iEn  != "" { o.alias[iEn ] = iUid }
    return nil
 }
 
