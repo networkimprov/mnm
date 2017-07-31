@@ -9,6 +9,7 @@ import (
 )
 
 const kUserNodeMax = 100
+const kAliasDefunctUid = "*defunct"
 
 
 //: these are instructions/guidance comments
@@ -54,7 +55,9 @@ type tNode struct {
 
 type tAlias struct {
    En string // in english
+   EnDefunct bool
    Nat string // in whatever language
+   NatDefunct bool
 }
 
 type tGroup struct {
@@ -78,7 +81,7 @@ const (
    eErrArgument;
    eErrMissingNode;
    eErrUserInvalid; eErrNodeInvalid; eErrMaxNodes; eErrLastNode;
-   eErrUnknownAlias; eErrAliasTaken;
+   eErrUnknownAlias; eErrAliasTaken; eErrAliasInvalid;
 )
 
 type tType string
@@ -131,6 +134,7 @@ func TestUserDb(iPath string) {
    }
 
    var aUid1, aUid2, aNode1, aNode2 string
+   aNat := "アリアス"
 
    // ADDUSER
    aUid1 = "AddUserUid1"
@@ -212,7 +216,6 @@ func TestUserDb(iPath string) {
    // ADDALIAS
    aUid1, aUid2 = "AddUserUid1", "AddAliasUid2"
    aNode1, aNode2 = "AddUserN1", "AddAliasN2"
-   aNat := "アリアス"
    err = aDb.AddAlias(aUid1, aNode1, aNat, "AddAliasA1")
    if err != nil || aDb.alias[aNat] != aUid1 || aDb.alias["AddAliasA1"] != aUid1 {
       fReport("add both case failed")
@@ -249,6 +252,34 @@ func TestUserDb(iPath string) {
    err = aDb.AddAlias(aUid2, aNode2, aNat, "")
    if err == nil || err.(*tUdbError).id != eErrAliasTaken {
       fReport("already taken case succeeded: AddAlias")
+   }
+
+   // DROPALIAS
+   aUid1, aUid2 = "AddUserUid1", "AddAliasUid2"
+   aNode1, aNode2 = "AddUserN1", "AddAliasN2"
+   err = aDb.DropAlias(aUid1, aNode1, "AddAliasA1")
+   if err != nil || aDb.alias["AddAliasA1"] != kAliasDefunctUid {
+      fReport("drop en case failed")
+   }
+   err = aDb.DropAlias(aUid1, aNode1, "AddAliasA1")
+   if err != nil || aDb.alias["AddAliasA1"] != kAliasDefunctUid {
+      fReport("re-drop en case failed")
+   }
+   err = aDb.DropAlias(aUid1, aNode1, aNat)
+   if err != nil || aDb.alias[aNat] != kAliasDefunctUid {
+      fReport("drop nat case failed")
+   }
+   err = aDb.DropAlias(aUid1, "DropAliasN1", aNat)
+   if err == nil || err.(*tUdbError).id != eErrNodeInvalid {
+      fReport("invalid node case succeeded: DropAlias")
+   }
+   err = aDb.DropAlias("DropAliasUid0", aNode1, aNat)
+   if err == nil || err.(*tUdbError).id != eErrUserInvalid {
+      fReport("invalid user case succeeded: DropAlias")
+   }
+   err = aDb.DropAlias(aUid2, aNode2, "AddAliasA2")
+   if err == nil || err.(*tUdbError).id != eErrAliasInvalid {
+      fReport("invalid alias case succeeded: DropAlias")
    }
 
    if aOk {
@@ -420,6 +451,53 @@ func (o *tUserDb) DropAlias(iUid, iNode, iAlias string) error {
    //: mark alias defunct in o.alias
    //: iUid has iNode
    //: iAlias for iUid
+
+   aUser, err := o.fetchUser(iUid, eFetchCheck)
+   if err != nil { panic(err) }
+
+   if aUser == nil {
+      return &tUdbError{id: eErrUserInvalid, msg: fmt.Sprintf("DropAlias: iUid %s not found", iUid)}
+   }
+
+   aUser.Lock()
+   defer aUser.Unlock()
+
+   aQid := iNode //todo set properly
+   if aUser.Nodes[iNode].Qid != aQid {
+      return &tUdbError{id: eErrNodeInvalid, msg: fmt.Sprintf("DropAlias: iNode %s invalid", iNode)}
+   }
+
+   // check for retry
+   for _, aAlias := range aUser.Aliases {
+      if iAlias == aAlias.Nat && aAlias.NatDefunct ||
+         iAlias == aAlias.En && aAlias.EnDefunct {
+         return nil
+      }
+   }
+
+   aUid, _ := o.Lookup(iAlias)
+   if aUid != iUid {
+      return &tUdbError{id: eErrAliasInvalid, msg: fmt.Sprintf("DropAlias: iAlias %s not for iUid %s", iAlias, iUid)}
+   }
+
+   o.aliasDoor.Lock()
+   o.alias[iAlias] = kAliasDefunctUid
+   err = o.putRecord(eTalias, iAlias, kAliasDefunctUid)
+   if err != nil { panic(err) }
+   o.aliasDoor.Unlock()
+
+   for a, _ := range aUser.Aliases {
+      if iAlias == aUser.Aliases[a].Nat {
+         aUser.Aliases[a].NatDefunct = true
+         break
+      }
+      if iAlias == aUser.Aliases[a].En {
+         aUser.Aliases[a].EnDefunct = true
+         break
+      }
+   }
+   err = o.putRecord(eTuser, iUid, aUser)
+   if err != nil { panic(err) }
    return nil
 }
 
