@@ -51,9 +51,7 @@ func LocalTest(i int) {
       sTestClientId <- 111111 * a
    }
    for a := 0; true; a++ {
-      aAct := eActCycle
-      if a == 1 { aAct = eActDeferLogin }
-      NewLink(newTestClient(aAct, <-sTestClientId))
+      NewLink(newTestClient(eActCycle, <-sTestClientId))
    }
 }
 
@@ -76,7 +74,7 @@ type tTestClient struct {
 }
 
 type tTestAction int
-const ( eActCycle tTestAction =iota; eActDeferLogin; eActVerifySend; eActVerifyRecv )
+const ( eActCycle tTestAction =iota; eActVerifySend; eActVerifyRecv )
 
 type tTestWork struct { msg []byte; head tMsg; data, want string }
 
@@ -184,6 +182,10 @@ func newTestClient(iAct tTestAction, iId int) *tTestClient {
       },{ msg : []byte(`:zyx`) ,
           want: `0032{"id":"zyx","msgid":"#mid#","op":"ack"}`+"\n"+
                 `0047{"datalen":15,"from":"u`+fmt.Sprint(iId)+`","id":"#id#","op":"delivery"}data for Id:zyx` ,
+      },{ head: tMsg{"Op":eQuit} ,
+          want: `0020{"info":"logout ok","op":"quit"}` ,
+      },{ msg : []byte(`delay`) ,
+          want: `0024{"info":"login timeout","op":"quit"}` ,
       }}
    }
    return aTc
@@ -221,7 +223,11 @@ func (o *tTestClient) verifyRead(iBuf []byte) (int, error) {
       sTestVerifyWant = aWk.want + aNl
       sTestVerifyGot[0], sTestVerifyGot[1], sTestVerifyGot[2] = "","",""
       aMsg = aWk.msg
-      if aMsg == nil { aMsg = PackMsg(aWk.head, []byte(aWk.data)) }
+      if aMsg == nil {
+         aMsg = PackMsg(aWk.head, []byte(aWk.data))
+      } else if string(aMsg[:5]) == "delay" {
+         return 0, &net.OpError{Op:"read", Err:&tTimeoutError{}}
+      }
       select {
       case aId := <-o.ack:
          aMsg = PackMsg(tMsg{"Op":eAck, "Id":aId, "Type":"n"}, aMsg)
@@ -278,13 +284,10 @@ func (o *tTestClient) cycleRead(iBuf []byte) (int, error) {
 }
 
 func (o *tTestClient) Read(iBuf []byte) (int, error) {
-   switch o.action {
-   case eActVerifySend, eActVerifyRecv:
-      return o.verifyRead(iBuf)
-   case eActDeferLogin:
-      time.Sleep(kTestLoginWait)
+   if o.action == eActCycle {
+      return o.cycleRead(iBuf)
    }
-   return o.cycleRead(iBuf)
+   return o.verifyRead(iBuf)
 }
 
 func (o *tTestClient) Write(iBuf []byte) (int, error) {
