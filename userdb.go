@@ -72,7 +72,12 @@ type tUserDbErr struct {
 }
 
 func (o tUserDbErr) Error() string { return string(o.msg) }
-const ( _= iota; eErrUserInvalid; eErrMissingNode; eErrNodeInvalid; eErrMaxNodes; eErrLastNode )
+const (
+   _= iota;
+   eErrUserInvalid;
+   eErrMissingNode; eErrNodeInvalid; eErrMaxNodes; eErrLastNode;
+   eErrMissingAlias; eErrAliasEqual; eErrAliasTaken
+)
 
 type tType string
 const (
@@ -126,7 +131,7 @@ func TestUserDb() {
       }
    }
 
-   aUid, aUid2, aUid3 := "User1", "User2", "User3"
+   aUid, aUid2, aUid3, aUid4 := "User1", "User2", "User3", "User4"
    aNode1, aNode2 := "Node1", "Node2"
 
    // IMPLEMENTING ADDUSER
@@ -212,6 +217,45 @@ func TestUserDb() {
       fReport("DropNode: last node dropped, error expected")
    }
    fmt.Println("DropNode tests complete") //todo drop this
+
+   // IMPLEMENTING AddAlias
+   fmt.Println("Testing AddAlias") // todo drop this
+   aDb.AddUser(aUid4, aNode1)
+   err = aDb.AddAlias(aUid4, aNode1, "アリアス", "Alias1") // successful case
+   if err != nil {
+      fReport("AddAlias: Error with successful case")
+   }
+   err = aDb.AddAlias(aUid4, aNode1, "アリアス", "Alias1") // repeated successful case
+   if err != nil {
+      fReport("AddAlias: Error with successful (repeated) case")
+   }
+   err = aDb.AddAlias(aUid4, aNode1, "", "Alias2")
+   if err != nil {
+      fReport("AddAlias: Error with successful (repeated) case")
+   }
+   err = aDb.AddAlias(aUid4, aNode1, "アリアス2", "")
+   if err != nil {
+      fReport("AddAlias: Error with successful case")
+   }
+   err = aDb.AddAlias(aUid4, aNode1, "アリアス", "AnotherAlias")
+   if err != nil {
+      fReport("AddAlias: Error with successful case")
+   }
+
+   // testing error cases
+   err = aDb.AddAlias("Non-existant user", aNode1, "アリアス3", "Alias3")
+   if err == nil {
+      fReport("AddAlias: got success for non-existant user")
+   }
+   err = aDb.AddAlias(aUid4, "Non-existant node", "アリアス3", "Alias3")
+   if err == nil {
+      fReport("AddAlias: got success for non-existant node")
+   }
+   err = aDb.AddAlias(aUid3, aNode1, "アリアス", "Alias1")
+   if err == nil {
+      fReport("AddAlias: got success for adding an already taken alias")
+   }
+   fmt.Println("AddAlias tests complete") // todo drop this
 
    if aOk {
       fmt.Println("UserDb tests passed")
@@ -319,6 +363,66 @@ func (o *tUserDb) AddAlias(iUid, iNode, iNat, iEn string) error {
    //: add aliases to iUid and o.alias
    //: iUid has iNode
    //: iNat != iEn, iNat or iEn != ""
+
+   if iNat == iEn {
+      return tUserDbErr{msg: fmt.Sprintf("AddAlias: iNat cannot equal iEn"), id: eErrAliasEqual}
+   }
+
+   aUser, err := o.fetchUser(iUid, eFetchCheck)
+   if err != nil { panic(err) }
+
+   if aUser == nil {
+      return tUserDbErr{msg: fmt.Sprintf("AddAlias: user not found"), id: eErrUserInvalid}
+   }
+
+   aUser.door.Lock()
+   defer aUser.door.Unlock()
+
+   aQid := iNode
+   if aUser.Nodes[iNode].Qid != aQid {
+      return tUserDbErr{msg: fmt.Sprintf("AddAlias: iNode %s invalid", iNode), id: eErrNodeInvalid}
+   }
+
+   aAddedCount := 0
+   aAliases := [...] string {iNat, iEn}
+   for _, aAlias := range aAliases {
+      if aAlias != "" {
+         aUid, _ := o.Lookup(iNat)
+         if aUid == iUid {
+            aAddedCount++
+         } else if aUid != "" {
+            return tUserDbErr{msg: fmt.Sprintf("AddAlias: alias %s already taken", aAlias), id: eErrAliasTaken}
+         }
+      }
+   }
+
+   if aAddedCount == 2 {
+      return nil
+   }
+
+   o.aliasDoor.Lock()
+   defer o.aliasDoor.Unlock()
+
+   for _, aAlias := range aAliases {
+      if aAlias != "" {
+         if o.alias[aAlias] != "" && o.alias[aAlias] != iUid{
+            return tUserDbErr{msg: fmt.Sprintf("AddAlias: alias %s already taken", aAlias), id: eErrAliasTaken}
+         }
+      }
+   }
+
+   for _, aAlias := range aAliases {
+      if aAlias != "" {
+         o.alias[aAlias] = iUid
+         err = o.putRecord(eTalias, aAlias, iUid) // add iEn to disk
+         if err != nil { panic(err) }
+      }
+   }
+
+   aUser.Aliases = append(aUser.Aliases, tAlias{En: iEn, Nat: iNat})
+   err = o.putRecord(eTuser, iUid, aUser)
+   if err != nil { panic(err) }
+
    return nil
 }
 
@@ -344,6 +448,28 @@ func (o *tUserDb) GetNodes(iUid string) (aQids []string, err error) {
 
 func (o *tUserDb) Lookup(iAlias string) (aUid string, err error) {
    //: return uid for iAlias
+
+   o.aliasDoor.RLock()
+   aUid = o.alias[iAlias] // check cache
+   o.aliasDoor.RUnlock()
+
+   if aUid == "" { // iAlias not in cache
+      aObj, err := o.getRecord(eTalias, iAlias)
+      if err != nil { return "", err }
+
+      if aObj == nil {
+         return "", tUserDbErr{msg: fmt.Sprintf("Lookup: iAlias %s not in use", iAlias), id: eErrMissingAlias}
+      }
+
+      aUid = aObj.(string)
+      o.aliasDoor.Lock()
+      if aTemp := o.alias[iAlias]; aTemp != "" { // recheck the map
+         aUid = aTemp
+      } else {
+         o.alias[iAlias] = aUid // add Uid to map
+      }
+      o.aliasDoor.Unlock()
+   }
    return aUid, nil
 }
 
@@ -353,6 +479,7 @@ func (o *tUserDb) GroupInvite(iGid, iAlias, iByAlias, iByUid string) (aUid strin
    //: iGid exists, iByUid in group, iByAlias ignored
    //: iGid !exists, make iGid and add iByUid with iByAlias
    //: iByAlias for iByUid
+
    return aUid, nil
 }
 
