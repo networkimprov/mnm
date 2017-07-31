@@ -53,7 +53,9 @@ type tNode struct {
 
 type tAlias struct {
    En string // in english
+   EnDefunct bool
    Nat string // in whatever language
+   NatDefunct bool
 }
 
 type tGroup struct {
@@ -76,7 +78,7 @@ const (
    _= iota;
    eErrUserInvalid;
    eErrMissingNode; eErrNodeInvalid; eErrMaxNodes; eErrLastNode;
-   eErrMissingAlias; eErrAliasEqual; eErrAliasTaken
+   eErrMissingAlias; eErrAliasEqual; eErrAliasTaken; eErrAliasInvalid
 )
 
 type tType string
@@ -257,6 +259,36 @@ func TestUserDb() {
    }
    fmt.Println("AddAlias tests complete") // todo drop this
 
+   // IMPLEMENTING DropAlias
+   fmt.Println("Testing DropAlias") // todo drop this
+   // testing successful cases
+   err = aDb.DropAlias(aUid4, aNode1, "Alias1")
+   if err != nil {
+      fReport("DropAlias: error with successful case-- En")
+   }
+   err = aDb.DropAlias(aUid4, aNode1, "Alias1")
+   if err != nil {
+      fReport("DropAlias: error with successful case (repeated)")
+   }
+   err = aDb.DropAlias(aUid4, aNode1, "アリアス")
+   if err != nil {
+      fReport("DropAlias: error with successful case-- Nat")
+   }
+   // testing error cases
+   err = aDb.DropAlias("Non-existant user", aNode1, "Alias")
+   if err == nil {
+      fReport("DropAlias: got success for non-existant user")
+   }
+   err = aDb.DropAlias(aUid4, "Non-existant node", "アリアス")
+   if err == nil {
+      fReport("DropAlias: got success for non-existant node")
+   }
+   err = aDb.DropAlias(aUid4, aNode1, "NotYourAlias")
+   if err == nil {
+      fReport("DropAlias: got success for dropping alias not belonging to user")
+   }
+   fmt.Println("DropAlias tests complete") // todo drop this
+
    if aOk {
       fmt.Println("UserDb tests passed")
    }
@@ -430,6 +462,54 @@ func (o *tUserDb) DropAlias(iUid, iNode, iAlias string) error {
    //: mark alias defunct in o.alias
    //: iUid has iNode
    //: iAlias for iUid
+
+   aUser, err := o.fetchUser(iUid, eFetchCheck)
+   if err != nil { panic(err) }
+
+   if aUser == nil {
+      return tUserDbErr{msg: fmt.Sprintf("DropAlias: iUid %s not found", iUid), id: eErrUserInvalid}
+   }
+
+   aUser.door.Lock()
+   defer aUser.door.Unlock()
+
+   aQid := iNode
+   if aUser.Nodes[iNode].Qid != aQid {
+      return tUserDbErr{msg: fmt.Sprintf("DropAlias: iNode %s invalid", iNode), id: eErrNodeInvalid}
+   }
+
+   // check for repeated case
+   for _, aAlias := range aUser.Aliases {
+      if iAlias == aAlias.Nat && aAlias.NatDefunct ||
+         iAlias == aAlias.En && aAlias.EnDefunct {
+         return nil
+      }
+   }
+
+   aUid, _ := o.Lookup(iAlias)
+   if aUid != iUid {
+      return tUserDbErr{msg: fmt.Sprintf("DropAlias: iAlias %s doesn't belong to user", iAlias), id: eErrAliasInvalid}
+   }
+
+   for a, aAlias := range aUser.Aliases {
+      if iAlias == aAlias.Nat {
+         aUser.Aliases[a].NatDefunct = true
+         break
+      }
+      if iAlias == aAlias.En {
+         aUser.Aliases[a].EnDefunct = true
+         break
+      }
+   }
+
+   o.aliasDoor.Lock()
+   defer o.aliasDoor.Unlock()
+   o.alias[iAlias] = "*defunct"
+
+   err = o.putRecord(eTuser, iUid, aUser)
+   if err != nil { panic(err) }
+   err = o.putRecord(eTalias, iAlias, "*defunct")
+   if err != nil { panic(err) }
    return nil
 }
 
