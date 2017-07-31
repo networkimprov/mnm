@@ -79,7 +79,7 @@ Response `{"op":"tmtprev", "id":"1"}`
 _todo: receive-only accounts which cannot ping or post_  
 _todo: integrate with third party authentication services_  
 `{"op":1, "newnode":string <,"newalias":string>}`  
-.newnode is a reference to 1st client device  
+.newnode is the user label for a client device  
 Response _same as Login_  
 At node `{"op":"registered", "uid":string, "nodeid":string <,"error":string>}`
 
@@ -89,12 +89,13 @@ _todo: notify other nodes_
 Response `{"op":"info|quit" "info":string}` (also given on login timeout)  
 ? At nodes `{"op":"login", "id":string, "from":string, "info":string}`
 
-3. UserEdit updates a user (in progress)  
+3. UserEdit updates a user account  
+_todo: check & store label_  
 _todo: dropnode and dropalias; prevent account hijacking from stolen client/nodeid_  
-`{"op":3, "uid":string, "nodeid":string <,"newnode":string &| ,"newalias":string>}`  
-.newnode is a reference to Nth client device  
-Response `{"op":"updated" <,"nodeid":string>, "ok":"ok|error" <,"error":string>}`  
-At nodes `{"op":"account", "id":string, "from":string <,"newnode":string &| ,"newalias"string>}`
+`{"op":3, "id":string, <"newnode":string | "newalias":string>}`  
+.newnode is the user label for a client device  
+Response `{"op":"ack", "id":string, "msgid":string, <"error":string>}`  
+At nodes `{"op":"user", "id":string, "from":string, "datalen":0, <"nodeid":string | "newalias":string>}`
 
 4. GroupInvite invites someone to a group, creating it if necessary  
 `{"op":4, "id":string, "gid":string, "datalen":uint, "from":string, "to":string}`  
