@@ -24,43 +24,41 @@ func LocalTest(i int) {
    sTestVerifyWant = "\n"
    sTestVerifyGot[2] = "\n"
 
-   UDb.TempUser(testMakeUser(111112))
-   UDb.TempUser(testMakeUser(222223))
-   UDb.TempAlias("u111112", "test1")
-   UDb.TempAlias("u111112", "test11")
-   UDb.TempAlias("u222223", "test2")
-   UDb.TempGroup("blab", "u111112", "test1") // Status eStatInvited
+   UDb.TempUser("u100002", testMakeNode(100002))
+   UDb.TempUser("u100003", testMakeNode(100003))
+   UDb.TempAlias("u100002", "test1")
+   UDb.TempAlias("u100002", "test11")
+   UDb.TempAlias("u100003", "test2")
+   UDb.TempGroup("blab", "u100002", "test1") // Status eStatInvited
 
-   NewLink(newTestClient(eActVerifyRecv, 222223))
-   NewLink(newTestClient(eActVerifySend, 111112))
+   NewLink(newTestClient(eActVerifyRecv, 100003))
+   NewLink(newTestClient(eActVerifySend, 100002))
    <-sTestVerifyDone
    time.Sleep(10 * time.Millisecond)
    fmt.Printf("%d verify pass failures, starting cycle\n\n", sTestVerifyFail)
 
-   UDb.TempUser(testMakeUser(111111))
-   UDb.TempUser(testMakeUser(222222))
-   UDb.TempUser(testMakeUser(333333))
-   UDb.TempAlias("u111111", "a1")
-   UDb.TempAlias("u222222", "a2")
-   UDb.TempGroup("g1", "u111111", "111")
-   UDb.TempGroup("g1", "u222222", "222")
-   UDb.TempGroup("g1", "u333333", "333")
-
    sTestClientId = make(chan int, i)
-   for a := 1; a <= i; a++ {
-      sTestClientId <- 111111 * a
+   for a := 0; a <= i; a++ {
+      aId := 111000 + a
+      aS := fmt.Sprint(aId)
+      UDb.TempUser("u"+aS, testMakeNode(aId))
+      UDb.TempAlias("u"+aS, "a"+aS)
+      UDb.TempGroup("g"+fmt.Sprint(a/100), "u"+aS, "a"+aS)
+      if a < i {
+         sTestClientId <- aId
+      }
    }
    for a := 0; true; a++ {
       NewLink(newTestClient(eActCycle, <-sTestClientId))
    }
 }
 
-func testMakeUser(id int) (string, string) {
+func testMakeNode(id int) string {
    aNodeId := sBase32.EncodeToString([]byte(fmt.Sprint(id)))
    sTestNodeIds[id] = aNodeId
    aNodeSha, err := getNodeSha(&aNodeId)
    if err != nil { panic(err) }
-   return "u"+fmt.Sprint(id), aNodeSha
+   return aNodeSha
 }
 
 type tTestClient struct {
@@ -80,7 +78,7 @@ type tTestWork struct { msg []byte; head tMsg; data, want string }
 
 func newTestClient(iAct tTestAction, iId int) *tTestClient {
    aTc := &tTestClient{
-      id: iId, to: iId+111111,
+      id: iId, to: iId+1,
       action: iAct,
       ack: make(chan string, 10),
    }
@@ -134,13 +132,13 @@ func newTestClient(iAct tTestAction, iId int) *tTestClient {
         { head: tMsg{"Op":eLogin, "Uid":"noone", "Node":"LB27ML46"} ,
           want: `0023{"info":"login failed","op":"quit"}` ,
       },  aTmtpRev,
-        { head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId+111111), "Node":sTestNodeIds[iId+111111]} ,
+        { head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId+1), "Node":sTestNodeIds[iId+1]} ,
           want: `002d{"info":"node already connected","op":"quit"}` ,
       },  aTmtpRev,
         { head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId), "Node":sTestNodeIds[iId]} ,
           want: `001f{"info":"login ok","op":"info"}` ,
       },{ head: tMsg{"Op":ePost, "Id":"zyx", "Datalen":15, "For":[]tHeaderFor{
-                       {Id:"u"+fmt.Sprint(iId+111111), Type:eForUser} }} ,
+                       {Id:"u"+fmt.Sprint(iId+1), Type:eForUser} }} ,
           data: `data for Id:zyx` ,
           want: `0032{"id":"zyx","msgid":"#mid#","op":"ack"}`+"\n"+
                 `0047{"datalen":15,"from":"u`+fmt.Sprint(iId)+`","id":"#id#","op":"delivery"}data for Id:zyx` ,
@@ -177,7 +175,7 @@ func newTestClient(iAct tTestAction, iId int) *tTestClient {
                 `0032{"id":"123","msgid":"#mid#","op":"ack"}`+"\n"+
                 `004f{"datalen":1,"from":"u`+fmt.Sprint(iId)+`","id":"#id#","op":"ping","to":"test2"}1` ,
       },{ head: tMsg{"Op":ePost, "Id":"zyx", "Datalen":15, "For":[]tHeaderFor{
-                       {Id:"u"+fmt.Sprint(iId+111111), Type:eForUser} }} ,
+                       {Id:"u"+fmt.Sprint(iId+1), Type:eForUser} }} ,
           data: `data for Id` ,
       },{ msg : []byte(`:zyx`) ,
           want: `0032{"id":"zyx","msgid":"#mid#","op":"ack"}`+"\n"+
@@ -264,12 +262,12 @@ func (o *tTestClient) cycleRead(iBuf []byte) (int, error) {
          aHead = tMsg{"Op":eTmtpRev, "Id":"1"}
       } else if o.count == 2 {
          aHead = tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(o.id), "Node":sTestNodeIds[o.id]}
-      } else if o.id == 222222 && o.count % 20 == 3 {
-         aHead = tMsg{"Op":ePing, "Id":fmt.Sprint(o.count), "Datalen":1, "From":"a2", "To":"a1"}
+      } else if o.id == 111001 && o.count % 20 == 3 {
+         aHead = tMsg{"Op":ePing, "Id":fmt.Sprint(o.count), "Datalen":1, "From":"a111001", "To":"a111000"}
          aData = "1"
       } else {
          aFor := tHeaderFor{Id:"u"+fmt.Sprint(o.to), Type:eForUser}
-         if o.count % 20 >= 18 { aFor = tHeaderFor{Id:"g1", Type:eForGroupAll} }
+         if o.count % 20 >= 18 { aFor = tHeaderFor{Id:"g0", Type:eForGroupAll} }
          if o.count % 20 == 19 { aFor.Type = eForGroupExcl }
          aHead = tMsg{"Op":ePost, "Id":fmt.Sprint(o.count), "Datalen":10, "For":[]tHeaderFor{aFor}}
          aData = fmt.Sprintf(" |msg %3d|", o.count)
