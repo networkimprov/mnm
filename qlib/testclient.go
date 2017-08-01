@@ -1,6 +1,7 @@
 package qlib
 
 import (
+   "sync/atomic"
    "fmt"
    "encoding/json"
    "net"
@@ -12,15 +13,19 @@ import (
 
 const kTestLoginWait time.Duration = 6 * time.Second
 
-var sTestClientId chan int
-var sTestVerifyDone chan int
+var sTestNodeIds = make(map[int]string)
+var sTestVerifyDone = make(chan int)
 var sTestVerifyWant string // expected results of verifyRead()
 var sTestVerifyGot [3]string // actual results of verifyRead()
 var sTestVerifyFail int
-var sTestNodeIds map[int]string = make(map[int]string)
+var sTestClientCount int32
+var sTestClientId chan int
+var sTestLogins = make(map[int]*int)
+var sTestLoginTotal int32
+var sTestRecvCount int32
+var sTestRecvBytes int64
 
 func LocalTest(i int) {
-   sTestVerifyDone = make(chan int)
    sTestVerifyWant = "\n"
    sTestVerifyGot[2] = "\n"
 
@@ -37,6 +42,7 @@ func LocalTest(i int) {
    time.Sleep(10 * time.Millisecond)
    fmt.Printf("%d verify pass failures, starting cycle\n\n", sTestVerifyFail)
 
+   sTestClientCount = int32(i)
    sTestClientId = make(chan int, i)
    for a := 0; a <= i; a++ {
       aId := 111000 + a
@@ -45,6 +51,7 @@ func LocalTest(i int) {
       UDb.TempAlias("u"+aS, "a"+aS)
       UDb.TempGroup("g"+fmt.Sprint(a/100), "u"+aS, "a"+aS)
       if a < i {
+         sTestLogins[aId] = new(int)
          sTestClientId <- aId
       }
    }
@@ -235,6 +242,25 @@ func (o *tTestClient) verifyRead(iBuf []byte) (int, error) {
    return copy(iBuf, aMsg), nil
 }
 
+func loginSummary() {
+   if atomic.AddInt32(&sTestLoginTotal, 1) % (sTestClientCount * 1) == 0 {
+      var aMinV, aMaxV, aMinK, aMaxK int = 1e9, 0,0,0
+      for aK, aV := range sTestLogins {
+         if *aV > aMaxV { aMaxV = *aV; aMaxK = aK }
+         if *aV < aMinV { aMinV = *aV; aMinK = aK }
+      }
+      fmt.Printf("login summary: min u%d %d, max u%d %d\n", aMinK, aMinV, aMaxK, aMaxV)
+   }
+}
+
+func recvSummary(i int) {
+   aB := atomic.AddInt64(&sTestRecvBytes, int64(i))
+   aN := atomic.AddInt32(&sTestRecvCount, 1)
+   if aN % (sTestClientCount * 2) == 0 {
+      fmt.Printf("message count %d, MB %d\n", aN, aB/(1024*1024))
+   }
+}
+
 func (o *tTestClient) cycleRead(iBuf []byte) (int, error) {
    if o.count % 20 == 19 {
       return 0, &net.OpError{Op:"read", Err:tError("log out")}
@@ -262,6 +288,8 @@ func (o *tTestClient) cycleRead(iBuf []byte) (int, error) {
          aHead = tMsg{"Op":eTmtpRev, "Id":"1"}
       } else if o.count == 2 {
          aHead = tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(o.id), "Node":sTestNodeIds[o.id]}
+         *sTestLogins[o.id]++
+         loginSummary()
       } else if o.id == 111001 && o.count % 20 == 3 {
          aHead = tMsg{"Op":ePing, "Id":fmt.Sprint(o.count), "Datalen":1, "From":"a111001", "To":"a111000"}
          aData = "1"
@@ -320,6 +348,8 @@ func (o *tTestClient) Write(iBuf []byte) (int, error) {
    }
 
    if aHead["from"] != nil {
+      aDatalen := int(aHead["datalen"].(float64))
+      if o.action == eActCycle { recvSummary(aDatalen) }
       aTmr := time.NewTimer(2 * time.Second)
       select {
       case o.ack <- aHead["id"].(string):
