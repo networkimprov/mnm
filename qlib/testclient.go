@@ -3,8 +3,10 @@ package qlib
 import (
    "sync/atomic"
    "fmt"
+   "io"
    "encoding/json"
    "net"
+   "os"
    "strconv"
    "strings"
    "time"
@@ -40,7 +42,7 @@ func LocalTest(i int) {
    NewLink(newTestClient(eActVerifySend, 100002))
    <-sTestVerifyDone
    time.Sleep(10 * time.Millisecond)
-   fmt.Printf("%d verify pass failures, starting cycle\n\n", sTestVerifyFail)
+   fmt.Fprintf(os.Stderr, "%d verify pass failures, starting cycle\n\n", sTestVerifyFail)
 
    sTestClientCount = int32(i)
    sTestClientId = make(chan int, i)
@@ -207,7 +209,7 @@ func (o *tTestClient) verifyRead(iBuf []byte) (int, error) {
       } else {
          select {
          case <-sTestVerifyDone:
-            return 0, &net.OpError{Op:"read", Err:tError("log out")}
+            return 0, io.EOF
          case aId := <-o.ack:
             aMsg = PackMsg(tMsg{"Op":eAck, "Id":aId, "Type":"n"}, nil)
          }
@@ -217,11 +219,11 @@ func (o *tTestClient) verifyRead(iBuf []byte) (int, error) {
       aGot := strings.Join(sTestVerifyGot[:], "")
       if aGot != sTestVerifyWant {
          sTestVerifyFail++
-         fmt.Printf("Verify FAIL:\n  want: %s   got: %s", sTestVerifyWant, aGot)
+         fmt.Fprintf(os.Stderr, "Verify FAIL:\n  want: %s   got: %s", sTestVerifyWant, aGot)
       }
       if o.count-1 == len(o.work) {
          close(sTestVerifyDone)
-         return 0, &net.OpError{Op:"read", Err:tError("log out")}
+         return 0, io.EOF
       }
       aWk := o.work[o.count-1]
       aNl := "\n"; if aWk.want == "" { aNl = "" }
@@ -249,7 +251,7 @@ func loginSummary() {
          if *aV > aMaxV { aMaxV = *aV; aMaxK = aK }
          if *aV < aMinV { aMinV = *aV; aMinK = aK }
       }
-      fmt.Printf("login summary: min u%d %d, max u%d %d\n", aMinK, aMinV, aMaxK, aMaxV)
+      fmt.Fprintf(os.Stderr, "login summary: min u%d %d, max u%d %d\n", aMinK, aMinV, aMaxK, aMaxV)
    }
 }
 
@@ -257,15 +259,11 @@ func recvSummary(i int) {
    aB := atomic.AddInt64(&sTestRecvBytes, int64(i))
    aN := atomic.AddInt32(&sTestRecvCount, 1)
    if aN % (sTestClientCount * 2) == 0 {
-      fmt.Printf("message count %d, MB %d\n", aN, aB/(1024*1024))
+      fmt.Fprintf(os.Stderr, "message count %d, MB %d\n", aN, aB/(1024*1024))
    }
 }
 
 func (o *tTestClient) cycleRead(iBuf []byte) (int, error) {
-   if o.count % 20 == 19 {
-      return 0, &net.OpError{Op:"read", Err:tError("log out")}
-   }
-
    var aDlC <-chan time.Time
    if !o.readDeadline.IsZero() {
       aDl := time.NewTimer(o.readDeadline.Sub(time.Now()))
@@ -290,22 +288,24 @@ func (o *tTestClient) cycleRead(iBuf []byte) (int, error) {
          aHead = tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(o.id), "Node":sTestNodeIds[o.id]}
          *sTestLogins[o.id]++
          loginSummary()
-      } else if o.id == 111001 && o.count % 20 == 3 {
+      } else if o.count == 3 && o.id == 111001 {
          aHead = tMsg{"Op":ePing, "Id":fmt.Sprint(o.count), "Datalen":1, "From":"a111001", "To":"a111000"}
          aData = "1"
-      } else {
+      } else if o.count < 20 {
          aFor := tHeaderFor{Id:"u"+fmt.Sprint(o.to), Type:eForUser}
-         if o.count % 20 >= 18 { aFor = tHeaderFor{Id:"g0", Type:eForGroupAll} }
-         if o.count % 20 == 19 { aFor.Type = eForGroupExcl }
+         if o.count >= 18 { aFor = tHeaderFor{Id:"g0", Type:eForGroupAll} }
+         if o.count == 19 { aFor.Type = eForGroupExcl }
          aHead = tMsg{"Op":ePost, "Id":fmt.Sprint(o.count), "Datalen":10, "For":[]tHeaderFor{aFor}}
          aData = fmt.Sprintf(" |msg %3d|", o.count)
+      } else {
+         return 0, io.EOF
       }
    case <-aDlC:
       return 0, &net.OpError{Op:"read", Err:&tTimeoutError{}}
    }
 
    aMsg := PackMsg(aHead, []byte(aData))
-   fmt.Printf("%d PUT %s\n", o.id, string(aMsg))
+   //fmt.Printf("%d PUT %s\n", o.id, string(aMsg))
    return copy(iBuf, aMsg), nil
 }
 
@@ -318,7 +318,6 @@ func (o *tTestClient) Read(iBuf []byte) (int, error) {
 
 func (o *tTestClient) Write(iBuf []byte) (int, error) {
    if o.closed {
-      fmt.Printf("%d testclient.write was closed\n", o.id)
       return 0, &net.OpError{Op:"write", Err:tError("closed")}
    }
 
@@ -344,7 +343,10 @@ func (o *tTestClient) Write(iBuf []byte) (int, error) {
          sTestVerifyGot[aI] += string(iBuf) + "\n"
       }
    } else {
-      fmt.Printf("%d got %s\n", o.id, string(iBuf))
+      if aHead["op"].(string) == "quit" {
+         fmt.Fprintf(os.Stderr, "%d testclient.write got quit %s\n", o.id, aHead["info"].(string))
+      }
+      //fmt.Printf("%d got %s\n", o.id, string(iBuf))
    }
 
    if aHead["from"] != nil {
@@ -355,7 +357,7 @@ func (o *tTestClient) Write(iBuf []byte) (int, error) {
       case o.ack <- aHead["id"].(string):
          aTmr.Stop()
       case <-aTmr.C:
-         fmt.Printf("%d testclient.write timed out on ack\n", o.id)
+         fmt.Fprintf(os.Stderr, "%d testclient.write timed out on ack\n", o.id)
          return 0, &net.OpError{Op:"write", Err:tError("noack")}
       }
    }

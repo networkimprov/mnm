@@ -141,10 +141,12 @@ func runLink(o *Link) {
       aLen, err := o.conn.Read(aBuf[aPos:])
       if err != nil {
          //todo if recoverable continue
-         if err.(net.Error).Timeout() {
+         if err == io.EOF {
+            // client close
+         } else if err.(net.Error).Timeout() {
             aQuitMsg = sMsgLoginTimeout
          } else {
-            fmt.Printf("%s link.runlink net error %s\n", o.uid, err.Error())
+            fmt.Fprintf(os.Stderr, "%s link.runlink net error %s\n", o.uid, err.Error())
          }
          break
       }
@@ -259,7 +261,7 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
       aNodeId, aNodeSha := makeNodeId()
       _, err := UDb.AddUser(aUid, aNodeSha) //todo iHead.NewNode
       if err != nil {
-         fmt.Printf("%s link.handlemsg register %s\n", o.uid, err.Error())
+         fmt.Fprintf(os.Stderr, "%s link.handlemsg register %s\n", o.uid, err.Error())
          return sMsgRegisterFailure
       }
       aAck := tMsg{"op":sResponseOps[iHead.Op], "uid":aUid, "nodeid":aNodeId}
@@ -321,7 +323,7 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
          aMid, err = o.postMsg(iHead, aEtc, nil)
       }
       if err != nil {
-         fmt.Printf("%s link.handlemsg useredit %s\n", o.uid, err.Error())
+         fmt.Fprintf(os.Stderr, "%s link.handlemsg useredit %s\n", o.uid, err.Error())
       }
       o.ack(iHead.Id, aMid, err)
    case eGroupInvite:
@@ -360,13 +362,13 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
          aMid, err = o.postMsg(aHead, aEtc, nil)
       }
       if err != nil {
-         fmt.Printf("%s link.handlemsg group %s\n", o.uid, err.Error())
+         fmt.Fprintf(os.Stderr, "%s link.handlemsg group %s\n", o.uid, err.Error())
       }
       o.ack(iHead.Id, aMid, err)
    case ePost:
       aMid, err = o.postMsg(iHead, nil, iData)
       if err != nil {
-         fmt.Printf("%s link.handlemsg post %s\n", o.uid, err.Error())
+         fmt.Fprintf(os.Stderr, "%s link.handlemsg post %s\n", o.uid, err.Error())
       }
       o.ack(iHead.Id, aMid, err)
    case ePing:
@@ -376,7 +378,7 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
          aMid, err = o.postMsg(iHead, tMsg{"to":iHead.To}, iData)
       }
       if err != nil {
-         fmt.Printf("%s link.handlemsg ping %s\n", o.uid, err.Error())
+         fmt.Fprintf(os.Stderr, "%s link.handlemsg ping %s\n", o.uid, err.Error())
       }
       o.ack(iHead.Id, aMid, err)
    case eAck:
@@ -385,7 +387,7 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
       case o.queue.ack <- iHead.Id:
          aTmr.Stop()
       case <-aTmr.C:
-         fmt.Printf("%s link.handlemsg timed out waiting on ack\n", o.uid)
+         fmt.Fprintf(os.Stderr, "%s link.handlemsg timed out waiting on ack\n", o.uid)
       }
    case eQuit:
       return sMsgQuit
@@ -516,7 +518,7 @@ func QueueLink(iNode string, iConn net.Conn) *tQueue {
       aNd.dir.Lock()
       if aNd.queue != nil {
          aNd.dir.Unlock()
-         fmt.Printf("%.7s newqueue attempt to recreate queue\n", iNode)
+         fmt.Fprintf(os.Stderr, "%.7s newqueue attempt to recreate queue\n", iNode)
       } else {
          aNd.queue = new(tQueue)
          aQ := aNd.queue
@@ -568,20 +570,20 @@ func runQueue(o *tQueue) {
          case aAckId := <-o.ack:
             aTimeout.Stop()
             if aAckId != aMsgId {
-               fmt.Printf("%.7s queue.runqueue got ack for %s, expected %s\n", o.node, aAckId, aMsgId)
+               fmt.Fprintf(os.Stderr, "%.7s queue.runqueue got ack for %s, expected %s\n", o.node, aAckId, aMsgId)
                break
             }
             sStore.RmLink(o.node, aMsgId)
             aMsgId = <-o.out
             aConn = o.waitForConn()
          case <-aTimeout.C:
-            fmt.Printf("%.7s queue.runqueue timed out awaiting ack\n", o.node)
+            fmt.Fprintf(os.Stderr, "%.7s queue.runqueue timed out awaiting ack\n", o.node)
          }
       } else if false { //todo transient
          time.Sleep(10 * time.Millisecond)
       } else {
+         fmt.Fprintf(os.Stderr, "%.7s queue.runqueue sendfile error %s\n", o.node, err.Error())
          aConn = o.waitForConn()
-         fmt.Printf("%.7s runqueue resumed\n", o.node)
       }
    }
 }
@@ -601,6 +603,9 @@ func runElasticChan(o *tQueue) {
       case aS, ok = <-o.in:
          if !ok { goto closed }
          o.buf = append(o.buf, aS)
+         if len(o.buf) % 100 == 0 {
+            fmt.Fprintf(os.Stderr, "%.7s queue.runelasticchan buf len %d\n", o.node, len(o.buf))
+         }
       case o.out <- o.buf[0]:
          o.buf = o.buf[1:]
       }
