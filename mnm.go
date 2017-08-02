@@ -2,12 +2,25 @@ package main
 
 import (
    "fmt"
+   "os"
    "qlib"
+   "strconv"
    "mnm/tst_udb"
 )
 
 
 func main() {
+   var err error
+
+   aTcNum := 10
+   if len(os.Args) == 2 {
+      aTcNum, err = strconv.Atoi(os.Args[1])
+      if err != nil || aTcNum < 2 || aTcNum > 1000 {
+         fmt.Fprintf(os.Stderr, "testclient count must be 2-1000\n")
+         return
+      }
+   }
+
    aDb, err := tst_udb.NewUserDb("./userdb")
    if err != nil { panic(err) }
    aDb.Init()
@@ -16,7 +29,7 @@ func main() {
    qlib.Init("qstore")
 
    fmt.Printf("Starting Test Pass\n")
-   qlib.LocalTest(2)
+   qlib.LocalTest(aTcNum)
 }
 
 /* moved to qlib/testclient.go
