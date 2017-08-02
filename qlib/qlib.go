@@ -20,7 +20,7 @@ import (
 )
 
 const kLoginTimeout time.Duration =  5 * time.Second
-const kQueueAckTimeout time.Duration = 3 * time.Second
+const kQueueAckTimeout time.Duration = 30 * time.Second
 const kQueueIdleMax time.Duration = 28 * time.Hour
 const kStoreIdIncr = 1000
 const kMsgHeaderMinLen = int64(len(`{"op":1}`))
@@ -571,16 +571,16 @@ func runQueue(o *tQueue) {
             aTimeout.Stop()
             if aAckId != aMsgId {
                fmt.Fprintf(os.Stderr, "%.7s queue.runqueue got ack for %s, expected %s\n", o.node, aAckId, aMsgId)
-               break
+               continue
             }
             sStore.RmLink(o.node, aMsgId)
             aMsgId = <-o.out
-            aConn = o.waitForConn()
          case <-aTimeout.C:
             fmt.Fprintf(os.Stderr, "%.7s queue.runqueue timed out awaiting ack\n", o.node)
          }
-      } else if false { //todo transient
-         time.Sleep(10 * time.Millisecond)
+         aConn = o.waitForConn()
+      } else if false {
+         //todo transient
       } else {
          fmt.Fprintf(os.Stderr, "%.7s queue.runqueue sendfile error %s\n", o.node, err.Error())
          aConn = o.waitForConn()
