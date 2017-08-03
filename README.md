@@ -7,7 +7,7 @@ See [Why mnm?](Rationale.md)
 
 mnm is a person-to-person (or app-to-app) message relay server, based on a new client/server protocol. 
 (It's not a web app.) 
-Written in Go, mnm aims to be lightweight, fast, dependency-free, and free of charge.
+Written in Go, mnm aims to be reliable, fast, lightweight, dependency-free, and free of charge.
 
 mnm provides:
 - Members-only access
@@ -33,6 +33,17 @@ mnm shall be accessible via several network frontends:
 - HTTP + Websockets
 - Unix domain sockets
 - Arbitrary Golang frontend invoking qlib package
+
+### Status
+
+_3 August 2017_ -
+A simulation of 1000 concurrent active clients 
+delivers 1 million messages totaling 6.7GB in 46 minutes. 
+It uses ~200MB RAM, <10MB disk, and minimal CPU time. 
+Each client runs a 19-step cycle that does login, then post for two recipients (15x) 
+or for a group of 100 (2x) every 1-30s, then logout and idle for 1-30s. 
+
+mnm v0.1 should be released in September 2017.
 
 The author previously prototyped this in Node.js.
 (Based on that experience, he can't recommend Node.js.)
@@ -136,14 +147,3 @@ At recipient `{"op":"ohi", "id":string, "from":string}`
 
 10. Quit performs logout  
 `{"op":10}`
-
-### Log
-
-_23 June 2017_ -
-Login, Post, Ack messages defined and handled.
-qlib receiver (Link) and sender (tQueue) threads running,
- inter-linked by elastic msg id & net.Conn & ack channels.
-Message storage in filesystem.
-UserDatabase interface and storage functions drafted.
-In-process client (tTestClient) exercising system.
-Todo-next: ping, tUserDb implementation, free idle queues, stream long messages to/from storage.
