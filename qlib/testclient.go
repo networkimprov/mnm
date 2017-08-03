@@ -26,6 +26,8 @@ var sTestLogins = make(map[int]*int)
 var sTestLoginTotal int32
 var sTestRecvCount int32
 var sTestRecvBytes int64
+var sTestReadSize = [...]int{50, 50, 50, 500, 500, 1500, 2000, 5000, 10000, 50000}
+var sTestReadData = make([]byte, 16*1024)
 
 func LocalTest(i int) {
    sTestVerifyWant = "\n"
@@ -43,6 +45,11 @@ func LocalTest(i int) {
    <-sTestVerifyDone
    time.Sleep(10 * time.Millisecond)
    fmt.Fprintf(os.Stderr, "%d verify pass failures, starting cycle\n\n", sTestVerifyFail)
+
+   aSegment := []byte(`0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz.!`)
+   for a := 0; a < len(sTestReadData) / len(aSegment); a++ {
+      copy(sTestReadData[a*len(aSegment):], aSegment)
+   }
 
    sTestClientCount = int32(i)
    sTestClientId = make(chan int, i)
@@ -71,8 +78,9 @@ func testMakeNode(id int) string {
 }
 
 type tTestClient struct {
-   id, to int // who i am, who i send to
+   id int // user id
    count int // msg number
+   toRead, toWrite int // data yet to read/write
    action tTestAction // test mode
    work []tTestWork // verify sequence data
    ack chan string // writer tells reader to issue ack to qlib
@@ -87,7 +95,7 @@ type tTestWork struct { msg []byte; head tMsg; data, want string }
 
 func newTestClient(iAct tTestAction, iId int) *tTestClient {
    aTc := &tTestClient{
-      id: iId, to: iId+1,
+      id: iId,
       action: iAct,
       ack: make(chan string, 10),
    }
@@ -264,6 +272,20 @@ func recvSummary(i int) {
 }
 
 func (o *tTestClient) cycleRead(iBuf []byte) (int, error) {
+   fGetBuf := func() []byte {
+      cData := sTestReadData
+      if o.toRead < len(cData) {
+         cData = cData[:o.toRead]
+      }
+      o.toRead -= len(cData)
+      return cData
+   }
+
+   if o.toRead > 0 {
+      time.Sleep(3 * time.Millisecond)
+      return copy(iBuf, fGetBuf()), nil
+   }
+
    var aDlC <-chan time.Time
    if !o.readDeadline.IsZero() {
       aDl := time.NewTimer(o.readDeadline.Sub(time.Now()))
@@ -271,14 +293,17 @@ func (o *tTestClient) cycleRead(iBuf []byte) (int, error) {
       aDlC = aDl.C
    }
 
-   aTmr := time.NewTimer(200 * time.Millisecond)
+   aNs := time.Now().Nanosecond()
+   if o.count < 2 || o.count == 19 { aNs = 30 }
+   aTmr := time.NewTimer(time.Duration(aNs % 30 + 1) * time.Second)
    defer aTmr.Stop()
 
    var aHead tMsg
-   var aData string
+   var aData []byte
 
    select {
    case aId := <-o.ack:
+      time.Sleep(time.Duration(aNs % 100 + 1) * time.Millisecond)
       aHead = tMsg{"Op":eAck, "Id":aId, "Type":"n"}
    case <-aTmr.C:
       o.count++
@@ -288,15 +313,23 @@ func (o *tTestClient) cycleRead(iBuf []byte) (int, error) {
          aHead = tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(o.id), "Node":sTestNodeIds[o.id]}
          *sTestLogins[o.id]++
          loginSummary()
-      } else if o.count == 3 && o.id == 111001 {
-         aHead = tMsg{"Op":ePing, "Id":fmt.Sprint(o.count), "Datalen":1, "From":"a111001", "To":"a111000"}
-         aData = "1"
+      } else if o.count == 3 && o.id % 2 == 1 {
+         aData = []byte("bing-bong!")
+         aHead = tMsg{"Op":ePing, "Id":fmt.Sprint(o.count), "Datalen":len(aData),
+                      "From":"a"+fmt.Sprint(o.id), "To":"a"+fmt.Sprint(o.id-1)}
       } else if o.count < 20 {
-         aFor := tHeaderFor{Id:"u"+fmt.Sprint(o.to), Type:eForUser}
-         if o.count >= 18 { aFor = tHeaderFor{Id:"g0", Type:eForGroupAll} }
-         if o.count == 19 { aFor.Type = eForGroupExcl }
-         aHead = tMsg{"Op":ePost, "Id":fmt.Sprint(o.count), "Datalen":10, "For":[]tHeaderFor{aFor}}
-         aData = fmt.Sprintf(" |msg %3d|", o.count)
+         var aFor []tHeaderFor
+         if o.count < 18 {
+            aTo := time.Now().Nanosecond() % int(sTestClientCount) + 111000
+            aFor = []tHeaderFor{{Id:"u"+fmt.Sprint(aTo)  , Type:eForUser},
+                                {Id:"u"+fmt.Sprint(aTo+1), Type:eForUser}}
+         } else {
+            aFor = []tHeaderFor{{Id:"g"+fmt.Sprint((o.id-111000)/100), Type:eForGroupAll}}
+            if o.count == 19 { aFor[0].Type = eForGroupExcl }
+         }
+         o.toRead = sTestReadSize[time.Now().Nanosecond() % len(sTestReadSize)]
+         aHead = tMsg{"Op":ePost, "Id":fmt.Sprint(o.count), "Datalen":o.toRead, "For":aFor}
+         aData = fGetBuf()
       } else {
          return 0, io.EOF
       }
@@ -304,7 +337,7 @@ func (o *tTestClient) cycleRead(iBuf []byte) (int, error) {
       return 0, &net.OpError{Op:"read", Err:&tTimeoutError{}}
    }
 
-   aMsg := PackMsg(aHead, []byte(aData))
+   aMsg := PackMsg(aHead, aData)
    //fmt.Printf("%d PUT %s\n", o.id, string(aMsg))
    return copy(iBuf, aMsg), nil
 }
@@ -319,6 +352,11 @@ func (o *tTestClient) Read(iBuf []byte) (int, error) {
 func (o *tTestClient) Write(iBuf []byte) (int, error) {
    if o.closed {
       return 0, &net.OpError{Op:"write", Err:tError("closed")}
+   }
+
+   if o.toWrite > 0 {
+      o.toWrite -= len(iBuf)
+      return len(iBuf), nil
    }
 
    aHeadLen,_ := strconv.ParseInt(string(iBuf[:4]), 16, 0)
@@ -352,6 +390,7 @@ func (o *tTestClient) Write(iBuf []byte) (int, error) {
    if aHead["from"] != nil {
       aDatalen := int(aHead["datalen"].(float64))
       if o.action == eActCycle { recvSummary(aDatalen) }
+      o.toWrite = aDatalen - len(iBuf) + int(aHeadLen+4)
       aTmr := time.NewTimer(2 * time.Second)
       select {
       case o.ack <- aHead["id"].(string):
@@ -372,7 +411,6 @@ func (o *tTestClient) SetReadDeadline(i time.Time) error {
 
 func (o *tTestClient) Close() error {
    o.closed = true;
-   var fResume func()
    if o.action >= eActVerifySend {
       select {
       case <-sTestVerifyDone:
@@ -380,12 +418,12 @@ func (o *tTestClient) Close() error {
       default:
          aTc := newTestClient(eActVerifySend, o.id)
          aTc.count = o.count
-         fResume = func(){ NewLink(aTc) }
+         time.AfterFunc(10*time.Millisecond, func(){ NewLink(aTc) })
       }
    } else {
-      fResume = func(){ sTestClientId <- o.id }
+      aSec := time.Now().Nanosecond() % 30 + 1
+      time.AfterFunc(time.Duration(aSec) * time.Second, func(){ sTestClientId <- o.id })
    }
-   time.AfterFunc(10*time.Millisecond, fResume)
    return nil
 }
 
