@@ -8,6 +8,9 @@ import (
    "mnm/tst_udb"
 )
 
+const kVersionA, kVersionB, kVersionC = 0, 0, 0
+const kVersionDate = "(unreleased)"
+
 
 func main() {
    var err error
@@ -20,6 +23,8 @@ func main() {
          return
       }
    }
+
+   fmt.Printf("mnm tmtp server v%d.%d.%d %s\n", kVersionA, kVersionB, kVersionC, kVersionDate)
 
    aDb, err := tst_udb.NewUserDb("./userdb")
    if err != nil { panic(err) }
