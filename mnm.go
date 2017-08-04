@@ -12,7 +12,10 @@ const kVersionA, kVersionB, kVersionC = 0, 0, 0
 const kVersionDate = "(unreleased)"
 
 
-func main() {
+func main() { os.Exit(mainResult()) }
+
+func mainResult() int {
+   // return 2 reserved for use by Go internals
    var err error
 
    aTcNum := 10
@@ -20,7 +23,7 @@ func main() {
       aTcNum, err = strconv.Atoi(os.Args[1])
       if err != nil || aTcNum < 2 || aTcNum > 1000 {
          fmt.Fprintf(os.Stderr, "testclient count must be 2-1000\n")
-         return
+         return 1
       }
    }
 
@@ -35,6 +38,8 @@ func main() {
 
    fmt.Printf("Starting Test Pass\n")
    qlib.LocalTest(aTcNum)
+
+   return 0
 }
 
 /* moved to qlib/testclient.go
