@@ -55,6 +55,7 @@ var sHeaderDefs = [...]tHeader{
 
 var sResponseOps = [...]string{
    eRegister:    "registered",
+   eLogin:       "login",
    eUserEdit:    "user",
    eGroupInvite: "invite",
    eGroupEdit:   "member",
@@ -297,6 +298,11 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
       o.uid = iHead.Uid
       o.node = aNodeSha
       o.queue = aQ
+      if iHead.Op != eRegister {
+         iHead.For = []tHeaderFor{{Id:o.uid, Type:eForUser}}
+         _,err = o.postMsg(iHead, tMsg{"node":"tbd"}, nil) //todo tbd=noderef
+         if err != nil { panic(err) }
+      }
       fmt.Printf("%s link.handlemsg login user %.7s\n", o.uid, aQ.node)
    case eUserEdit:
       if iHead.NewNode == "" && iHead.NewAlias == "" { return sMsgHeaderBad }

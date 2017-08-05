@@ -153,7 +153,8 @@ func newTestClient(iAct tTestAction, iId int) *tTestClient {
           want: `002d{"info":"node already connected","op":"quit"}` ,
       },  aTmtpRev,
         { head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId), "Node":sTestNodeIds[iId]} ,
-          want: `001f{"info":"login ok","op":"info"}` ,
+          want: `001f{"info":"login ok","op":"info"}`+"\n"+
+                `0074{"datalen":0,"from":"u`+fmt.Sprint(iId)+`","id":"#sid#","node":"tbd","op":"login","posted":"#spdt#"}` ,
       },{ head: tMsg{"Op":ePost, "Id":"zyx", "Datalen":15, "For":[]tHeaderFor{
                        {Id:"u"+fmt.Sprint(iId+1), Type:eForUser} }} ,
           data: `data for Id:zyx` ,
@@ -190,6 +191,7 @@ func newTestClient(iAct tTestAction, iId int) *tTestClient {
                        `002f{"Op":7, "Id":"123", "Datalen":1, "To":"test2"}1`) ,
           want: `001f{"info":"login ok","op":"info"}`+"\n"+
                 `0032{"id":"123","msgid":"#mid#","op":"ack"}`+"\n"+
+                `0074{"datalen":0,"from":"u`+fmt.Sprint(iId)+`","id":"#sid#","node":"tbd","op":"login","posted":"#spdt#"}`+"\n"+
                 `0073{"datalen":1,"from":"u`+fmt.Sprint(iId)+`","id":"#id#","op":"ping","posted":"#pdt#","to":"test2"}1` ,
       },{ head: tMsg{"Op":ePost, "Id":"zyx", "Datalen":15, "For":[]tHeaderFor{
                        {Id:"u"+fmt.Sprint(iId+1), Type:eForUser} }} ,
@@ -364,8 +366,9 @@ func (o *tTestClient) Write(iBuf []byte) (int, error) {
    err := json.Unmarshal(iBuf[4:aHeadLen+4], &aHead)
    if err != nil { panic(err) }
 
+   aOp := aHead["op"].(string)
    if o.action >= eActVerifySend {
-      if !(o.action == eActVerifyRecv && o.count == 1) {
+      if o.action == eActVerifySend || !(aOp == "tmtprev" || aOp == "info" || aOp == "login") {
          aI := 0; if o.action == eActVerifyRecv { aI = 2 }
          if aHead["msgid"] != nil {
             sTestVerifyWant = strings.Replace(sTestVerifyWant, `#mid#`, aHead["msgid"].(string), 1)
@@ -373,7 +376,7 @@ func (o *tTestClient) Write(iBuf []byte) (int, error) {
             aS := ""; if o.action == eActVerifySend { aS = "s"; aI = 1 }
             sTestVerifyWant = strings.Replace(sTestVerifyWant, `#`+aS+`id#`, aHead["id"].(string), 1)
             sTestVerifyWant = strings.Replace(sTestVerifyWant, `#`+aS+`pdt#`, aHead["posted"].(string), 1)
-         } else if aHead["op"].(string) == "registered" {
+         } else if aOp == "registered" {
             sTestVerifyWant = strings.Replace(sTestVerifyWant, `#uid#`, aHead["uid"].(string), 1)
          }
          if aHead["nodeid"] != nil {
@@ -382,7 +385,7 @@ func (o *tTestClient) Write(iBuf []byte) (int, error) {
          sTestVerifyGot[aI] += string(iBuf) + "\n"
       }
    } else {
-      if aHead["op"].(string) == "quit" {
+      if aOp == "quit" {
          fmt.Fprintf(os.Stderr, "%d testclient.write got quit %s\n", o.id, aHead["info"].(string))
       }
       //fmt.Printf("%d got %s\n", o.id, string(iBuf))
