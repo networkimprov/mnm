@@ -102,107 +102,106 @@ func newTestClient(iAct tTestAction, iId int) *tTestClient {
    if iAct == eActVerifySend {
       aTmtpRev := tTestWork{
          head: tMsg{"Op":eTmtpRev, "Id":"1"} ,
-         want: `0019{"id":"1","op":"tmtprev"}` ,
+         want: `{"id":"1","op":"tmtprev"}` ,
       }
       aTc.work = []tTestWork{
         { msg : []byte(`00z1{"Op":3, "Uid":"noone"}`) ,
-          want: `002c{"info":"invalid header length","op":"quit"}` ,
+          want: `{"info":"invalid header length","op":"quit"}` ,
       },{ msg : []byte(`000a{"Op":12f3`) ,
-          want: `0025{"info":"invalid header","op":"quit"}` ,
+          want: `{"info":"invalid header","op":"quit"}` ,
       },{ head: tMsg{"Op":eLogin, "Uid":"noone", "NoId":"none"} ,
-          want: `0025{"info":"invalid header","op":"quit"}` ,
+          want: `{"info":"invalid header","op":"quit"}` ,
       },  aTmtpRev,
         { head: tMsg{"Op":eTmtpRev, "Id":"1"} ,
-          want: `002f{"info":"disallowed op repetition","op":"quit"}` ,
+          want: `{"info":"disallowed op repetition","op":"quit"}` ,
       },{ head: tMsg{"Op":eLogin, "Uid":"noone", "Node":"none"} ,
-          want: `002a{"info":"tmtprev was omitted","op":"quit"}` ,
+          want: `{"info":"tmtprev was omitted","op":"quit"}` ,
       },{ head: tMsg{"Op":ePost, "Id":"zyx", "Datalen":1, "For":[]tHeaderFor{{}}} ,
           data: `1` ,
-          want: `003c{"info":"disallowed op on unauthenticated link","op":"quit"}` ,
+          want: `{"info":"disallowed op on unauthenticated link","op":"quit"}` ,
       },  aTmtpRev,
         { head: tMsg{"Op":eRegister, "NewNode":"blue", "NewAlias":"_"} ,
-          want: `0070{"nodeid":"#nid#","op":"registered","uid":"#uid#"}`+"\n"+
-                `001f{"info":"login ok","op":"info"}` ,
+          want: `{"nodeid":"#nid#","op":"registered","uid":"#uid#"}`+"\n"+
+                `{"info":"login ok","op":"info"}` ,
       },{ head: tMsg{"Op":eQuit} ,
-          want: `0020{"info":"logout ok","op":"quit"}` ,
+          want: `{"info":"logout ok","op":"quit"}` ,
       },  aTmtpRev,
         { head: tMsg{"Op":eRegister, "NewNode":"blue", "NewAlias":"LongJohn Silver"} ,
-          want: `0070{"nodeid":"#nid#","op":"registered","uid":"#uid#"}`+"\n"+
-                `001f{"info":"login ok","op":"info"}` ,
+          want: `{"nodeid":"#nid#","op":"registered","uid":"#uid#"}`+"\n"+
+                `{"info":"login ok","op":"info"}` ,
       },{ head: tMsg{"Op":eQuit} ,
-          want: `0020{"info":"logout ok","op":"quit"}` ,
+          want: `{"info":"logout ok","op":"quit"}` ,
       },  aTmtpRev,
         { head: tMsg{"Op":eRegister, "NewNode":"blue", "NewAlias":"short"} ,
-          want: `0099{"error":"newalias must be 8+ characters",`+
-                     `"nodeid":"#nid#","op":"registered","uid":"#uid#"}`+"\n"+
-                `001f{"info":"login ok","op":"info"}` ,
+          want: `{"error":"newalias must be 8+ characters","nodeid":"#nid#","op":"registered","uid":"#uid#"}`+"\n"+
+                `{"info":"login ok","op":"info"}` ,
       },{ head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId), "Node":sTestNodeIds[iId]} ,
-          want: `0036{"info":"disallowed op on connected link","op":"quit"}` ,
+          want: `{"info":"disallowed op on connected link","op":"quit"}` ,
       },  aTmtpRev,
         { head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId), "Node":sTestNodeIds[iId], "Datalen":5} ,
           data: `extra` ,
-          want: `0025{"info":"invalid header","op":"quit"}` ,
+          want: `{"info":"invalid header","op":"quit"}` ,
       },  aTmtpRev,
         { head: tMsg{"Op":eLogin, "Uid":"noone", "Node":"none"} ,
-          want: `002b{"info":"corrupt base32 value","op":"quit"}` ,
+          want: `{"info":"corrupt base32 value","op":"quit"}` ,
       },  aTmtpRev,
         { head: tMsg{"Op":eLogin, "Uid":"noone", "Node":"LB27ML46"} ,
-          want: `0023{"info":"login failed","op":"quit"}` ,
+          want: `{"info":"login failed","op":"quit"}` ,
       },  aTmtpRev,
         { head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId+1), "Node":sTestNodeIds[iId+1]} ,
-          want: `002d{"info":"node already connected","op":"quit"}` ,
+          want: `{"info":"node already connected","op":"quit"}` ,
       },  aTmtpRev,
         { head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId), "Node":sTestNodeIds[iId]} ,
-          want: `001f{"info":"login ok","op":"info"}`+"\n"+
-                `0074{"datalen":0,"from":"u`+fmt.Sprint(iId)+`","id":"#sid#","node":"tbd","op":"login","posted":"#spdt#"}` ,
+          want: `{"info":"login ok","op":"info"}`+"\n"+
+                `{"datalen":0,"from":"u`+fmt.Sprint(iId)+`","id":"#sid#","node":"tbd","op":"login","posted":"#spdt#"}` ,
       },{ head: tMsg{"Op":ePost, "Id":"zyx", "Datalen":15, "For":[]tHeaderFor{
                        {Id:"u"+fmt.Sprint(iId+1), Type:eForUser} }} ,
           data: `data for Id:zyx` ,
-          want: `0032{"id":"zyx","msgid":"#mid#","op":"ack"}`+"\n"+
-                `006b{"datalen":15,"from":"u`+fmt.Sprint(iId)+`","id":"#id#","op":"delivery","posted":"#pdt#"}data for Id:zyx` ,
+          want: `{"id":"zyx","msgid":"#mid#","op":"ack"}`+"\n"+
+                `{"datalen":15,"from":"u`+fmt.Sprint(iId)+`","id":"#id#","op":"delivery","posted":"#pdt#"}data for Id:zyx` ,
       },{ head: tMsg{"Op":ePing, "Id":"123", "Datalen":1, "To":"test2"} ,
           data: `1` ,
-          want: `0032{"id":"123","msgid":"#mid#","op":"ack"}`+"\n"+
-                `0073{"datalen":1,"from":"u`+fmt.Sprint(iId)+`","id":"#id#","op":"ping","posted":"#pdt#","to":"test2"}1` ,
+          want: `{"id":"123","msgid":"#mid#","op":"ack"}`+"\n"+
+                `{"datalen":1,"from":"u`+fmt.Sprint(iId)+`","id":"#id#","op":"ping","posted":"#pdt#","to":"test2"}1` ,
       },{ head: tMsg{"Op":eUserEdit, "Id":"0", "Newalias":"sam walker"} ,
-          want: `0030{"id":"0","msgid":"#mid#","op":"ack"}`+"\n"+
-                `007e{"datalen":0,"from":"u`+fmt.Sprint(iId)+`","id":"#sid#","newalias":"sam walker","op":"user","posted":"#spdt#"}` ,
+          want: `{"id":"0","msgid":"#mid#","op":"ack"}`+"\n"+
+                `{"datalen":0,"from":"u`+fmt.Sprint(iId)+`","id":"#sid#","newalias":"sam walker","op":"user","posted":"#spdt#"}` ,
       },{ head: tMsg{"Op":eUserEdit, "Id":"0", "Newnode":"ref"} ,
-          want: `0030{"id":"0","msgid":"#mid#","op":"ack"}`+"\n"+
-                `009a{"datalen":0,"from":"u`+fmt.Sprint(iId)+`","id":"#sid#","nodeid":"#nid#","op":"user","posted":"#spdt#"}` ,
+          want: `{"id":"0","msgid":"#mid#","op":"ack"}`+"\n"+
+                `{"datalen":0,"from":"u`+fmt.Sprint(iId)+`","id":"#sid#","nodeid":"#nid#","op":"user","posted":"#spdt#"}` ,
       },{ head: tMsg{"Op":eGroupEdit, "Id":"0", "Gid":"blab", "Act":"join"} ,
-          want: `0030{"id":"0","msgid":"#mid#","op":"ack"}`+"\n"+
-                `0092{"act":"join","alias":"test1","datalen":0,"from":"u`+fmt.Sprint(iId)+`","gid":"blab","id":"#sid#","op":"member","posted":"#spdt#"}` ,
+          want: `{"id":"0","msgid":"#mid#","op":"ack"}`+"\n"+
+                `{"act":"join","alias":"test1","datalen":0,"from":"u`+fmt.Sprint(iId)+`","gid":"blab","id":"#sid#","op":"member","posted":"#spdt#"}` ,
       },{ head: tMsg{"Op":eGroupEdit, "Id":"0", "Gid":"blab", "Act":"drop", "To":"test1"} ,
-          want: `0030{"id":"0","msgid":"#mid#","op":"ack"}`+"\n"+
-                `0092{"act":"drop","alias":"test1","datalen":0,"from":"u`+fmt.Sprint(iId)+`","gid":"blab","id":"#sid#","op":"member","posted":"#spdt#"}` ,
+          want: `{"id":"0","msgid":"#mid#","op":"ack"}`+"\n"+
+                `{"act":"drop","alias":"test1","datalen":0,"from":"u`+fmt.Sprint(iId)+`","gid":"blab","id":"#sid#","op":"member","posted":"#spdt#"}` ,
       },{ head: tMsg{"Op":eGroupInvite, "Id":"0", "Gid":"talk", "Datalen":5, "From":"test1", "To":"test2"} ,
           data: `hello` ,
-          want: `0030{"id":"0","msgid":"#mid#","op":"ack"}`+"\n"+
-                `0094{"act":"invite","alias":"test2","datalen":0,"from":"u`+fmt.Sprint(iId)+`","gid":"talk","id":"#sid#","op":"member","posted":"#spdt#"}`+"\n"+
-                `0082{"datalen":5,"from":"u`+fmt.Sprint(iId)+`","gid":"talk","id":"#id#","op":"invite","posted":"#pdt#","to":"test2"}hello` ,
+          want: `{"id":"0","msgid":"#mid#","op":"ack"}`+"\n"+
+                `{"act":"invite","alias":"test2","datalen":0,"from":"u`+fmt.Sprint(iId)+`","gid":"talk","id":"#sid#","op":"member","posted":"#spdt#"}`+"\n"+
+                `{"datalen":5,"from":"u`+fmt.Sprint(iId)+`","gid":"talk","id":"#id#","op":"invite","posted":"#pdt#","to":"test2"}hello` ,
       },{ head: tMsg{"Op":eGroupEdit, "Id":"0", "Gid":"talk", "Act":"alias", "Newalias":"test11"} ,
-          want: `0030{"id":"0","msgid":"#mid#","op":"ack"}`+"\n"+
-                `00a7{"act":"alias","alias":"test1","datalen":0,"from":"u`+fmt.Sprint(iId)+`","gid":"talk","id":"#sid#","newalias":"test11","op":"member","posted":"#spdt#"}` ,
+          want: `{"id":"0","msgid":"#mid#","op":"ack"}`+"\n"+
+                `{"act":"alias","alias":"test1","datalen":0,"from":"u`+fmt.Sprint(iId)+`","gid":"talk","id":"#sid#","newalias":"test11","op":"member","posted":"#spdt#"}` ,
       },{ head: tMsg{"Op":eQuit} ,
-          want: `0020{"info":"logout ok","op":"quit"}` ,
+          want: `{"info":"logout ok","op":"quit"}` ,
       },  aTmtpRev,
         { msg : []byte(`0034{"Op":2, "Uid":"u`+fmt.Sprint(iId)+`", "Node":"`+sTestNodeIds[iId]+`"}`+
                        `002f{"Op":7, "Id":"123", "Datalen":1, "To":"test2"}1`) ,
-          want: `001f{"info":"login ok","op":"info"}`+"\n"+
-                `0032{"id":"123","msgid":"#mid#","op":"ack"}`+"\n"+
-                `0074{"datalen":0,"from":"u`+fmt.Sprint(iId)+`","id":"#sid#","node":"tbd","op":"login","posted":"#spdt#"}`+"\n"+
-                `0073{"datalen":1,"from":"u`+fmt.Sprint(iId)+`","id":"#id#","op":"ping","posted":"#pdt#","to":"test2"}1` ,
+          want: `{"info":"login ok","op":"info"}`+"\n"+
+                `{"id":"123","msgid":"#mid#","op":"ack"}`+"\n"+
+                `{"datalen":0,"from":"u`+fmt.Sprint(iId)+`","id":"#sid#","node":"tbd","op":"login","posted":"#spdt#"}`+"\n"+
+                `{"datalen":1,"from":"u`+fmt.Sprint(iId)+`","id":"#id#","op":"ping","posted":"#pdt#","to":"test2"}1` ,
       },{ head: tMsg{"Op":ePost, "Id":"zyx", "Datalen":15, "For":[]tHeaderFor{
                        {Id:"u"+fmt.Sprint(iId+1), Type:eForUser} }} ,
           data: `data for Id` ,
       },{ msg : []byte(`:zyx`) ,
-          want: `0032{"id":"zyx","msgid":"#mid#","op":"ack"}`+"\n"+
-                `006b{"datalen":15,"from":"u`+fmt.Sprint(iId)+`","id":"#id#","op":"delivery","posted":"#pdt#"}data for Id:zyx` ,
+          want: `{"id":"zyx","msgid":"#mid#","op":"ack"}`+"\n"+
+                `{"datalen":15,"from":"u`+fmt.Sprint(iId)+`","id":"#id#","op":"delivery","posted":"#pdt#"}data for Id:zyx` ,
       },{ head: tMsg{"Op":eQuit} ,
-          want: `0020{"info":"logout ok","op":"quit"}` ,
+          want: `{"info":"logout ok","op":"quit"}` ,
       },{ msg : []byte(`delay`) ,
-          want: `0024{"info":"login timeout","op":"quit"}` ,
+          want: `{"info":"login timeout","op":"quit"}` ,
       }}
    }
    return aTc
@@ -382,7 +381,7 @@ func (o *tTestClient) Write(iBuf []byte) (int, error) {
          if aHead["nodeid"] != nil {
             sTestVerifyWant = strings.Replace(sTestVerifyWant, `#nid#`, aHead["nodeid"].(string), 1)
          }
-         sTestVerifyGot[aI] += string(iBuf) + "\n"
+         sTestVerifyGot[aI] += string(iBuf[4:]) + "\n"
       }
    } else {
       if aOp == "quit" {
