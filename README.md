@@ -95,10 +95,9 @@ Response _same as Login_
 At node `{"op":"registered", "uid":string, "nodeid":string <,"error":string>}`
 
 2. Login connects a client to its queue  
-_todo: notify other nodes_  
 `{"op":2, "uid":string, "node":string}`  
 Response `{"op":"info|quit" "info":string}` (also given on login timeout)  
-? At nodes `{"op":"login", "id":string, "from":string, "info":string}`
+At nodes `{"op":"login", "id":string, "from":string, "datalen":0, "posted":string, "node":string}`
 
 3. UserEdit updates a user account  
 _todo: check & store label_  
@@ -106,13 +105,13 @@ _todo: dropnode and dropalias; prevent account hijacking from stolen client/node
 `{"op":3, "id":string, <"newnode":string | "newalias":string>}`  
 .newnode is the user label for a client device  
 Response `{"op":"ack", "id":string, "msgid":string, <"error":string>}`  
-At nodes `{"op":"user", "id":string, "from":string, "datalen":0, <"nodeid":string | "newalias":string>}`
+At nodes `{"op":"user", "id":string, "from":string, "datalen":0, "posted":string, <"nodeid":string | "newalias":string>}`
 
 4. GroupInvite invites someone to a group, creating it if necessary  
 `{"op":4, "id":string, "gid":string, "datalen":uint, "from":string, "to":string}`  
 Response `{"op":"ack", "id":string, "msgid":string, <"error":string>}`  
-At recipient `{"op":"invite", "id":string, "from":string, "datalen":uint, "gid":string, "to":string}`  
-At members `{"op":"member", "id":string, "from":string, "act":string, "gid":string, "alias":string, <"newalias":string>}`
+At recipient `{"op":"invite", "id":string, "from":string, "datalen":uint, "posted":string, "gid":string, "to":string}`  
+At members `{"op":"member", "id":string, "from":string, "datalen":0, "posted":string, "act":string, "gid":string, "alias":string, <"newalias":string>}`
 
 5. GroupEdit updates a group  
 _todo: moderated group_  
@@ -121,26 +120,25 @@ _todo: closed group publishes aliases to moderators_
 `{"op":5, "id":string, "act":"alias", "gid":string, "newalias":string}`  
 `{"op":5, "id":string, "act":"drop" , "gid":string, "to":string}`  
 Response `{"op":"ack", "id":string, "msgid":string, <"error":string>}`  
-At members `{"op":"member", "id":string, "from":string, "act":string, "gid":string, "alias":string, <"newalias":string>}`
+At members `{"op":"member", "id":string, "from":string, "datalen":0, "posted":string, "act":string, "gid":string, "alias":string, <"newalias":string>}`
 
 6. Post sends a message to users and/or groups  
-_todo: return undelivered messages after N hours_  
 `{"op":6, "id":string, "datalen":uint, "for":[{"id":string, "type":uint}, ...]}`  
 .for[i].type: 1) user_id, 2) group_id (include self) 3) group_id (exclude self)  
 Response `{"op":"ack", "id":string, "msgid":string, <"error":string>}`  
-At recipient `{"op":"delivery", "id":string, "from":string, "datalen":uint}`
+At recipient `{"op":"delivery", "id":string, "from":string, "datalen":uint, "posted":string}`
 
 7. Ping sends a short text message via a user's alias.
 A reply establishes contact between the parties.  
 _todo: limit number of pings per 24h and consecutive failed pings_  
 `{"op":7, "id":string, "datalen":uint, "to":string}`  
 Response `{"op":"ack", "id":string, "msgid":string, <"error":string>}`  
-At recipient `{"op":"ping", "id":string, "from":string, "datalen":uint, "to":string}`
+At recipient `{"op":"ping", "id":string, "from":string, "datalen":uint, "posted":string, "to":string}`
 
 8. Ohi notifies chat contacts of presence (in progress)  
 `{"op":8, "id":string, "for":[{"id":string}, ...]}`  
 Response `{"op":"ack", "id":string, <"error":string>}`  
-At recipient `{"op":"ohi", "id":string, "from":string}`
+At recipient `{"op":"ohi", "id":string, "from":string, "datalen":0, "posted":string}`
 
 9. Ack acknowledges receipt of a message  
 `{"op":9, "id":string, "type":string}`
