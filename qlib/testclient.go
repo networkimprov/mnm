@@ -158,31 +158,31 @@ func newTestClient(iAct tTestAction, iId int) *tTestClient {
                        {Id:"u"+fmt.Sprint(iId+1), Type:eForUser} }} ,
           data: `data for Id:zyx` ,
           want: `0032{"id":"zyx","msgid":"#mid#","op":"ack"}`+"\n"+
-                `0047{"datalen":15,"from":"u`+fmt.Sprint(iId)+`","id":"#id#","op":"delivery"}data for Id:zyx` ,
+                `006b{"datalen":15,"from":"u`+fmt.Sprint(iId)+`","id":"#id#","op":"delivery","posted":"#pdt#"}data for Id:zyx` ,
       },{ head: tMsg{"Op":ePing, "Id":"123", "Datalen":1, "To":"test2"} ,
           data: `1` ,
           want: `0032{"id":"123","msgid":"#mid#","op":"ack"}`+"\n"+
-                `004f{"datalen":1,"from":"u`+fmt.Sprint(iId)+`","id":"#id#","op":"ping","to":"test2"}1` ,
+                `0073{"datalen":1,"from":"u`+fmt.Sprint(iId)+`","id":"#id#","op":"ping","posted":"#pdt#","to":"test2"}1` ,
       },{ head: tMsg{"Op":eUserEdit, "Id":"0", "Newalias":"sam walker"} ,
           want: `0030{"id":"0","msgid":"#mid#","op":"ack"}`+"\n"+
-                `005a{"datalen":0,"from":"u`+fmt.Sprint(iId)+`","id":"#sid#","newalias":"sam walker","op":"user"}` ,
+                `007e{"datalen":0,"from":"u`+fmt.Sprint(iId)+`","id":"#sid#","newalias":"sam walker","op":"user","posted":"#spdt#"}` ,
       },{ head: tMsg{"Op":eUserEdit, "Id":"0", "Newnode":"ref"} ,
           want: `0030{"id":"0","msgid":"#mid#","op":"ack"}`+"\n"+
-                `0076{"datalen":0,"from":"u`+fmt.Sprint(iId)+`","id":"#sid#","nodeid":"#nid#","op":"user"}` ,
+                `009a{"datalen":0,"from":"u`+fmt.Sprint(iId)+`","id":"#sid#","nodeid":"#nid#","op":"user","posted":"#spdt#"}` ,
       },{ head: tMsg{"Op":eGroupEdit, "Id":"0", "Gid":"blab", "Act":"join"} ,
           want: `0030{"id":"0","msgid":"#mid#","op":"ack"}`+"\n"+
-                `006e{"act":"join","alias":"test1","datalen":0,"from":"u`+fmt.Sprint(iId)+`","gid":"blab","id":"#sid#","op":"member"}` ,
+                `0092{"act":"join","alias":"test1","datalen":0,"from":"u`+fmt.Sprint(iId)+`","gid":"blab","id":"#sid#","op":"member","posted":"#spdt#"}` ,
       },{ head: tMsg{"Op":eGroupEdit, "Id":"0", "Gid":"blab", "Act":"drop", "To":"test1"} ,
           want: `0030{"id":"0","msgid":"#mid#","op":"ack"}`+"\n"+
-                `006e{"act":"drop","alias":"test1","datalen":0,"from":"u`+fmt.Sprint(iId)+`","gid":"blab","id":"#sid#","op":"member"}` ,
+                `0092{"act":"drop","alias":"test1","datalen":0,"from":"u`+fmt.Sprint(iId)+`","gid":"blab","id":"#sid#","op":"member","posted":"#spdt#"}` ,
       },{ head: tMsg{"Op":eGroupInvite, "Id":"0", "Gid":"talk", "Datalen":5, "From":"test1", "To":"test2"} ,
           data: `hello` ,
           want: `0030{"id":"0","msgid":"#mid#","op":"ack"}`+"\n"+
-                `0070{"act":"invite","alias":"test2","datalen":0,"from":"u`+fmt.Sprint(iId)+`","gid":"talk","id":"#sid#","op":"member"}`+"\n"+
-                `005e{"datalen":5,"from":"u`+fmt.Sprint(iId)+`","gid":"talk","id":"#id#","op":"invite","to":"test2"}hello` ,
+                `0094{"act":"invite","alias":"test2","datalen":0,"from":"u`+fmt.Sprint(iId)+`","gid":"talk","id":"#sid#","op":"member","posted":"#spdt#"}`+"\n"+
+                `0082{"datalen":5,"from":"u`+fmt.Sprint(iId)+`","gid":"talk","id":"#id#","op":"invite","posted":"#pdt#","to":"test2"}hello` ,
       },{ head: tMsg{"Op":eGroupEdit, "Id":"0", "Gid":"talk", "Act":"alias", "Newalias":"test11"} ,
           want: `0030{"id":"0","msgid":"#mid#","op":"ack"}`+"\n"+
-                `0083{"act":"alias","alias":"test1","datalen":0,"from":"u`+fmt.Sprint(iId)+`","gid":"talk","id":"#sid#","newalias":"test11","op":"member"}` ,
+                `00a7{"act":"alias","alias":"test1","datalen":0,"from":"u`+fmt.Sprint(iId)+`","gid":"talk","id":"#sid#","newalias":"test11","op":"member","posted":"#spdt#"}` ,
       },{ head: tMsg{"Op":eQuit} ,
           want: `0020{"info":"logout ok","op":"quit"}` ,
       },  aTmtpRev,
@@ -190,13 +190,13 @@ func newTestClient(iAct tTestAction, iId int) *tTestClient {
                        `002f{"Op":7, "Id":"123", "Datalen":1, "To":"test2"}1`) ,
           want: `001f{"info":"login ok","op":"info"}`+"\n"+
                 `0032{"id":"123","msgid":"#mid#","op":"ack"}`+"\n"+
-                `004f{"datalen":1,"from":"u`+fmt.Sprint(iId)+`","id":"#id#","op":"ping","to":"test2"}1` ,
+                `0073{"datalen":1,"from":"u`+fmt.Sprint(iId)+`","id":"#id#","op":"ping","posted":"#pdt#","to":"test2"}1` ,
       },{ head: tMsg{"Op":ePost, "Id":"zyx", "Datalen":15, "For":[]tHeaderFor{
                        {Id:"u"+fmt.Sprint(iId+1), Type:eForUser} }} ,
           data: `data for Id` ,
       },{ msg : []byte(`:zyx`) ,
           want: `0032{"id":"zyx","msgid":"#mid#","op":"ack"}`+"\n"+
-                `0047{"datalen":15,"from":"u`+fmt.Sprint(iId)+`","id":"#id#","op":"delivery"}data for Id:zyx` ,
+                `006b{"datalen":15,"from":"u`+fmt.Sprint(iId)+`","id":"#id#","op":"delivery","posted":"#pdt#"}data for Id:zyx` ,
       },{ head: tMsg{"Op":eQuit} ,
           want: `0020{"info":"logout ok","op":"quit"}` ,
       },{ msg : []byte(`delay`) ,
@@ -370,8 +370,9 @@ func (o *tTestClient) Write(iBuf []byte) (int, error) {
          if aHead["msgid"] != nil {
             sTestVerifyWant = strings.Replace(sTestVerifyWant, `#mid#`, aHead["msgid"].(string), 1)
          } else if aHead["from"] != nil {
-            aRepl := `#id#`; if o.action == eActVerifySend { aRepl = `#sid#`; aI = 1 }
-            sTestVerifyWant = strings.Replace(sTestVerifyWant, aRepl, aHead["id"].(string), 1)
+            aS := ""; if o.action == eActVerifySend { aS = "s"; aI = 1 }
+            sTestVerifyWant = strings.Replace(sTestVerifyWant, `#`+aS+`id#`, aHead["id"].(string), 1)
+            sTestVerifyWant = strings.Replace(sTestVerifyWant, `#`+aS+`pdt#`, aHead["posted"].(string), 1)
          } else if aHead["op"].(string) == "registered" {
             sTestVerifyWant = strings.Replace(sTestVerifyWant, `#uid#`, aHead["uid"].(string), 1)
          }

@@ -27,6 +27,7 @@ const kMsgHeaderMinLen = int64(len(`{"op":1}`))
 const kMsgHeaderMaxLen = int64(1 << 16)
 const kNodeIdLen = 25
 const kAliasMinLen = 8
+const kPostDateFormat = "2006-01-02T15:04:05.000Z07:00"
 
 const (
    eTmtpRev = iota
@@ -407,7 +408,8 @@ func (o *Link) ack(iId, iMsgId string, iErr error) {
 
 func (o *Link) postMsg(iHead *tHeader, iEtc tMsg, iData []byte) (aMsgId string, err error) {
    aMsgId = sStore.MakeId()
-   aHead := tMsg{"op":sResponseOps[iHead.Op], "id":aMsgId, "from":o.uid, "datalen":iHead.DataLen}
+   aHead := tMsg{"op":sResponseOps[iHead.Op], "id":aMsgId, "from":o.uid, "datalen":iHead.DataLen,
+                 "posted":time.Now().UTC().Format(kPostDateFormat)}
    if iEtc != nil {
       for aK, aV := range iEtc { aHead[aK] = aV }
    }
