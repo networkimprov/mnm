@@ -2,6 +2,7 @@ package qlib
 
 import (
    "sync/atomic"
+   "hash/crc32"
    "fmt"
    "io"
    "io/ioutil"
@@ -82,6 +83,8 @@ var (
 
 // encoding without vowels to avoid words
 var sBase32 = base32.NewEncoding("%+123456789BCDFGHJKLMNPQRSTVWXYZ")
+
+var sCrc32c = crc32.MakeTable(crc32.Castagnoli)
 
 var sNode = tNodes{list: tNodeMap{}}
 var sStore = tStore{}
@@ -204,6 +207,7 @@ func runLink(o *Link) {
 type tHeader struct {
    Op uint8
    DataLen int64
+   DataSum uint64
    Uid, Gid string
    Id string
    Node, NewNode string
@@ -221,6 +225,7 @@ func (o *tHeader) check() bool {
    aFail :=
       o.DataLen < 0                                  ||
       (aDef.DataLen == 0)    != (o.DataLen == 0)     ||
+      aDef.DataSum       > 0 && o.DataSum       == 0 ||
       len(aDef.Uid)      > 0 && len(o.Uid)      == 0 ||
       len(aDef.Gid)      > 0 && len(o.Gid)      == 0 ||
       len(aDef.Id)       > 0 && len(o.Id)       == 0 ||
@@ -416,15 +421,22 @@ func (o *Link) postMsg(iHead *tHeader, iEtc tMsg, iData []byte) (aMsgId string, 
    aMsgId = sStore.MakeId()
    aHead := tMsg{"op":sResponseOps[iHead.Op], "id":aMsgId, "from":o.uid, "datalen":iHead.DataLen,
                  "posted":time.Now().UTC().Format(kPostDateFormat)}
+   if iHead.DataSum != 0 {
+      aHead["datasum"] = iHead.DataSum
+   }
    if iEtc != nil {
       for aK, aV := range iEtc { aHead[aK] = aV }
    }
+   aHead["headsum"] = crc32.Checksum(PackMsg(aHead, nil), sCrc32c)
+
    err = sStore.RecvFile(aMsgId, PackMsg(aHead, nil), iData, o.conn, iHead.DataLen)
    if err != nil { panic(err) }
    defer sStore.RmFile(aMsgId)
+
    aForNodes := make(map[string]bool, len(iHead.For)) //todo x2 or more?
    aForMyUid := false
    iHead.For = append(iHead.For, tHeaderFor{Id:o.uid, Type:eForSelf})
+
    for _, aTo := range iHead.For {
       var aUids []string
       switch aTo.Type {
