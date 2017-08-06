@@ -43,16 +43,16 @@ const (
 const ( _=iota; eForUser; eForGroupAll; eForGroupExcl; eForSelf )
 
 var sHeaderDefs = [...]tHeader{
-   eTmtpRev    : { Id:"1"                                  },
-   eRegister   : { NewNode:"1", NewAlias:"1"               },
-   eLogin      : { Uid:"1", Node:"1"                       },
-   eUserEdit   : { Id:"1"                                  },
-   eGroupInvite: { Id:"1", DataLen:1, Gid:"1"              },
-   eGroupEdit  : { Id:"1", Act:"1", Gid:"1"                },
+   eTmtpRev    : { Id:"1" },
+   eRegister   : { NewNode:"1", NewAlias:"1" },
+   eLogin      : { Uid:"1", Node:"1" },
+   eUserEdit   : { Id:"1" },
+   eGroupInvite: { Id:"1", DataLen:1, Gid:"1", From:"1", To:"1" },
+   eGroupEdit  : { Id:"1", Act:"1", Gid:"1" },
    ePost       : { Id:"1", DataLen:1, For:[]tHeaderFor{{}} },
-   ePing       : { Id:"1", DataLen:1, To:"1"               },
-   eAck        : { Id:"1", Type:"1"                        },
-   eQuit       : {                                         },
+   ePing       : { Id:"1", DataLen:1, To:"1" },
+   eAck        : { Id:"1", Type:"1" },
+   eQuit       : {  },
 }
 
 var sResponseOps = [...]string{
@@ -349,7 +349,6 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
       switch iHead.Act {
       case "invite":
          if iHead.DataLen > kMsgPingDataMax { return sMsgDatalenLimit }
-         if iHead.From == "" || iHead.To == "" { return sMsgHeaderBad }
          err = o.checkPing(iHead, &iData)
          if err != nil {
             if err.Error() == "" { return sMsgDataNonAscii }
