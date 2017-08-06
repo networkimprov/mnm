@@ -26,6 +26,7 @@ const kQueueIdleMax time.Duration = 28 * time.Hour
 const kStoreIdIncr = 1000
 const kMsgHeaderMinLen = int64(len(`{"op":1}`))
 const kMsgHeaderMaxLen = int64(1 << 16)
+const kMsgPingDataMax = 140
 const kNodeIdLen = 25
 const kAliasMinLen = 8
 const kPostDateFormat = "2006-01-02T15:04:05.000Z07:00"
@@ -79,6 +80,8 @@ var (
    sMsgLoginNodeOnline = tMsg{"op":"quit", "info":"node already connected"}
    sMsgLogin           = tMsg{"op":"info", "info":"login ok"}
    sMsgQuit            = tMsg{"op":"quit", "info":"logout ok"}
+   sMsgDatalenLimit    = tMsg{"op":"quit", "info":"data too long for request type"}
+   sMsgDataNonAscii    = tMsg{"op":"quit", "info":"data contains non-ASCII characters"}
 )
 
 // encoding without vowels to avoid words
@@ -177,7 +180,7 @@ func runLink(o *Link) {
          aQuitMsg = sMsgHeaderBad
          break
       }
-      var aData []byte
+      aData := aBuf[aHeadEnd:aHeadEnd] // checkPing may write into this
       if aPos > aHeadEnd && aHead.DataLen > 0 {
          aEnd := aHeadEnd + aHead.DataLen; if aPos < aEnd { aEnd = aPos }
          aData = aBuf[aHeadEnd:aEnd]
@@ -345,7 +348,13 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
       var aUid, aAlias, aNewAlias string
       switch iHead.Act {
       case "invite":
+         if iHead.DataLen > kMsgPingDataMax { return sMsgDatalenLimit }
          if iHead.From == "" || iHead.To == "" { return sMsgHeaderBad }
+         err = o.checkPing(iHead, &iData)
+         if err != nil {
+            if err.Error() == "" { return sMsgDataNonAscii }
+            panic(err) //todo handle net.Error
+         }
          aUid, err = UDb.GroupInvite(iHead.Gid, iHead.To, iHead.From, o.uid)
          if err == nil {
             iHead.For = []tHeaderFor{{Id:aUid, Type:eForUser}}
@@ -384,6 +393,12 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
       }
       o.ack(iHead.Id, aMid, err)
    case ePing:
+      if iHead.DataLen > kMsgPingDataMax { return sMsgDatalenLimit }
+      err = o.checkPing(iHead, &iData)
+      if err != nil {
+         if err.Error() == "" { return sMsgDataNonAscii }
+         panic(err) //todo handle net.Error
+      }
       aUid, err := UDb.Lookup(iHead.To)
       if err == nil {
          iHead.For = []tHeaderFor{{Id:aUid, Type:eForUser}}
@@ -405,6 +420,20 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
       return sMsgQuit
    default:
       panic(fmt.Sprintf("checkHeader failure, op %d", iHead.Op))
+   }
+   return nil
+}
+
+func (o *Link) checkPing(iHead *tHeader, iData *[]byte) error {
+   for len(*iData) < int(iHead.DataLen) {
+      aLen, err := o.conn.Read((*iData)[len(*iData):iHead.DataLen]) // panics if cap() < DataLen
+      if err != nil { return err }
+      *iData = (*iData)[:len(*iData)+aLen]
+   }
+   for _, a := range *iData {
+      if a > 0x7F {
+         return tError("")
+      }
    }
    return nil
 }

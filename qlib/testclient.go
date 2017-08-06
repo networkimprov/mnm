@@ -184,8 +184,9 @@ func newTestClient(iAct tTestAction, iId int) *tTestClient {
       },{ head: tMsg{"Op":eGroupEdit, "Id":"0", "Gid":"talk", "Act":"alias", "Newalias":"test11"} ,
           want: `{"id":"0","msgid":"#mid#","op":"ack"}`+"\n"+
                 `{"act":"alias","alias":"test1","datalen":0,"from":"u`+fmt.Sprint(iId)+`","gid":"talk","headsum":#sck#,"id":"#sid#","newalias":"test11","op":"member","posted":"#spdt#"}` ,
-      },{ head: tMsg{"Op":eQuit} ,
-          want: `{"info":"logout ok","op":"quit"}` ,
+      },{ head: tMsg{"Op":ePing, "Id":"123", "Datalen":144, "To":"test2"} ,
+          data: `123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 1234` ,
+          want: `{"info":"data too long for request type","op":"quit"}` ,
       },  aTmtpRev,
         { msg : []byte(`0034{"Op":2, "Uid":"u`+fmt.Sprint(iId)+`", "Node":"`+sTestNodeIds[iId]+`"}`+
                        `002f{"Op":7, "Id":"123", "Datalen":1, "To":"test2"}1`) ,
@@ -199,8 +200,10 @@ func newTestClient(iAct tTestAction, iId int) *tTestClient {
       },{ msg : []byte(`:zyx`) ,
           want: `{"id":"zyx","msgid":"#mid#","op":"ack"}`+"\n"+
                 `{"datalen":15,"from":"u`+fmt.Sprint(iId)+`","headsum":#ck#,"id":"#id#","op":"delivery","posted":"#pdt#"}data for Id:zyx` ,
-      },{ head: tMsg{"Op":eQuit} ,
-          want: `{"info":"logout ok","op":"quit"}` ,
+      },{ head: tMsg{"Op":ePing, "Id":"123", "Datalen":8, "To":"test2"} ,
+      },{ msg : []byte(`1234567`) ,
+      },{ msg : []byte{255} ,
+          want: `{"info":"data contains non-ASCII characters","op":"quit"}` ,
       },{ msg : []byte(`delay`) ,
           want: `{"info":"login timeout","op":"quit"}` ,
       }}
@@ -242,7 +245,7 @@ func (o *tTestClient) verifyRead(iBuf []byte) (int, error) {
       aMsg = aWk.msg
       if aMsg == nil {
          aMsg = PackMsg(aWk.head, []byte(aWk.data))
-      } else if string(aMsg[:5]) == "delay" {
+      } else if string(aMsg) == "delay" {
          return 0, &net.OpError{Op:"read", Err:&tTimeoutError{}}
       }
       select {
