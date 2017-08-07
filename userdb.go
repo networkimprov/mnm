@@ -67,8 +67,9 @@ type tGroup struct {
 
 type tMember struct {
    Alias string // invited/joined by this alias
-   Joined bool // use a date here?
+   Status int8
 }
+const ( _=iota; eStatInvited; eStatJoined; eStatBarred )
 
 type tUdbError struct {
    msg string
@@ -82,6 +83,7 @@ const (
    eErrMissingNode;
    eErrUserInvalid; eErrMaxNodes; eErrNodeInvalid; eErrLastNode;
    eErrUnknownAlias; eErrAliasTaken; eErrAliasInvalid;
+   eErrMemberJoined;
 )
 
 type tType string
@@ -134,6 +136,7 @@ func TestUserDb(iPath string) {
    }
 
    var aUid1, aUid2, aNode1, aNode2 string
+   var aGid1, aGid2, aAlias1, aAlias2 string
    aNat := "アリアス"
 
    // ADDUSER
@@ -299,6 +302,51 @@ func TestUserDb(iPath string) {
    err = aDb.CloseNodes("CloseNodesUid0")
    if err == nil || err.(*tUdbError).id != eErrUserInvalid {
      fReport("invalid user case succeeded: CloseNodes")
+   }
+
+   // GROUPINVITE
+   aGid1, aGid2 = "GinviteGid1", "GinviteGid2"
+   aUid1, aUid2 = "AddUserUid1", "GinviteUid2"
+   aAlias1, aAlias2 = "GinviteA1", "GinviteA2"
+   aDb.AddUser(aUid2, "GinviteN2")
+   aDb.AddAlias(aUid2, "", aAlias2)
+   aDb.AddAlias(aUid1, "", aAlias1)
+   _, err = aDb.GroupInvite(aGid1, aAlias1, aAlias2, aUid2)
+   if err != nil || aDb.group[aGid1].Uid[aUid2].Status != eStatJoined ||
+                    aDb.group[aGid1].Uid[aUid1].Status != eStatInvited {
+      fReport("invite new case failed")
+   }
+   _, err = aDb.GroupInvite(aGid1, aAlias1, aAlias2, aUid2)
+   if err != nil || aDb.group[aGid1].Uid[aUid2].Status != eStatJoined ||
+                    aDb.group[aGid1].Uid[aUid1].Status != eStatInvited {
+      fReport("re-invite case failed")
+   }
+   aDb.group[aGid2] = &tGroup{Uid: map[string]tMember{
+      aUid2:{Alias:aAlias2, Status:eStatJoined}}} //todo use TempGroup
+   _, err = aDb.GroupInvite(aGid2, aAlias1, aAlias2, aUid2)
+   if err != nil || aDb.group[aGid2].Uid[aUid1].Status != eStatInvited {
+      fReport("invite existing case failed")
+   }
+   _, err = aDb.GroupInvite(aGid1, aAlias2, aAlias1, aUid1)
+   if err == nil || err.(*tUdbError).id != eErrUserInvalid {
+      fReport("non-member invitor case succeeded: GroupInvite")
+   }
+   _, err = aDb.GroupInvite(aGid1, "GinviteA0", aAlias2, aUid2)
+   if err == nil || err.(*tUdbError).id != eErrAliasInvalid {
+      fReport("invalid invitee case succeeded: GroupInvite")
+   }
+   _, err = aDb.GroupInvite("GinviteGid0", aAlias1, "GinviteA0", aUid2)
+   if err == nil || err.(*tUdbError).id != eErrAliasInvalid {
+      fReport("invalid invitor alias case succeeded: GroupInvite")
+   }
+   _, err = aDb.GroupInvite("GinviteGid0", aAlias1, aAlias2, "GinviteUid0")
+   if err == nil || err.(*tUdbError).id != eErrAliasInvalid {
+      fReport("invalid invitor uid case succeeded: GroupInvite")
+   }
+   aDb.group[aGid2].Uid[aUid1] = tMember{Alias: aAlias1, Status: eStatJoined}
+   _, err = aDb.GroupInvite(aGid2, aAlias1, aAlias2, aUid2)
+   if err == nil || err.(*tUdbError).id != eErrMemberJoined {
+      fReport("already joined case succeeded: GroupInvite")
    }
 
    if aOk {
@@ -590,6 +638,46 @@ func (o *tUserDb) GroupInvite(iGid, iAlias, iByAlias, iByUid string) (aUid strin
    //: iGid exists, iByUid in group, iByAlias ignored
    //: iGid !exists, make iGid and add iByUid with iByAlias
    //: iByAlias for iByUid
+   aUid, _ = o.Lookup(iAlias)
+   if aUid == "" {
+      return "", &tUdbError{id: eErrAliasInvalid, msg: fmt.Sprintf("GroupInvite: iAlias %s not found", iAlias)}
+   }
+
+   aGroup, err := o.fetchGroup(iGid, eFetchMake)
+   if err != nil { panic(err) }
+
+   aGroup.Lock()
+   defer aGroup.Unlock()
+
+   if len(aGroup.Uid) == 0 {
+      aByUid, _ := o.Lookup(iByAlias)
+      if aByUid == "" || aByUid != iByUid {
+         o.groupDoor.Lock()
+         delete(o.group, iGid)
+         o.groupDoor.Unlock()
+
+         if aByUid == "" {
+            return "", &tUdbError{id: eErrAliasInvalid, msg: fmt.Sprintf("GroupInvite: iByAlias %s not found", iByAlias)}
+         } else {
+            return "", &tUdbError{id: eErrAliasInvalid, msg: fmt.Sprintf("GroupInvite: iByAlias %s not for iByUid %s", iByAlias, iByUid)}
+         }
+      }
+      aGroup.Uid[iByUid] = tMember{Alias: iByAlias, Status: eStatJoined}
+   } else {
+      if aGroup.Uid[iByUid].Status != eStatJoined {
+         return "", &tUdbError{id: eErrUserInvalid, msg: fmt.Sprintf("GroupInvite: iByUid %s not a member", iByUid)}
+      }
+      if aGroup.Uid[aUid].Status == eStatInvited {
+         return aUid, nil
+      }
+      if aGroup.Uid[aUid].Status == eStatJoined {
+         return "", &tUdbError{id: eErrMemberJoined, msg: fmt.Sprintf("GroupInvite: iAlias %s already joined", iAlias)}
+      }
+   }
+   aGroup.Uid[aUid] = tMember{Alias: iAlias, Status: eStatInvited}
+
+   err = o.putRecord(eTgroup, iGid, aGroup)
+   if err != nil { panic(err) }
    return aUid, nil
 }
 
