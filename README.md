@@ -82,6 +82,12 @@ Each message starts with a header, wherein four hex digits give the size of a JS
 which may be followed by arbitrary format 8-bit data: 
 `001f{ ... <"dataLen":uint> }dataLen 8-bit bytes of data`
 
+Ack responses from the server have the following required headers:  
+`"id":string, "msgid":string, <"error":string>`
+
+Messages from the server have the following required message headers:  
+`"id":string, "from":string, "posted":string, "headsum":uint`
+
 0. TmtpRev gives the latest recognized protocol version; it must be the first message  
 `{"op":0, "id":"1"}`  
 Response `{"op":"tmtprev", "id":"1"}`
@@ -97,25 +103,21 @@ At node `{"op":"registered", "uid":string, "nodeid":string <,"error":string>}`
 2. Login connects a client to its queue  
 `{"op":2, "uid":string, "node":string}`  
 Response `{"op":"info|quit" "info":string}` (also given on login timeout)  
-At nodes `{"op":"login", "id":string, "from":string, "posted":string, "headsum":uint, 
-"datalen":0, "node":string}`
+At nodes `{"op":"login", (message headers), "datalen":0, "node":string}`
 
 3. UserEdit updates a user account  
 _todo: check & store label_  
 _todo: dropnode and dropalias; prevent account hijacking from stolen client/nodeid_  
 `{"op":3, "id":string, <"newnode":string | "newalias":string>}`  
 .newnode is the user label for a client device  
-Response `{"op":"ack", "id":string, "msgid":string, <"error":string>}`  
-At nodes `{"op":"user", "id":string, "from":string, "posted":string, "headsum":uint, 
-"datalen":0, <"nodeid":string | "newalias":string>}`
+Response `{"op":"ack", (ack headers)}`  
+At nodes `{"op":"user", (message headers), "datalen":0, <"nodeid":string | "newalias":string>}`
 
 4. GroupInvite invites someone to a group, creating it if necessary  
 `{"op":4, "id":string, "gid":string, "datalen":uint, <"datasum":uint>, "from":string, "to":string}`  
-Response `{"op":"ack", "id":string, "msgid":string, <"error":string>}`  
-At recipient `{"op":"invite", "id":string, "from":string, "posted":string, "headsum":uint, 
-"datalen":uint, <"datasum":uint>, "gid":string, "to":string}`  
-At members `{"op":"member", "id":string, "from":string, "posted":string, "headsum":uint, 
-"datalen":0, "act":string, "gid":string, "alias":string, <"newalias":string>}`
+Response `{"op":"ack", (ack headers)}`  
+At recipient `{"op":"invite", (message headers), "datalen":uint, <"datasum":uint>, "gid":string, "to":string}`  
+At members `{"op":"member", (message headers), "datalen":0, "act":string, "gid":string, "alias":string, <"newalias":string>}`
 
 5. GroupEdit updates a group  
 _todo: moderated group_  
@@ -123,30 +125,26 @@ _todo: closed group publishes aliases to moderators_
 `{"op":5, "id":string, "act":"join" , "gid":string, <"newalias":string>}`  
 `{"op":5, "id":string, "act":"alias", "gid":string, "newalias":string}`  
 `{"op":5, "id":string, "act":"drop" , "gid":string, "to":string}`  
-Response `{"op":"ack", "id":string, "msgid":string, <"error":string>}`  
-At members `{"op":"member", "id":string, "from":string, "posted":string, "headsum":uint, 
-"datalen":0, "act":string, "gid":string, "alias":string, <"newalias":string>}`
+Response `{"op":"ack", (ack headers)}`  
+At members `{"op":"member", (message headers), "datalen":0, "act":string, "gid":string, "alias":string, <"newalias":string>}`
 
 6. Post sends a message to users and/or groups  
 `{"op":6, "id":string, "datalen":uint, <"datasum":uint>, "for":[{"id":string, "type":uint}, ...]}`  
 .for[i].type: 1) user_id, 2) group_id (include self) 3) group_id (exclude self)  
-Response `{"op":"ack", "id":string, "msgid":string, <"error":string>}`  
-At recipient `{"op":"delivery", "id":string, "from":string, "posted":string, "headsum":uint, 
-"datalen":uint, <"datasum":uint>}`
+Response `{"op":"ack", (ack headers)}`  
+At recipient `{"op":"delivery", (message headers), "datalen":uint, <"datasum":uint>}`
 
 7. Ping sends a short text message via a user's alias.
 A reply establishes contact between the parties.  
 _todo: limit number of pings per 24h and consecutive failed pings_  
 `{"op":7, "id":string, "datalen":uint, <"datasum":uint>, "to":string}`  
-Response `{"op":"ack", "id":string, "msgid":string, <"error":string>}`  
-At recipient `{"op":"ping", "id":string, "from":string, "posted":string, "headsum":uint, 
-"datalen":uint, <"datasum":uint>, "to":string}`
+Response `{"op":"ack", (ack headers)}`  
+At recipient `{"op":"ping", (message headers), "datalen":uint, <"datasum":uint>, "to":string}`
 
 8. Ohi notifies chat contacts of presence (in progress)  
 `{"op":8, "id":string, "for":[{"id":string}, ...]}`  
 Response `{"op":"ack", "id":string, <"error":string>}`  
-At recipient `{"op":"ohi", "id":string, "from":string, "posted":string, "headsum":uint, 
-"datalen":0}`
+At recipient `{"op":"ohi", (message headers), "datalen":0}`
 
 9. Ack acknowledges receipt of a message  
 `{"op":9, "id":string, "type":string}`
