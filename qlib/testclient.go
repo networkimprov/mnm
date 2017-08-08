@@ -354,6 +354,10 @@ func (o *tTestClient) Read(iBuf []byte) (int, error) {
    return o.verifyRead(iBuf)
 }
 
+func verifyWantEdit(iOld, iNew string) {
+   sTestVerifyWant = strings.Replace(sTestVerifyWant, "#"+iOld+"#", iNew, 1)
+}
+
 func (o *tTestClient) Write(iBuf []byte) (int, error) {
    if o.closed {
       return 0, &net.OpError{Op:"write", Err:tError("closed")}
@@ -374,18 +378,17 @@ func (o *tTestClient) Write(iBuf []byte) (int, error) {
       if o.action == eActVerifySend || !(aOp == "tmtprev" || aOp == "info" || aOp == "login") {
          aI := 0; if o.action == eActVerifyRecv { aI = 2 }
          if aHead["msgid"] != nil {
-            sTestVerifyWant = strings.Replace(sTestVerifyWant, `#mid#`, aHead["msgid"].(string), 1)
+            verifyWantEdit("mid", aHead["msgid"].(string))
          } else if aHead["from"] != nil {
             aS := ""; if o.action == eActVerifySend { aS = "s"; aI = 1 }
-            sTestVerifyWant = strings.Replace(sTestVerifyWant, `#`+aS+`id#`, aHead["id"].(string), 1)
-            sTestVerifyWant = strings.Replace(sTestVerifyWant, `#`+aS+`pdt#`, aHead["posted"].(string), 1)
-            sTestVerifyWant = strings.Replace(sTestVerifyWant, `#`+aS+`ck#`,
-                                              fmt.Sprint(uint32(aHead["headsum"].(float64))), 1)
+            verifyWantEdit(aS+"id", aHead["id"].(string))
+            verifyWantEdit(aS+"pdt", aHead["posted"].(string))
+            verifyWantEdit(aS+"ck", fmt.Sprint(uint32(aHead["headsum"].(float64))))
          } else if aOp == "registered" {
-            sTestVerifyWant = strings.Replace(sTestVerifyWant, `#uid#`, aHead["uid"].(string), 1)
+            verifyWantEdit("uid", aHead["uid"].(string))
          }
          if aHead["nodeid"] != nil {
-            sTestVerifyWant = strings.Replace(sTestVerifyWant, `#nid#`, aHead["nodeid"].(string), 1)
+            verifyWantEdit("nid", aHead["nodeid"].(string))
          }
          sTestVerifyGot[aI] += string(iBuf[4:]) + "\n"
       }
