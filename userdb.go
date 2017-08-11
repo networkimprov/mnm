@@ -83,7 +83,7 @@ const (
    eErrMissingNode;
    eErrUserInvalid; eErrMaxNodes; eErrNodeInvalid; eErrLastNode;
    eErrUnknownAlias; eErrAliasTaken; eErrAliasInvalid;
-   eErrMemberJoined;
+   eErrMemberJoined; eErrGroupInvalid;
 )
 
 type tType string
@@ -136,7 +136,8 @@ func TestUserDb(iPath string) {
    }
 
    var aUid1, aUid2, aNode1, aNode2 string
-   var aGid1, aGid2, aAlias1, aAlias2 string
+   var aAlias1, aAlias2, aAlias3 string
+   var aGid1, aGid2 string
    aNat := "アリアス"
 
    // ADDUSER
@@ -347,6 +348,47 @@ func TestUserDb(iPath string) {
    _, err = aDb.GroupInvite(aGid2, aAlias1, aAlias2, aUid2)
    if err == nil || err.(*tUdbError).id != eErrMemberJoined {
       fReport("already joined case succeeded: GroupInvite")
+   }
+
+   // GROUPJOIN
+   aGid1, aGid2 = "GjoinGid1", "GjoinGid2"
+   aUid1, aUid2 = "AddUserUid1", "GjoinUid2"
+   aAlias1, aAlias2, aAlias3 = "GjoinA1", "GjoinA2", "GjoinA3"
+   aDb.AddUser(aUid2, "GjoinN2")
+   aDb.AddAlias(aUid2, "", aAlias2)
+   aDb.AddAlias(aUid1, "", aAlias1)
+   aDb.AddAlias(aUid1, "", aAlias3)
+   aDb.GroupInvite(aGid1, aAlias1, aAlias2, aUid2)
+   aDb.GroupInvite(aGid2, aAlias1, aAlias2, aUid2)
+   _, err = aDb.GroupJoin(aGid1, aUid1, "")
+   if err != nil || aDb.group[aGid1].Uid[aUid1].Status != eStatJoined {
+      fReport("join case failed")
+   }
+   _, err = aDb.GroupJoin(aGid1, aUid1, "")
+   if err != nil || aDb.group[aGid1].Uid[aUid1].Status != eStatJoined {
+      fReport("re-join case failed")
+   }
+   _, err = aDb.GroupJoin(aGid2, aUid1, aAlias3)
+   if err != nil || aDb.group[aGid2].Uid[aUid1].Status != eStatJoined ||
+                    aDb.group[aGid2].Uid[aUid1].Alias != aAlias3 {
+      fReport("join new-alias case failed")
+   }
+   _, err = aDb.GroupJoin(aGid2, aUid1, aAlias3)
+   if err != nil || aDb.group[aGid2].Uid[aUid1].Status != eStatJoined ||
+                    aDb.group[aGid2].Uid[aUid1].Alias != aAlias3 {
+      fReport("re-join new-alias case failed")
+   }
+   _, err = aDb.GroupJoin(aGid1, aUid1, "GjoinA0")
+   if err == nil || err.(*tUdbError).id != eErrAliasInvalid {
+      fReport("invalid alias case succeeded: GroupJoin")
+   }
+   _, err = aDb.GroupJoin("GjoinGid0", aUid1, "")
+   if err == nil || err.(*tUdbError).id != eErrGroupInvalid {
+      fReport("invalid group case succeeded: GroupJoin")
+   }
+   _, err = aDb.GroupJoin(aGid1, "GjoinUid0", "")
+   if err == nil || err.(*tUdbError).id != eErrUserInvalid {
+      fReport("invalid user case succeeded: GroupJoin")
    }
 
    if aOk {
@@ -685,6 +727,38 @@ func (o *tUserDb) GroupJoin(iGid, iUid, iNewAlias string) (aAlias string, err er
    //: set joined status for member
    //: iUid in group
    //: iNewAlias optional for iUid
+
+   aGroup, err := o.fetchGroup(iGid, eFetchCheck)
+   if err != nil { panic(err) }
+
+   if aGroup == nil {
+      return "", &tUdbError{id: eErrGroupInvalid, msg: fmt.Sprintf("GroupJoin: iGid %s not found", iGid)}
+   }
+
+   aGroup.Lock()
+   defer aGroup.Unlock()
+
+   if aGroup.Uid[iUid].Status == eStatJoined &&
+      (iNewAlias == "" || iNewAlias == aGroup.Uid[iUid].Alias) {
+      return aGroup.Uid[iUid].Alias, nil
+   }
+   if aGroup.Uid[iUid].Status != eStatInvited && aGroup.Uid[iUid].Status != eStatJoined {
+      return "", &tUdbError{id: eErrUserInvalid, msg: fmt.Sprintf("GroupJoin: iUid %s not invited", iUid)}
+   }
+
+   if iNewAlias != "" {
+      aUid, _ := o.Lookup(iNewAlias)
+      if aUid != iUid {
+         return "", &tUdbError{id: eErrAliasInvalid, msg: fmt.Sprintf("GroupJoin: iNewAlias %s not for iUid %s", iNewAlias, iUid)}
+      }
+      aAlias = iNewAlias
+   } else {
+      aAlias = aGroup.Uid[iUid].Alias
+   }
+   aGroup.Uid[iUid] = tMember{Alias: aAlias, Status: eStatJoined}
+
+   err = o.putRecord(eTgroup, iGid, aGroup)
+   if err != nil { panic(err) }
    return aAlias, nil
 }
 
