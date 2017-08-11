@@ -79,7 +79,7 @@ const (
    eErrUserInvalid;
    eErrMissingNode; eErrNodeInvalid; eErrMaxNodes; eErrLastNode;
    eErrMissingAlias; eErrAliasEqual; eErrAliasTaken; eErrAliasInvalid;
-   eErrByAliasInvalid; eErrMemberJoined
+   eErrByAliasInvalid; eErrMemberJoined; eErrGroupInvalid
 )
 const ( _ = iota; eStatInvited; eStatJoined; eStatBarred )
 
@@ -338,6 +338,48 @@ func TestUserDb() {
    }
 
    fmt.Println("GroupInvite tests complete") // todo drop this
+
+   fmt.Println("Testing GroupJoin") // todo drop this
+   aGpJoinUid1 := "aGpJoinUid1"
+   aGpJoinNode1 := "aGpJoinNode1"
+   aGpJoinAlias1 := "aGpJoinAlias1"
+   aGpJoinGid1 := "aGpJoinGid1"
+   aGpJoinUid2 := "aGpJoinUid2"
+   aGpJoinAlias2 := "aGpJoinAlias2"
+   aGpJoinGid2 := "aGpJoinGid2"
+   _, err = aDb.AddUser(aGpJoinUid1, aGpJoinNode1)
+   _, err = aDb.AddUser(aGpJoinUid2, aGpJoinNode1)
+   err = aDb.AddAlias(aGpJoinUid1, aGpJoinNode1, "", aGpJoinAlias1)
+   err = aDb.AddAlias(aGpJoinUid2, aGpJoinNode1, "", aGpJoinAlias2)
+   _, err = aDb.GroupInvite(aGpJoinGid1, aGpJoinAlias1, aGpJoinAlias2, aGpJoinUid2)
+   _, err = aDb.GroupInvite(aGpJoinGid2, aGpJoinAlias1, aGpJoinAlias2, aGpJoinUid2)
+   // testing successful cases
+   aAlias, err := aDb.GroupJoin(aGpJoinGid1, aGpJoinUid1, "")
+   if err != nil || aAlias != aGpJoinAlias1 {
+      fReport("GroupJoin: got error for successful case (no new alias)")
+   }
+   aAlias, err = aDb.GroupJoin(aGpJoinGid1, aGpJoinUid1, "")
+   if err != nil || aAlias != aGpJoinAlias1 {
+      fReport("GroupJoin: got error for successful case (repeated, no new alias)")
+   }
+   aAlias, err = aDb.GroupJoin(aGpJoinGid2, aGpJoinUid1, "NewAlias")
+   if err != nil || aAlias != "NewAlias" {
+      fReport("GroupJoin: got error for successful case (with new alias)")
+   }
+   aAlias, err = aDb.GroupJoin(aGpJoinGid2, aGpJoinUid1, "NewAlias")
+   if err != nil || aAlias != "NewAlias" {
+      fReport("GroupJoin: got error for successful case (repeated, with new alias)")
+   }
+   // testing error cases
+   aAlias, err = aDb.GroupJoin("non-existent group", aGpJoinUid1, "")
+   if err == nil {
+      fReport("GroupJoin: got successful for using non-existent group")
+   }
+   aAlias, err = aDb.GroupJoin(aGpJoinGid1, "non-existent uid", "")
+   if err == nil {
+      fReport("GroupJoin: got successful for using non-existent uid")
+   }
+   fmt.Println("GroupJoin tests complete") // todo drop this
 
    if aOk {
       fmt.Println("UserDb tests passed")
@@ -654,6 +696,36 @@ func (o *tUserDb) GroupJoin(iGid, iUid, iNewAlias string) (aAlias string, err er
    //: set joined status for member
    //: iUid in group
    //: iNewAlias optional for iUid
+
+   aGroup, err := o.fetchGroup(iGid, eFetchCheck)
+   if err != nil { panic(err) }
+   if aGroup == nil {
+      return "", tUserDbErr{id: eErrGroupInvalid, msg: fmt.Sprintf("GroupJoin: iGid %s not found", iGid)}
+   }
+
+   aGroup.door.Lock()
+   defer aGroup.door.Unlock()
+
+   if aGroup.Uid[iUid].Status == eStatJoined {
+      if iNewAlias == "" {
+         return aGroup.Uid[iUid].Alias, nil
+      }
+      if aGroup.Uid[iUid].Alias == iNewAlias {
+         return iNewAlias, nil
+      }
+   }
+   if aGroup.Uid[iUid].Status != eStatInvited && aGroup.Uid[iUid].Status != eStatJoined {
+      return "", tUserDbErr{id: eErrUserInvalid, msg: fmt.Sprintf("GroupJoin: User %s cannot join group", iUid)}
+   }
+
+   if iNewAlias != "" {
+      aAlias = iNewAlias
+   } else {
+      aAlias = aGroup.Uid[iUid].Alias
+   }
+   aGroup.Uid[iUid] = tMember{Alias: aAlias, Status: eStatJoined}
+   err = o.putRecord(eTgroup, iGid, aGroup)
+   if err != nil { panic(err) }
    return aAlias, nil
 }
 
