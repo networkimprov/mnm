@@ -34,7 +34,8 @@ const kPostDateFormat = "2006-01-02T15:04:05.000Z07:00"
 const (
    eTmtpRev = iota
    eRegister; eLogin
-   eUserEdit; eGroupInvite; eGroupEdit
+   eUserEdit; eOhiEdit;
+   eGroupInvite; eGroupEdit
    ePost; ePing
    eAck; eQuit
    eOpEnd
@@ -47,6 +48,7 @@ var sHeaderDefs = [...]tHeader{
    eRegister   : { NewNode:"1", NewAlias:"1" },
    eLogin      : { Uid:"1", Node:"1" },
    eUserEdit   : { Id:"1" },
+   eOhiEdit    : { Id:"1", For:[]tHeaderFor{{}}, Type:"1" },
    eGroupInvite: { Id:"1", DataLen:1, Gid:"1", From:"1", To:"1" },
    eGroupEdit  : { Id:"1", Act:"1", Gid:"1" },
    ePost       : { Id:"1", DataLen:1, For:[]tHeaderFor{{}} },
@@ -59,6 +61,7 @@ var sResponseOps = [...]string{
    eRegister:    "registered",
    eLogin:       "login",
    eUserEdit:    "user",
+   eOhiEdit:     "ohiedit",
    eGroupInvite: "invite",
    eGroupEdit:   "member",
    ePost:        "delivery",
@@ -78,7 +81,6 @@ var (
    sMsgLoginTimeout    = tMsg{"op":"quit", "info":"login timeout"}
    sMsgLoginFailure    = tMsg{"op":"quit", "info":"login failed"}
    sMsgLoginNodeOnline = tMsg{"op":"quit", "info":"node already connected"}
-   sMsgLogin           = tMsg{"op":"info", "info":"login ok"}
    sMsgQuit            = tMsg{"op":"quit", "info":"logout ok"}
    sMsgDatalenLimit    = tMsg{"op":"quit", "info":"data too long for request type"}
    sMsgDataNonAscii    = tMsg{"op":"quit", "info":"data contains non-ASCII characters"}
@@ -89,6 +91,7 @@ var sBase32 = base32.NewEncoding("%+123456789BCDFGHJKLMNPQRSTVWXYZ")
 
 var sCrc32c = crc32.MakeTable(crc32.Castagnoli)
 
+var sOhi = tOhi{from: tOhiMap{}}
 var sNode = tNodes{list: tNodeMap{}}
 var sStore = tStore{}
 var UDb UserDatabase // set by caller
@@ -131,6 +134,7 @@ type Link struct { // network client msg handler
    queue *tQueue
    tmtprev string
    uid, node string
+   ohi *tOhiSet
 }
 
 func NewLink(iConn net.Conn) *Link {
@@ -204,6 +208,16 @@ func runLink(o *Link) {
    o.conn.Close()
    if o.queue != nil {
       o.queue.Unlink()
+   }
+   if o.ohi != nil {
+      for _, aUid := range sOhi.unref(o.uid) {
+         aNodes, err := UDb.GetNodes(aUid)
+         if err != nil {
+            fmt.Fprintf(os.Stderr, "%s link.runlink getnodes %s\n", o.uid, err.Error())
+            continue
+         }
+         o.sendOhi(aNodes, eOhiOff)
+      }
    }
 }
 
@@ -298,7 +312,7 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
       if err != nil {
          return sMsgLoginFailure
       }
-      aQ := QueueLink(aNodeSha, o.conn)
+      aQ := QueueLink(aNodeSha, o.conn, tMsg{"op":"info", "info":"login ok", "ohi":nil}, iHead.Uid)
       if aQ == nil {
          return sMsgLoginNodeOnline
       }
@@ -339,6 +353,33 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
       }
       if err != nil {
          fmt.Fprintf(os.Stderr, "%s link.handlemsg useredit %s\n", o.uid, err.Error())
+      }
+      o.ack(iHead.Id, aMid, err)
+   case eOhiEdit:
+      if iHead.Type != "add" && iHead.Type != "drop" { return sMsgHeaderBad }
+      for _, aTo := range iHead.For {
+         _,err = UDb.GetNodes(aTo.Id)
+         if err != nil { break } //todo if err == defunct && Type == drop, continue
+      }
+      if err == nil {
+         aInit := o.ohi == nil
+         if aInit {
+            o.ohi = sOhi.ref(o.uid)
+         }
+         aStat := eOhiOff; if iHead.Type == "add" { aStat = eOhiOn }
+         for _, aTo := range iHead.For {
+            if o.ohi.edit(aTo.Id, iHead.Type == "add") {
+               aNodes, aErr := UDb.GetNodes(aTo.Id)
+               if aErr == nil {
+                  o.sendOhi(aNodes, aStat)
+               }
+            }
+         }
+         if !aInit {
+            aHead := &tHeader{Op:eOhiEdit, For: []tHeaderFor{{Id:o.uid, Type:eForUser}}}
+            aEtc := tMsg{"for":iHead.For, "type":iHead.Type}
+            aMid, err = o.postMsg(aHead, aEtc, nil)
+         }
       }
       o.ack(iHead.Id, aMid, err)
    case eGroupInvite:
@@ -437,6 +478,23 @@ func (o *Link) checkPing(iHead *tHeader, iData *[]byte) error {
    return nil
 }
 
+func (o *Link) sendOhi(iNodes []string, iStat int8) {
+   for _, aNid := range iNodes {
+      aNd := GetNode(aNid)
+      aNd.dir.RLock()
+      if aNd.queue != nil {
+         aTmr := time.NewTimer(200 * time.Millisecond)
+         select {
+         case aNd.queue.ohi <- tOhiMsg{from:o.uid, status:iStat}:
+            aTmr.Stop()
+         case <-aTmr.C:
+            fmt.Fprintf(os.Stderr, "%s link.handlemsg ohiedit timeout node %s\n", o.uid, aNid)
+         }
+      }
+      aNd.dir.RUnlock()
+   }
+}
+
 func (o *Link) ack(iId, iMsgId string, iErr error) {
    aMsg := tMsg{"op":"ack", "id":iId, "msgid":iMsgId}
    if iErr != nil {
@@ -519,6 +577,91 @@ func PackMsg(iJso tMsg, iData []byte) []byte {
 }
 
 
+type tOhi struct {
+   from tOhiMap // users notifying others of presence
+   sync.RWMutex
+}
+
+type tOhiMap map[string]*tOhiSet // indexed by uid
+
+type tOhiMsg struct {
+   from string
+   status int8
+}
+
+const ( _ int8 = iota; eOhiOn; eOhiOff; )
+
+type tOhiSet struct {
+   uid map[string]bool // users to notify
+   sync.RWMutex
+   refcount int32 // online nodes
+}
+
+func (o *tOhiSet) edit(iTo string, iNew bool) bool {
+   o.Lock()
+   aOld := o.uid[iTo]
+   o.uid[iTo] = iNew
+   o.Unlock()
+   return aOld != iNew
+}
+
+func (o *tOhi) ref(iFrom string) *tOhiSet {
+   o.RLock()
+   aSet := o.from[iFrom]
+   if aSet != nil {
+      atomic.AddInt32(&aSet.refcount, 1)
+   }
+   o.RUnlock()
+
+   if aSet == nil {
+      o.Lock()
+      if aTemp := o.from[iFrom]; aTemp != nil {
+         aSet = aTemp
+         aSet.refcount++
+      } else {
+         aSet = &tOhiSet{refcount:1, uid:make(map[string]bool)}
+         o.from[iFrom] = aSet
+      }
+      o.Unlock()
+   }
+   return aSet
+}
+
+func (o *tOhi) unref(iFrom string) []string {
+   o.RLock()
+   aSet := o.from[iFrom]
+   aN := atomic.AddInt32(&aSet.refcount, -1) // crash if from[iFrom] not found
+   o.RUnlock()
+
+   var aList []string
+   if aN == 0 {
+      o.Lock()
+      if aSet.refcount == 0 {
+         delete(o.from, iFrom)
+         for aK, aV := range aSet.uid {
+            if aV { aList = append(aList, aK) }
+         }
+      }
+      o.Unlock()
+   }
+   return aList
+}
+
+func (o *tOhi) getOhiTo(iUid string) []string {
+   var aSet []string
+   o.RLock()
+   for aK, aV := range o.from {
+      aV.RLock()
+      if aV.uid[iUid] {
+         aSet = append(aSet, aK)
+      }
+      aV.RUnlock()
+   }
+   o.RUnlock()
+   return aSet
+}
+
+
 type tNodes struct {
    list tNodeMap // nodes that have received msgs or loggedin
    create sync.RWMutex //todo Mutex when sync.map
@@ -551,16 +694,16 @@ func GetNode(iNode string) *tNode {
 
 type tQueue struct {
    node string
-   conn net.Conn // client ref
-   connDoor sync.Mutex // control access to conn
+   connChan chan net.Conn // control access to conn
+   hasConn int32 // in use by Link
    ack chan string // forwards acks from client
    buf []string // elastic channel buffer
    in chan string // elastic channel input
    out chan string // elastic channel output
-   hasConn int32 // in use by Link
+   ohi chan tOhiMsg // presence notifications to us
 }
 
-func QueueLink(iNode string, iConn net.Conn) *tQueue {
+func QueueLink(iNode string, iConn net.Conn, iMsg tMsg, iUid string) *tQueue {
    aNd := GetNode(iNode)
    if aNd.queue == nil {
       aNd.dir.Lock()
@@ -571,10 +714,11 @@ func QueueLink(iNode string, iConn net.Conn) *tQueue {
          aNd.queue = new(tQueue)
          aQ := aNd.queue
          aQ.node = iNode
-         aQ.connDoor.Lock()
+         aQ.connChan = make(chan net.Conn, 1)
          aQ.ack = make(chan string, 10)
          aQ.in = make(chan string)
          aQ.out = make(chan string)
+         aQ.ohi = make(chan tOhiMsg, 100) //todo tune size
          var err error
          aQ.buf, err = sStore.GetDir(iNode)
          if err != nil { panic(err) }
@@ -587,33 +731,61 @@ func QueueLink(iNode string, iConn net.Conn) *tQueue {
    if !atomic.CompareAndSwapInt32(&aNd.queue.hasConn, 0, 1) {
       return nil
    }
-   iConn.Write(PackMsg(sMsgLogin, nil))
-   aNd.queue.conn = iConn
-   aNd.queue.connDoor.Unlock() // unblocks waitForConn
+   aOhi := sOhi.getOhiTo(iUid)
+   if len(aOhi) > 0 {
+      iMsg["ohi"] = aOhi
+   } else {
+      delete(iMsg, "ohi")
+   }
+   iConn.Write(PackMsg(iMsg, nil))
+   aNd.queue.connChan <- iConn
    return aNd.queue
 }
 
 func (o *tQueue) Unlink() {
-   o.connDoor.Lock() // blocks waitForConn
-   o.conn = nil
+   <-o.connChan
    o.hasConn = 0
 }
 
+func (o *tQueue) waitForMsg() string {
+   for {
+      select {
+      case aMid := <-o.out:
+         return aMid
+      case aOhi := <-o.ohi:
+         o.tryOhi(&aOhi)
+      }
+   }
+}
+
+func (o *tQueue) tryOhi(iOhi *tOhiMsg) {
+   aMsg := PackMsg(tMsg{"op":"ohi", "from":iOhi.from, "status":iOhi.status}, nil)
+   select {
+   case aConn := <-o.connChan:
+      o.connChan <- aConn
+      _,err := aConn.Write(aMsg)
+      if err != nil {
+         fmt.Fprintf(os.Stderr, "%.7s queue.runqueue write error %s\n", o.node, err.Error())
+      }
+   default: // drop msg
+   }
+}
+
 func (o *tQueue) waitForConn() net.Conn {
-   o.connDoor.Lock() // waits if o.conn nil
-   aConn := o.conn
-   o.connDoor.Unlock()
+   aConn := <-o.connChan
+   o.connChan <- aConn
    return aConn
 }
 
 func runQueue(o *tQueue) {
-   aMsgId := <-o.out
+   aMsgId := o.waitForMsg()
    aConn := o.waitForConn()
    for {
       err := sStore.SendFile(o.node, aMsgId, aConn)
       if _,ok := err.(*os.PathError); ok { panic(err) } //todo move to sStore?
       if err == nil {
          aTimeout := time.NewTimer(kQueueAckTimeout)
+      WaitForAck:
          select {
          case aAckId := <-o.ack:
             aTimeout.Stop()
@@ -622,9 +794,12 @@ func runQueue(o *tQueue) {
                continue
             }
             sStore.RmLink(o.node, aMsgId)
-            aMsgId = <-o.out
+            aMsgId = o.waitForMsg()
          case <-aTimeout.C:
             fmt.Fprintf(os.Stderr, "%.7s queue.runqueue timed out awaiting ack\n", o.node)
+         case aOhi := <-o.ohi:
+            o.tryOhi(&aOhi)
+            goto WaitForAck
          }
          aConn = o.waitForConn()
       } else if false {

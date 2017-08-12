@@ -25,7 +25,7 @@ var sTestClientCount int32
 var sTestClientId chan int
 var sTestLogins = make(map[int]*int)
 var sTestLoginTotal int32
-var sTestRecvCount int32
+var sTestRecvCount, sTestRecvOhi int32
 var sTestRecvBytes int64
 var sTestReadSize = [...]int{50, 50, 50, 500, 500, 1500, 2000, 5000, 10000, 50000}
 var sTestReadData = make([]byte, 16*1024)
@@ -93,6 +93,8 @@ type tTestAction int
 const ( eActCycle tTestAction =iota; eActVerifySend; eActVerifyRecv )
 
 type tTestWork struct { msg []byte; head tMsg; data, want string }
+
+type tTestForOhi struct { Id string }
 
 func newTestClient(iAct tTestAction, iId int) *tTestClient {
    aTc := &tTestClient{
@@ -188,8 +190,26 @@ func newTestClient(iAct tTestAction, iId int) *tTestClient {
           data: `123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 1234` ,
           want: `{"info":"data too long for request type","op":"quit"}` ,
       },  aTmtpRev,
+        { head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId), "Node":sTestNodeIds[iId]} ,
+          want: `{"info":"login ok","op":"info"}`+"\n"+
+                `{"datalen":0,"from":"u`+fmt.Sprint(iId)+`","headsum":#sck#,"id":"#sid#","node":"tbd","op":"login","posted":"#spdt#"}` ,
+      },{ head: tMsg{"Op":eOhiEdit, "Id":"0", "For":[]tTestForOhi{{Id:"u"+fmt.Sprint(iId+1)}}, "Type":"add"} ,
+          want: `{"id":"0","msgid":"#mid#","op":"ack"}`+"\n"+
+                `{"from":"u`+fmt.Sprint(iId)+`","op":"ohi","status":1}` ,
+      },{ head: tMsg{"Op":eOhiEdit, "Id":"0", "For":[]tTestForOhi{{Id:"u"+fmt.Sprint(iId+1)}}, "Type":"drop"} ,
+          want: `{"id":"0","msgid":"#mid#","op":"ack"}`+"\n"+
+                `{"datalen":0,"for":[{"Id":"u`+fmt.Sprint(iId+1)+`","Type":0}],"from":"u`+fmt.Sprint(iId)+`","headsum":#sck#,"id":"#sid#","op":"ohiedit","posted":"#spdt#","type":"drop"}`+"\n"+
+                `{"from":"u`+fmt.Sprint(iId)+`","op":"ohi","status":2}` ,
+      },{ head: tMsg{"Op":eOhiEdit, "Id":"0", "For":[]tTestForOhi{{Id:"u"+fmt.Sprint(iId+1)}}, "Type":"add"} ,
+          want: `{"id":"0","msgid":"#mid#","op":"ack"}`+"\n"+
+                `{"datalen":0,"for":[{"Id":"u`+fmt.Sprint(iId+1)+`","Type":0}],"from":"u`+fmt.Sprint(iId)+`","headsum":#sck#,"id":"#sid#","op":"ohiedit","posted":"#spdt#","type":"add"}`+"\n"+
+                `{"from":"u`+fmt.Sprint(iId)+`","op":"ohi","status":1}` ,
+      },{ head: tMsg{"Op":eQuit} ,
+          want: `{"info":"logout ok","op":"quit"}`+"\n"+
+                `{"from":"u`+fmt.Sprint(iId)+`","op":"ohi","status":2}` ,
+      },  aTmtpRev,
         { msg : []byte(`0034{"Op":2, "Uid":"u`+fmt.Sprint(iId)+`", "Node":"`+sTestNodeIds[iId]+`"}`+
-                       `002f{"Op":7, "Id":"123", "Datalen":1, "To":"test2"}1`) ,
+                       `002f{"Op":8, "Id":"123", "Datalen":1, "To":"test2"}1`) ,
           want: `{"info":"login ok","op":"info"}`+"\n"+
                 `{"id":"123","msgid":"#mid#","op":"ack"}`+"\n"+
                 `{"datalen":0,"from":"u`+fmt.Sprint(iId)+`","headsum":#sck#,"id":"#sid#","node":"tbd","op":"login","posted":"#spdt#"}`+"\n"+
@@ -272,7 +292,7 @@ func recvSummary(i int) {
    aB := atomic.AddInt64(&sTestRecvBytes, int64(i))
    aN := atomic.AddInt32(&sTestRecvCount, 1)
    if aN % (sTestClientCount * 2) == 0 {
-      fmt.Fprintf(os.Stderr, "message count %d, MB %d\n", aN, aB/(1024*1024))
+      fmt.Fprintf(os.Stderr, "messages %d, ohis %d, MB %d\n", aN, sTestRecvOhi, aB/(1024*1024))
    }
 }
 
@@ -318,7 +338,14 @@ func (o *tTestClient) cycleRead(iBuf []byte) (int, error) {
          aHead = tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(o.id), "Node":sTestNodeIds[o.id]}
          *sTestLogins[o.id]++
          loginSummary()
-      } else if o.count == 3 && o.id % 2 == 1 {
+      } else if o.count == 3 {
+         var aFor []tTestForOhi
+         aMax := int(sTestClientCount); if aMax > 100 { aMax = 100 }
+         for a := 0; a < aMax; a++ {
+            aFor = append(aFor, tTestForOhi{Id:"u"+fmt.Sprint(o.id/aMax*aMax+a)})
+         }
+         aHead = tMsg{"Op":eOhiEdit, "Id":fmt.Sprint(o.count), "For":aFor, "Type":"add"}
+      } else if o.count == 4 && o.id % 2 == 1 {
          aData = []byte("bing-bong!")
          aHead = tMsg{"Op":ePing, "Id":fmt.Sprint(o.count), "Datalen":len(aData),
                       "From":"a"+fmt.Sprint(o.id), "To":"a"+fmt.Sprint(o.id-1)}
@@ -379,7 +406,7 @@ func (o *tTestClient) Write(iBuf []byte) (int, error) {
          aI := 0; if o.action == eActVerifyRecv { aI = 2 }
          if aHead["msgid"] != nil {
             verifyWantEdit("mid", aHead["msgid"].(string))
-         } else if aHead["from"] != nil {
+         } else if aHead["from"] != nil && aOp != "ohi" {
             aS := ""; if o.action == eActVerifySend { aS = "s"; aI = 1 }
             verifyWantEdit(aS+"id", aHead["id"].(string))
             verifyWantEdit(aS+"pdt", aHead["posted"].(string))
@@ -396,10 +423,15 @@ func (o *tTestClient) Write(iBuf []byte) (int, error) {
       if aOp == "quit" {
          fmt.Fprintf(os.Stderr, "%d testclient.write got quit %s\n", o.id, aHead["info"].(string))
       }
+      if aHead["error"] != nil {
+         fmt.Fprintf(os.Stderr, "%d testclient.write error %s\n", o.id, aHead["error"].(string))
+      }
       //fmt.Printf("%d got %s\n", o.id, string(iBuf))
    }
 
-   if aHead["from"] != nil {
+   if aOp == "ohi" {
+      atomic.AddInt32(&sTestRecvOhi, 1)
+   } else if aHead["from"] != nil {
       aHeadsum := uint32(aHead["headsum"].(float64))
       delete(aHead, "headsum")
       if aHeadsum != crc32.Checksum(PackMsg(aHead, nil), sCrc32c) {
