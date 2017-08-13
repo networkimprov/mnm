@@ -109,50 +109,50 @@ func newTestClient(iAct tTestAction, iId int) *tTestClient {
       }
       aTc.work = []tTestWork{
         { msg : []byte(`00z1{"Op":3, "Uid":"noone"}`) ,
-          want: `{"info":"invalid header length","op":"quit"}` ,
+          want: `{"error":"invalid header length","op":"quit"}` ,
       },{ msg : []byte(`000a{"Op":12f3`) ,
-          want: `{"info":"invalid header","op":"quit"}` ,
+          want: `{"error":"invalid header","op":"quit"}` ,
       },{ head: tMsg{"Op":eLogin, "Uid":"noone", "NoId":"none"} ,
-          want: `{"info":"invalid header","op":"quit"}` ,
+          want: `{"error":"invalid header","op":"quit"}` ,
       },  aTmtpRev,
         { head: tMsg{"Op":eTmtpRev, "Id":"1"} ,
-          want: `{"info":"disallowed op repetition","op":"quit"}` ,
+          want: `{"error":"disallowed op repetition","op":"quit"}` ,
       },{ head: tMsg{"Op":eLogin, "Uid":"noone", "Node":"none"} ,
-          want: `{"info":"tmtprev was omitted","op":"quit"}` ,
+          want: `{"error":"tmtprev was omitted","op":"quit"}` ,
       },{ head: tMsg{"Op":ePost, "Id":"zyx", "Datalen":1, "For":[]tHeaderFor{{}}} ,
           data: `1` ,
-          want: `{"info":"disallowed op on unauthenticated link","op":"quit"}` ,
+          want: `{"error":"disallowed op on unauthenticated link","op":"quit"}` ,
       },  aTmtpRev,
         { head: tMsg{"Op":eRegister, "NewNode":"blue", "NewAlias":"_"} ,
           want: `{"nodeid":"#nid#","op":"registered","uid":"#uid#"}`+"\n"+
                 `{"info":"login ok","op":"info"}` ,
       },{ head: tMsg{"Op":eQuit} ,
-          want: `{"info":"logout ok","op":"quit"}` ,
+          want: `{"error":"logout ok","op":"quit"}` ,
       },  aTmtpRev,
         { head: tMsg{"Op":eRegister, "NewNode":"blue", "NewAlias":"LongJohn Silver"} ,
           want: `{"nodeid":"#nid#","op":"registered","uid":"#uid#"}`+"\n"+
                 `{"info":"login ok","op":"info"}` ,
       },{ head: tMsg{"Op":eQuit} ,
-          want: `{"info":"logout ok","op":"quit"}` ,
+          want: `{"error":"logout ok","op":"quit"}` ,
       },  aTmtpRev,
         { head: tMsg{"Op":eRegister, "NewNode":"blue", "NewAlias":"short"} ,
           want: `{"error":"newalias must be 8+ characters","nodeid":"#nid#","op":"registered","uid":"#uid#"}`+"\n"+
                 `{"info":"login ok","op":"info"}` ,
       },{ head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId), "Node":sTestNodeIds[iId]} ,
-          want: `{"info":"disallowed op on connected link","op":"quit"}` ,
+          want: `{"error":"disallowed op on connected link","op":"quit"}` ,
       },  aTmtpRev,
         { head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId), "Node":sTestNodeIds[iId], "Datalen":5} ,
           data: `extra` ,
-          want: `{"info":"invalid header","op":"quit"}` ,
+          want: `{"error":"invalid header","op":"quit"}` ,
       },  aTmtpRev,
         { head: tMsg{"Op":eLogin, "Uid":"noone", "Node":"none"} ,
-          want: `{"info":"corrupt base32 value","op":"quit"}` ,
+          want: `{"error":"corrupt base32 value","op":"quit"}` ,
       },  aTmtpRev,
         { head: tMsg{"Op":eLogin, "Uid":"noone", "Node":"LB27ML46"} ,
-          want: `{"info":"login failed","op":"quit"}` ,
+          want: `{"error":"login failed","op":"quit"}` ,
       },  aTmtpRev,
         { head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId+1), "Node":sTestNodeIds[iId+1]} ,
-          want: `{"info":"node already connected","op":"quit"}` ,
+          want: `{"error":"node already connected","op":"quit"}` ,
       },  aTmtpRev,
         { head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId), "Node":sTestNodeIds[iId]} ,
           want: `{"info":"login ok","op":"info"}`+"\n"+
@@ -188,7 +188,7 @@ func newTestClient(iAct tTestAction, iId int) *tTestClient {
                 `{"act":"alias","alias":"test1","datalen":0,"from":"u`+fmt.Sprint(iId)+`","gid":"talk","headsum":#sck#,"id":"#sid#","newalias":"test11","op":"member","posted":"#spdt#"}` ,
       },{ head: tMsg{"Op":ePing, "Id":"123", "Datalen":144, "To":"test2"} ,
           data: `123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 1234` ,
-          want: `{"info":"data too long for request type","op":"quit"}` ,
+          want: `{"error":"data too long for request type","op":"quit"}` ,
       },  aTmtpRev,
         { head: tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(iId), "Node":sTestNodeIds[iId]} ,
           want: `{"info":"login ok","op":"info"}`+"\n"+
@@ -205,7 +205,7 @@ func newTestClient(iAct tTestAction, iId int) *tTestClient {
                 `{"datalen":0,"for":[{"Id":"u`+fmt.Sprint(iId+1)+`","Type":0}],"from":"u`+fmt.Sprint(iId)+`","headsum":#sck#,"id":"#sid#","op":"ohiedit","posted":"#spdt#","type":"add"}`+"\n"+
                 `{"from":"u`+fmt.Sprint(iId)+`","op":"ohi","status":1}` ,
       },{ head: tMsg{"Op":eQuit} ,
-          want: `{"info":"logout ok","op":"quit"}`+"\n"+
+          want: `{"error":"logout ok","op":"quit"}`+"\n"+
                 `{"from":"u`+fmt.Sprint(iId)+`","op":"ohi","status":2}` ,
       },  aTmtpRev,
         { msg : []byte(`0034{"Op":2, "Uid":"u`+fmt.Sprint(iId)+`", "Node":"`+sTestNodeIds[iId]+`"}`+
@@ -223,9 +223,9 @@ func newTestClient(iAct tTestAction, iId int) *tTestClient {
       },{ head: tMsg{"Op":ePing, "Id":"123", "Datalen":8, "To":"test2"} ,
       },{ msg : []byte(`1234567`) ,
       },{ msg : []byte{255} ,
-          want: `{"info":"data contains non-ASCII characters","op":"quit"}` ,
+          want: `{"error":"data contains non-ASCII characters","op":"quit"}` ,
       },{ msg : []byte(`delay`) ,
-          want: `{"info":"login timeout","op":"quit"}` ,
+          want: `{"error":"login timeout","op":"quit"}` ,
       }}
    }
    return aTc
@@ -420,11 +420,9 @@ func (o *tTestClient) Write(iBuf []byte) (int, error) {
          sTestVerifyGot[aI] += string(iBuf[4:]) + "\n"
       }
    } else {
-      if aOp == "quit" {
-         fmt.Fprintf(os.Stderr, "%d testclient.write got quit %s\n", o.id, aHead["info"].(string))
-      }
       if aHead["error"] != nil {
-         fmt.Fprintf(os.Stderr, "%d testclient.write error %s\n", o.id, aHead["error"].(string))
+         fmt.Fprintf(os.Stderr, "%d testclient.write op %s error %s\n",
+                     o.id, aOp, aHead["error"].(string))
       }
       //fmt.Printf("%d got %s\n", o.id, string(iBuf))
    }

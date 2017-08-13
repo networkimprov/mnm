@@ -70,20 +70,20 @@ var sResponseOps = [...]string{
 }
 
 var (
-   sMsgLengthBad       = tMsg{"op":"quit", "info":"invalid header length"}
-   sMsgHeaderBad       = tMsg{"op":"quit", "info":"invalid header"}
-   sMsgBase32Bad       = tMsg{"op":"quit", "info":"corrupt base32 value"}
-   sMsgOpRedundant     = tMsg{"op":"quit", "info":"disallowed op repetition"}
-   sMsgOpDisallowedOff = tMsg{"op":"quit", "info":"disallowed op on unauthenticated link"}
-   sMsgOpDisallowedOn  = tMsg{"op":"quit", "info":"disallowed op on connected link"}
-   sMsgNeedTmtpRev     = tMsg{"op":"quit", "info":"tmtprev was omitted"}
-   sMsgRegisterFailure = tMsg{"op":"quit", "info":"register failure"} //todo details
-   sMsgLoginTimeout    = tMsg{"op":"quit", "info":"login timeout"}
-   sMsgLoginFailure    = tMsg{"op":"quit", "info":"login failed"}
-   sMsgLoginNodeOnline = tMsg{"op":"quit", "info":"node already connected"}
-   sMsgQuit            = tMsg{"op":"quit", "info":"logout ok"}
-   sMsgDatalenLimit    = tMsg{"op":"quit", "info":"data too long for request type"}
-   sMsgDataNonAscii    = tMsg{"op":"quit", "info":"data contains non-ASCII characters"}
+   sMsgLengthBad       = tMsg{"op":"quit", "error":"invalid header length"}
+   sMsgHeaderBad       = tMsg{"op":"quit", "error":"invalid header"}
+   sMsgBase32Bad       = tMsg{"op":"quit", "error":"corrupt base32 value"}
+   sMsgOpRedundant     = tMsg{"op":"quit", "error":"disallowed op repetition"}
+   sMsgOpDisallowedOff = tMsg{"op":"quit", "error":"disallowed op on unauthenticated link"}
+   sMsgOpDisallowedOn  = tMsg{"op":"quit", "error":"disallowed op on connected link"}
+   sMsgNeedTmtpRev     = tMsg{"op":"quit", "error":"tmtprev was omitted"}
+   sMsgRegisterFailure = tMsg{"op":"quit", "error":"register failure"} //todo details
+   sMsgLoginTimeout    = tMsg{"op":"quit", "error":"login timeout"}
+   sMsgLoginFailure    = tMsg{"op":"quit", "error":"login failed"}
+   sMsgLoginNodeOnline = tMsg{"op":"quit", "error":"node already connected"}
+   sMsgQuit            = tMsg{"op":"quit", "error":"logout ok"}
+   sMsgDatalenLimit    = tMsg{"op":"quit", "error":"data too long for request type"}
+   sMsgDataNonAscii    = tMsg{"op":"quit", "error":"data contains non-ASCII characters"}
 )
 
 // encoding without vowels to avoid words
@@ -202,7 +202,7 @@ func runLink(o *Link) {
    }
 
    if aQuitMsg != nil {
-      fmt.Printf("%s link.runlink quit %s\n", o.uid, aQuitMsg["info"].(string))
+      fmt.Printf("%s link.runlink quit %s\n", o.uid, aQuitMsg["error"].(string))
       o.conn.Write(PackMsg(aQuitMsg, nil))
    }
    o.conn.Close()
