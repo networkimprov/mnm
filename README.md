@@ -82,17 +82,21 @@ Each message starts with a header, wherein four hex digits give the size of a JS
 which may be followed by arbitrary format 8-bit data: 
 `001f{ ... <"dataLen":uint> }dataLen 8-bit bytes of data`
 
+Protocol errors by the client and login failure/timeout cause the server to terminate the connection 
+after emitting a quit response:  
+`{"op":"quit", "error":string}`
+
 Ack responses from the server have the following required headers:  
 `"id":string, "msgid":string, <"error":string>`
 
 Messages from the server have the following required message headers:  
 `"id":string, "from":string, "posted":string, "headsum":uint`
 
-0. TmtpRev gives the latest recognized protocol version; it must be the first message  
+0. TmtpRev gives the latest recognized protocol version; it must be the first message.  
 `{"op":0, "id":"1"}`  
 Response `{"op":"tmtprev", "id":"1"}`
 
-1. Register creates a user and client queue  
+0. Register creates a user and client queue.  
 _todo: receive-only accounts which cannot ping or post_  
 _todo: integrate with third party authentication services_  
 `{"op":1, "newnode":string <,"newalias":string>}`  
@@ -100,12 +104,12 @@ _todo: integrate with third party authentication services_
 Response _same as Login_  
 At node `{"op":"registered", "uid":string, "nodeid":string <,"error":string>}`
 
-2. Login connects a client to its queue  
+0. Login connects a client to its queue.  
 `{"op":2, "uid":string, "node":string}`  
-Response `{"op":"info|quit" "info":string}` (also given on login timeout)  
+Response `{"op":"info" "info":string, "ohi":[string,...]}`  
 At nodes `{"op":"login", (message headers), "datalen":0, "node":string}`
 
-3. UserEdit updates a user account  
+0. UserEdit updates a user account.  
 _todo: check & store label_  
 _todo: dropnode and dropalias; prevent account hijacking from stolen client/nodeid_  
 `{"op":3, "id":string, <"newnode":string | "newalias":string>}`  
@@ -113,41 +117,43 @@ _todo: dropnode and dropalias; prevent account hijacking from stolen client/node
 Response `{"op":"ack", (ack headers)}`  
 At nodes `{"op":"user", (message headers), "datalen":0, <"nodeid":string | "newalias":string>}`
 
-4. GroupInvite invites someone to a group, creating it if necessary  
-`{"op":4, "id":string, "gid":string, "datalen":uint, <"datasum":uint>, "from":string, "to":string}`  
+0. OhiEdit notifies selected contacts of a user's presence. 
+On first request after login, no "ohiedit" message is sent to user's nodes.  
+`{"op":4, "id":string, "for":[{"id":string}, ...], "type":"add|drop"}`  
+Response `{"op":"ack", (ack headers)}`  
+At nodes `{"op":"ohiedit", (message headers), datalen:0, "for":[{"id":string}, ...], "type":"add|drop"}`  
+At recipient `{"op":"ohi", "from":string, "status":uint}`
+
+0. GroupInvite invites someone to a group, creating it if necessary.  
+`{"op":5, "id":string, "gid":string, "datalen":uint, <"datasum":uint>, "from":string, "to":string}`  
 Response `{"op":"ack", (ack headers)}`  
 At recipient `{"op":"invite", (message headers), "datalen":uint, <"datasum":uint>, "gid":string, "to":string}`  
 At members `{"op":"member", (message headers), "datalen":0, "act":string, "gid":string, "alias":string, <"newalias":string>}`
 
-5. GroupEdit updates a group  
+0. GroupEdit updates a group.  
 _todo: moderated group_  
 _todo: closed group publishes aliases to moderators_  
-`{"op":5, "id":string, "act":"join" , "gid":string, <"newalias":string>}`  
-`{"op":5, "id":string, "act":"alias", "gid":string, "newalias":string}`  
-`{"op":5, "id":string, "act":"drop" , "gid":string, "to":string}`  
+`{"op":6, "id":string, "act":"join" , "gid":string, <"newalias":string>}`  
+`{"op":6, "id":string, "act":"alias", "gid":string, "newalias":string}`  
+`{"op":6, "id":string, "act":"drop" , "gid":string, "to":string}`  
 Response `{"op":"ack", (ack headers)}`  
 At members `{"op":"member", (message headers), "datalen":0, "act":string, "gid":string, "alias":string, <"newalias":string>}`
 
-6. Post sends a message to users and/or groups  
-`{"op":6, "id":string, "datalen":uint, <"datasum":uint>, "for":[{"id":string, "type":uint}, ...]}`  
+0. Post sends a message to users and/or groups.  
+`{"op":7, "id":string, "datalen":uint, <"datasum":uint>, "for":[{"id":string, "type":uint}, ...]}`  
 .for[i].type: 1) user_id, 2) group_id (include self) 3) group_id (exclude self)  
 Response `{"op":"ack", (ack headers)}`  
 At recipient `{"op":"delivery", (message headers), "datalen":uint, <"datasum":uint>}`
 
-7. Ping sends a short text message via a user's alias.
+0. Ping sends a short text message via a user's alias.
 A reply establishes contact between the parties.  
 _todo: limit number of pings per 24h and consecutive failed pings_  
-`{"op":7, "id":string, "datalen":uint, <"datasum":uint>, "to":string}`  
+`{"op":8, "id":string, "datalen":uint, <"datasum":uint>, "to":string}`  
 Response `{"op":"ack", (ack headers)}`  
 At recipient `{"op":"ping", (message headers), "datalen":uint, <"datasum":uint>, "to":string}`
 
-8. Ohi notifies chat contacts of presence (in progress)  
-`{"op":8, "id":string, "for":[{"id":string}, ...]}`  
-Response `{"op":"ack", "id":string, <"error":string>}`  
-At recipient `{"op":"ohi", (message headers), "datalen":0}`
-
-9. Ack acknowledges receipt of a message  
+0. Ack acknowledges receipt of a message.  
 `{"op":9, "id":string, "type":string}`
 
-10. Quit performs logout  
+0. Quit performs logout.  
 `{"op":10}`
