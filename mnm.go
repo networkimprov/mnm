@@ -2,6 +2,9 @@ package main
 
 import (
    "fmt"
+   "io/ioutil"
+   "encoding/json"
+   "net"
    "os"
    "qlib"
    "strconv"
@@ -10,6 +13,9 @@ import (
 
 const kVersionA, kVersionB, kVersionC = 0, 0, 0
 const kVersionDate = "(unreleased)"
+const kConfigFile = "mnm.config"
+
+var sConfig tConfig
 
 
 func main() { os.Exit(mainResult()) }
@@ -25,22 +31,70 @@ func mainResult() int {
          fmt.Fprintf(os.Stderr, "testclient count must be 2-1000\n")
          return 1
       }
+   } else {
+      err = sConfig.load()
+      if err != nil {
+         if !os.IsNotExist(err) {
+            fmt.Fprintf(os.Stderr, "config load: %s\n", err.Error())
+            return 1
+         }
+      } else {
+         aTcNum = 0
+      }
    }
 
    fmt.Printf("mnm tmtp server v%d.%d.%d %s\n", kVersionA, kVersionB, kVersionC, kVersionDate)
 
-   aDb, err := tst_udb.NewUserDb("./userdb")
-   if err != nil { panic(err) }
-   aDb.Init()
+   aDbName := "userdb"; if aTcNum != 0 { aDbName += "-test-qlib" }
+   qlib.UDb, err = tst_udb.NewUserDb(aDbName)
+   if err != nil {
+      fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+      return 1
+   }
 
-   qlib.UDb = aDb
    qlib.Init("qstore")
 
-   fmt.Printf("Starting Test Pass\n")
-   qlib.LocalTest(aTcNum)
+   if aTcNum != 0 {
+      fmt.Printf("Starting Test Pass\n")
+      qlib.LocalTest(aTcNum)
+   } else {
+      err = startServer(&sConfig)
+      if err != nil {
+         fmt.Fprintf(os.Stderr, "server exit: %s\n", err.Error())
+         return 1
+      }
+   }
 
    return 0
 }
+
+type tConfig struct {
+   Listen struct {
+      Net string
+      Laddr string
+   }
+}
+
+func (o *tConfig) load() error {
+   aBuf, err := ioutil.ReadFile(kConfigFile)
+   if err != nil { return err }
+   err = json.Unmarshal(aBuf, o)
+   return err
+}
+
+func startServer(iConf *tConfig) error {
+   aListener, err := net.Listen(iConf.Listen.Net, iConf.Listen.Laddr)
+   if err != nil { return err }
+   defer aListener.Close()
+
+   for {
+      var aConn net.Conn
+      aConn, err = aListener.Accept()
+      if err != nil { return err }
+      qlib.NewLink(aConn)
+   }
+}
+
 
 /* moved to qlib/testclient.go
 const ( _=iota; eRegister; eAddNode; eLogin; eListEdit; ePost; ePing; eAck )
