@@ -129,7 +129,7 @@ type UserDatabase interface {
 }
 
 
-type Link struct { // network client msg handler
+type tLink struct { // network client msg handler
    conn net.Conn // link to client
    queue *tQueue
    tmtprev string
@@ -137,13 +137,11 @@ type Link struct { // network client msg handler
    ohi *tOhiSet
 }
 
-func NewLink(iConn net.Conn) *Link {
-   aL := &Link{conn:iConn}
-   go runLink(aL)
-   return aL
+func NewLink(iConn net.Conn) {
+   go runLink(&tLink{conn:iConn})
 }
 
-func runLink(o *Link) {
+func runLink(o *tLink) {
    aBuf := make([]byte, kMsgHeaderMaxLen+4) //todo start smaller, realloc as needed
    var aPos, aHeadEnd int64
    var aQuitMsg tMsg
@@ -189,7 +187,7 @@ func runLink(o *Link) {
          aEnd := aHeadEnd + aHead.DataLen; if aPos < aEnd { aEnd = aPos }
          aData = aBuf[aHeadEnd:aEnd]
       }
-      aQuitMsg = o.HandleMsg(aHead, aData)
+      aQuitMsg = o.handleMsg(aHead, aData)
       if aQuitMsg != nil {
          break
       }
@@ -257,7 +255,7 @@ func (o *tHeader) check() bool {
    return !aFail
 }
 
-func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
+func (o *tLink) handleMsg(iHead *tHeader, iData []byte) tMsg {
    var err error
    var aMid string
 
@@ -464,7 +462,7 @@ func (o *Link) HandleMsg(iHead *tHeader, iData []byte) tMsg {
    return nil
 }
 
-func (o *Link) checkPing(iHead *tHeader, iData *[]byte) error {
+func (o *tLink) checkPing(iHead *tHeader, iData *[]byte) error {
    for len(*iData) < int(iHead.DataLen) {
       aLen, err := o.conn.Read((*iData)[len(*iData):iHead.DataLen]) // panics if cap() < DataLen
       if err != nil { return err }
@@ -478,7 +476,7 @@ func (o *Link) checkPing(iHead *tHeader, iData *[]byte) error {
    return nil
 }
 
-func (o *Link) sendOhi(iNodes []string, iStat int8) {
+func (o *tLink) sendOhi(iNodes []string, iStat int8) {
    for _, aNid := range iNodes {
       aNd := GetNode(aNid)
       aNd.dir.RLock()
@@ -488,14 +486,14 @@ func (o *Link) sendOhi(iNodes []string, iStat int8) {
          case aNd.queue.ohi <- tOhiMsg{from:o.uid, status:iStat}:
             aTmr.Stop()
          case <-aTmr.C:
-            fmt.Fprintf(os.Stderr, "%s link.handlemsg ohiedit timeout node %s\n", o.uid, aNid)
+            fmt.Fprintf(os.Stderr, "%s link.sendohi timeout node %s\n", o.uid, aNid)
          }
       }
       aNd.dir.RUnlock()
    }
 }
 
-func (o *Link) ack(iId, iMsgId string, iErr error) {
+func (o *tLink) ack(iId, iMsgId string, iErr error) {
    aMsg := tMsg{"op":"ack", "id":iId, "msgid":iMsgId}
    if iErr != nil {
       aMsg["error"] = iErr.Error()
@@ -503,7 +501,7 @@ func (o *Link) ack(iId, iMsgId string, iErr error) {
    o.conn.Write(PackMsg(aMsg, nil))
 }
 
-func (o *Link) postMsg(iHead *tHeader, iEtc tMsg, iData []byte) (aMsgId string, err error) {
+func (o *tLink) postMsg(iHead *tHeader, iEtc tMsg, iData []byte) (aMsgId string, err error) {
    aMsgId = sStore.MakeId()
    aHead := tMsg{"op":sResponseOps[iHead.Op], "id":aMsgId, "from":o.uid, "datalen":iHead.DataLen,
                  "posted":time.Now().UTC().Format(kPostDateFormat)}
@@ -695,7 +693,7 @@ func GetNode(iNode string) *tNode {
 type tQueue struct {
    node string
    connChan chan net.Conn // control access to conn
-   hasConn int32 // in use by Link
+   hasConn int32 // in use by tLink
    ack chan string // forwards acks from client
    buf []string // elastic channel buffer
    in chan string // elastic channel input
