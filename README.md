@@ -56,6 +56,7 @@ http://github.com/networkimprov/websocket.MQ
 - qlib/testclient.go: in-process test client, invoked from main()
 - userdb.go: user records management
 - mnm.go: main(), frontends (coming soon)
+- mnm.conf: site-specific parameters; rename to mnm.config to enable TCP server
 - codestyle.txt: how to make Go source much more clear
 - After build & run:  
 mnm: the app!  
@@ -66,7 +67,7 @@ qstore/: queued messages awaiting delivery
 
 1. go get github.com/networkimprov/mnm
 
-2. go run mnm #currently starts test sequence  
+2. go run mnm [testclient_count] #currently starts test sequence  
 _todo: prompt for key (or --key option) to decrypt userdb directory_
 
 ### TMTP Summary
@@ -112,6 +113,7 @@ At nodes `{"op":"login", (message headers), "datalen":0, "node":string}`
 0. UserEdit updates a user account.  
 _todo: check & store label_  
 _todo: dropnode and dropalias; prevent account hijacking from stolen client/nodeid_  
+_todo: cork stops delivery to user's nodes, params date & for-list_  
 `{"op":3, "id":string, <"newnode":string | "newalias":string>}`  
 .newnode is the user label for a client device  
 Response `{"op":"ack", (ack headers)}`  
