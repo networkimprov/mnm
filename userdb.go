@@ -59,8 +59,13 @@ type tMember struct {
    Joined bool // use a date here?
 }
 
-type tUserDbErr string
-func (o tUserDbErr) Error() string { return string(o) }
+type tUdbError struct {
+   msg string
+   id int
+}
+func (o *tUdbError) Error() string { return string(o.msg) }
+
+const ( _=iota; )
 
 type tType string
 const (
