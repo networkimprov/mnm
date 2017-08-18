@@ -282,6 +282,22 @@ func TestUserDb(iPath string) {
       fReport("invalid alias case succeeded: DropAlias")
    }
 
+   // VERIFY
+   aUid1 = "AddUserUid1"
+   aNode1 = "AddUserN1"
+   _, err = aDb.Verify(aUid1, aNode1)
+   if err != nil {
+      fReport("verify case failed")
+   }
+   _, err = aDb.Verify(aUid1, "VerifyN0")
+   if err == nil || err.(*tUdbError).id != eErrNodeInvalid {
+      fReport("invalid node case succeeded: Verify")
+   }
+   _, err = aDb.Verify("VerifyUid0", aNode1)
+   if err == nil || err.(*tUdbError).id != eErrUserInvalid {
+      fReport("invalid user case succeeded: Verify")
+   }
+
    if aOk {
       fmt.Println("UserDb tests passed")
    }
@@ -506,6 +522,23 @@ func (o *tUserDb) DropAlias(iUid, iNode, iAlias string) error {
 func (o *tUserDb) Verify(iUid, iNode string) (aQid string, err error) {
    //: return Qid of node
    //: iUid has iNode
+   aUser, err := o.fetchUser(iUid, eFetchCheck)
+   if err != nil { panic(err) }
+
+   if aUser == nil {
+      return "", &tUdbError{id: eErrUserInvalid, msg: fmt.Sprintf("Verify: iUid %s not found", iUid)}
+   }
+
+   aUser.RLock()
+   defer aUser.RUnlock()
+
+   if aUser.Nodes[iNode].Defunct {
+      return "", &tUdbError{id: eErrNodeInvalid, msg: fmt.Sprintf("Verify: iNode %s defunct", iNode)}
+   }
+   aQid = iNode //todo set properly
+   if aUser.Nodes[iNode].Qid != aQid {
+      return "", &tUdbError{id: eErrNodeInvalid, msg: fmt.Sprintf("Verify: iNode %s invalid", iNode)}
+   }
    return aQid, nil
 }
 
