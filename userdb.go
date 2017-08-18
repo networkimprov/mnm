@@ -39,7 +39,7 @@ type tUserDb struct {
 }
 
 type tUser struct {
-   door sync.RWMutex
+   sync.RWMutex
    Nodes map[string]int // value is NodeRef
    Aliases []tAlias // public names for the user
 }
@@ -50,7 +50,7 @@ type tAlias struct {
 }
 
 type tGroup struct {
-   door sync.RWMutex
+   sync.RWMutex
    Uid map[string]tMember
 }
 
