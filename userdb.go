@@ -298,6 +298,26 @@ func TestUserDb(iPath string) {
       fReport("invalid user case succeeded: Verify")
    }
 
+   // OPEN/CLOSENODES
+   aUid1 = "AddUserUid1"
+   var aNodes []string
+   aNodes, err = aDb.OpenNodes(aUid1)
+   if err != nil || len(aNodes) != 1 {
+      fReport("opennodes case failed")
+   }
+   err = aDb.CloseNodes(aUid1)
+   if err != nil {
+      fReport("closenodes case failed")
+   }
+   _, err = aDb.OpenNodes("OpenNodesUid0")
+   if err == nil || err.(*tUdbError).id != eErrUserInvalid {
+     fReport("invalid user case succeeded: OpenNodes")
+   }
+   err = aDb.CloseNodes("CloseNodesUid0")
+   if err == nil || err.(*tUdbError).id != eErrUserInvalid {
+     fReport("invalid user case succeeded: CloseNodes")
+   }
+
    if aOk {
       fmt.Println("UserDb tests passed")
    }
@@ -542,9 +562,36 @@ func (o *tUserDb) Verify(iUid, iNode string) (aQid string, err error) {
    return aQid, nil
 }
 
-func (o *tUserDb) GetNodes(iUid string) (aQids []string, err error) {
+func (o *tUserDb) OpenNodes(iUid string) (aQids []string, err error) {
    //: return Qids for iUid
+   aUser, err := o.fetchUser(iUid, eFetchCheck)
+   if err != nil { panic(err) }
+
+   if aUser == nil {
+      return aQids, &tUdbError{id: eErrUserInvalid, msg: fmt.Sprintf("OpenNodes: iUid %s not found", iUid)}
+   }
+
+   aUser.RLock()
+
+   for _, aNode := range aUser.Nodes {
+      if !aNode.Defunct {
+         aQids = append(aQids, aNode.Qid)
+      }
+   }
    return aQids, nil
+}
+
+func (o *tUserDb) CloseNodes(iUid string) error {
+   //: done with nodes
+   aUser, err := o.fetchUser(iUid, eFetchCheck)
+   if err != nil { panic(err) }
+
+   if aUser == nil {
+      return &tUdbError{id: eErrUserInvalid, msg: fmt.Sprintf("CloseNodes: iUid %s not found", iUid)}
+   }
+
+   aUser.RUnlock()
+   return nil
 }
 
 func (o *tUserDb) Lookup(iAlias string) (aUid string, err error) {
