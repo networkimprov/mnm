@@ -80,7 +80,7 @@ const (
    _=iota;
    eErrArgument;
    eErrMissingNode;
-   eErrUserInvalid; eErrNodeInvalid; eErrMaxNodes; eErrLastNode;
+   eErrUserInvalid; eErrMaxNodes; eErrNodeInvalid; eErrLastNode;
    eErrUnknownAlias; eErrAliasTaken; eErrAliasInvalid;
 )
 
@@ -154,36 +154,28 @@ func TestUserDb(iPath string) {
 
    // ADDNODE
    aUid1, aUid2 = "AddUserUid1", "AddNodeUid2"
-   aNode1, aNode2 = "AddUserN1", "AddNodeN2"
-   _, err = aDb.AddNode(aUid1, aNode1, aNode2)
-   if err != nil || aDb.user[aUid1].Nodes[aNode2].Qid != aNode2 {
+   aNode1 = "AddNodeN2"
+   _, err = aDb.AddNode(aUid1, aNode1)
+   if err != nil || aDb.user[aUid1].Nodes[aNode1].Qid != aNode1 {
       fReport("add case failed")
    }
-   _, err = aDb.AddNode(aUid1, aNode1, aNode2)
-   if err != nil || aDb.user[aUid1].Nodes[aNode2].Qid != aNode2 {
+   _, err = aDb.AddNode(aUid1, aNode1)
+   if err != nil || aDb.user[aUid1].Nodes[aNode1].Qid != aNode1 {
       fReport("re-add case failed")
    }
-   _, err = aDb.AddNode(aUid1, aNode1, aNode1)
-   if err == nil || err.(*tUdbError).id != eErrArgument {
-      fReport("iNode==iNewNode case succeeded: AddNode")
-   }
-   _, err = aDb.AddNode(aUid1, "AddNodeN0", aNode2)
-   if err == nil || err.(*tUdbError).id != eErrNodeInvalid {
-      fReport("invalid node case succeeded: AddNode")
-   }
-   _, err = aDb.AddNode("AddNodeUid0", aNode1, aNode2)
+   _, err = aDb.AddNode("AddNodeUid0", aNode1)
    if err == nil || err.(*tUdbError).id != eErrUserInvalid {
       fReport("invalid user case succeeded: AddNode")
    }
-   aDb.AddUser(aUid2, aNode2)
+   aDb.AddUser(aUid2, aNode1)
    for a := 1; a < 100; a++ {
-      _, err = aDb.AddNode(aUid2, aNode2, "AddNodeN0"+fmt.Sprint(a))
+      _, err = aDb.AddNode(aUid2, "AddNodeN0"+fmt.Sprint(a))
       if err != nil {
          fReport("add 100 case failed")
          break
       }
    }
-   _, err = aDb.AddNode(aUid2, aNode2, "AddNodeN100")
+   _, err = aDb.AddNode(aUid2, "AddNodeN100")
    if err == nil || err.(*tUdbError).id != eErrMaxNodes {
       fReport("add >100 case succeeded: AddNode")
    }
@@ -203,7 +195,7 @@ func TestUserDb(iPath string) {
    if err == nil || err.(*tUdbError).id != eErrNodeInvalid {
       fReport("invalid node case succeeded: DropNode")
    }
-   _, err = aDb.DropNode("DropNodeUid0", "AddUserN1")
+   _, err = aDb.DropNode("DropNodeUid0", aNode1)
    if err == nil || err.(*tUdbError).id != eErrUserInvalid {
       fReport("invalid user case succeeded: DropNode")
    }
@@ -215,69 +207,60 @@ func TestUserDb(iPath string) {
 
    // ADDALIAS
    aUid1, aUid2 = "AddUserUid1", "AddAliasUid2"
-   aNode1, aNode2 = "AddUserN1", "AddAliasN2"
-   err = aDb.AddAlias(aUid1, aNode1, aNat, "AddAliasA1")
+   aNode1 = "AddAliasN2"
+   err = aDb.AddAlias(aUid1, aNat, "AddAliasA1")
    if err != nil || aDb.alias[aNat] != aUid1 || aDb.alias["AddAliasA1"] != aUid1 {
       fReport("add both case failed")
    }
-   err = aDb.AddAlias(aUid1, aNode1, aNat, "AddAliasA1")
+   err = aDb.AddAlias(aUid1, aNat, "AddAliasA1")
    if err != nil || aDb.alias[aNat] != aUid1 || aDb.alias["AddAliasA1"] != aUid1 {
       fReport("re-add both case failed")
    }
-   err = aDb.AddAlias(aUid1, aNode1, "", "AddAliasA2")
+   err = aDb.AddAlias(aUid1, "", "AddAliasA2")
    if err != nil || aDb.alias["AddAliasA2"] != aUid1 {
       fReport("add en case failed")
    }
-   err = aDb.AddAlias(aUid1, aNode1, aNat+"2", "")
+   err = aDb.AddAlias(aUid1, aNat+"2", "")
    if err != nil || aDb.alias[aNat+"2"] != aUid1 {
       fReport("add nat case failed")
    }
-   err = aDb.AddAlias(aUid1, aNode1, aNat+"2", "AddAliasA3")
+   err = aDb.AddAlias(aUid1, aNat+"2", "AddAliasA3")
    if err != nil || aDb.alias[aNat+"2"] != aUid1 || aDb.alias["AddAliasA3"] != aUid1 {
       fReport("re-add nat case failed")
    }
-   err = aDb.AddAlias(aUid1, aNode1, aNat, aNat)
+   err = aDb.AddAlias(aUid1, aNat, aNat)
    if err == nil || err.(*tUdbError).id != eErrArgument {
       fReport("iNat==iEn case succeeded: AddAlias")
    }
-   err = aDb.AddAlias(aUid1, "AddAliasN0", aNat, "")
-   if err == nil || err.(*tUdbError).id != eErrNodeInvalid {
-      fReport("invalid node case succeeded: AddAlias")
-   }
-   err = aDb.AddAlias("AddAliasUid0", aNode1, aNat, "")
+   err = aDb.AddAlias("AddAliasUid0", aNat, "")
    if err == nil || err.(*tUdbError).id != eErrUserInvalid {
       fReport("invalid user case succeeded: AddAlias")
    }
-   aDb.AddUser(aUid2, aNode2)
-   err = aDb.AddAlias(aUid2, aNode2, aNat, "")
+   aDb.AddUser(aUid2, aNode1)
+   err = aDb.AddAlias(aUid2, aNat, "")
    if err == nil || err.(*tUdbError).id != eErrAliasTaken {
       fReport("already taken case succeeded: AddAlias")
    }
 
    // DROPALIAS
    aUid1, aUid2 = "AddUserUid1", "AddAliasUid2"
-   aNode1, aNode2 = "AddUserN1", "AddAliasN2"
-   err = aDb.DropAlias(aUid1, aNode1, "AddAliasA1")
+   err = aDb.DropAlias(aUid1, "AddAliasA1")
    if err != nil || aDb.alias["AddAliasA1"] != kAliasDefunctUid {
       fReport("drop en case failed")
    }
-   err = aDb.DropAlias(aUid1, aNode1, "AddAliasA1")
+   err = aDb.DropAlias(aUid1, "AddAliasA1")
    if err != nil || aDb.alias["AddAliasA1"] != kAliasDefunctUid {
       fReport("re-drop en case failed")
    }
-   err = aDb.DropAlias(aUid1, aNode1, aNat)
+   err = aDb.DropAlias(aUid1, aNat)
    if err != nil || aDb.alias[aNat] != kAliasDefunctUid {
       fReport("drop nat case failed")
    }
-   err = aDb.DropAlias(aUid1, "DropAliasN1", aNat)
-   if err == nil || err.(*tUdbError).id != eErrNodeInvalid {
-      fReport("invalid node case succeeded: DropAlias")
-   }
-   err = aDb.DropAlias("DropAliasUid0", aNode1, aNat)
+   err = aDb.DropAlias("DropAliasUid0", aNat)
    if err == nil || err.(*tUdbError).id != eErrUserInvalid {
       fReport("invalid user case succeeded: DropAlias")
    }
-   err = aDb.DropAlias(aUid2, aNode2, "AddAliasA2")
+   err = aDb.DropAlias(aUid2, "AddAliasA2")
    if err == nil || err.(*tUdbError).id != eErrAliasInvalid {
       fReport("invalid alias case succeeded: DropAlias")
    }
@@ -354,14 +337,9 @@ func (o *tUserDb) AddUser(iUid, iNewNode string) (aQid string, err error) {
    return aQid, nil
 }
 
-func (o *tUserDb) AddNode(iUid, iNode, iNewNode string) (aQid string, err error) {
+func (o *tUserDb) AddNode(iUid, iNewNode string) (aQid string, err error) {
    //: add node
-   //: iUid has iNode
    //: iUid may already have iNewNode
-   if iNode == iNewNode {
-      return "", &tUdbError{id: eErrArgument, msg: fmt.Sprintf("AddNode: iNode & iNewNode both %s", iNode)}
-   }
-
    aUser, err := o.fetchUser(iUid, eFetchCheck)
    if err != nil { panic(err) }
 
@@ -372,24 +350,20 @@ func (o *tUserDb) AddNode(iUid, iNode, iNewNode string) (aQid string, err error)
    aUser.Lock()
    defer aUser.Unlock()
 
-   aNodeQid := iNode //todo generate properly
-   aNewNodeQid := iNewNode
-   if aUser.Nodes[iNode].Qid != aNodeQid {
-      return "", &tUdbError{id: eErrNodeInvalid, msg: fmt.Sprintf("AddNode: iNode %s invalid", iNode)}
-   }
-   if aUser.Nodes[iNewNode].Qid == aNewNodeQid {
-      return aNewNodeQid, nil
+   aQid = iNewNode //todo generate properly
+   if aUser.Nodes[iNewNode].Qid == aQid {
+      return aQid, nil
    }
    if aUser.NonDefunctNodesCount == kUserNodeMax {
       return "", &tUdbError{id: eErrMaxNodes, msg: fmt.Sprintf("AddNode: Exceeds %d nodes", kUserNodeMax)}
    }
 
-   aUser.Nodes[iNewNode] = tNode{Defunct: false, Qid: aNewNodeQid}
+   aUser.Nodes[iNewNode] = tNode{Defunct: false, Qid: aQid}
    aUser.NonDefunctNodesCount++
 
    err = o.putRecord(eTuser, iUid, aUser)
    if err != nil { panic(err) }
-   return aNewNodeQid, nil
+   return aQid, nil
 }
 
 func (o *tUserDb) DropNode(iUid, iNode string) (aQid string, err error) {
@@ -424,11 +398,9 @@ func (o *tUserDb) DropNode(iUid, iNode string) (aQid string, err error) {
    return aQid, nil
 }
 
-func (o *tUserDb) AddAlias(iUid, iNode, iNat, iEn string) error {
+func (o *tUserDb) AddAlias(iUid, iNat, iEn string) error {
    //: add aliases to iUid and o.alias
-   //: iUid has iNode
    //: iNat != iEn, iNat or iEn != ""
-
    if iNat == iEn {
       return &tUdbError{id: eErrArgument, msg: fmt.Sprintf("AddAlias: iNat & iEn both %s", iNat)}
    }
@@ -438,14 +410,6 @@ func (o *tUserDb) AddAlias(iUid, iNode, iNat, iEn string) error {
 
    if aUser == nil {
       return &tUdbError{id: eErrUserInvalid, msg: fmt.Sprintf("AddAlias: iUid %s not found", iUid)}
-   }
-
-   aUser.Lock()
-   defer aUser.Unlock()
-
-   aQid := iNode
-   if aUser.Nodes[iNode].Qid != aQid {
-      return &tUdbError{id: eErrNodeInvalid, msg: fmt.Sprintf("AddAlias: iNode %s invalid", iNode)}
    }
 
    aAliases := [...]string{iNat, iEn}
@@ -476,6 +440,9 @@ func (o *tUserDb) AddAlias(iUid, iNode, iNat, iEn string) error {
    }
    o.aliasDoor.Unlock()
 
+   aUser.Lock()
+   defer aUser.Unlock()
+
    aUser.Aliases = append(aUser.Aliases, tAlias{En: iEn, Nat: iNat})
    err = o.putRecord(eTuser, iUid, aUser)
    if err != nil { panic(err) }
@@ -483,11 +450,9 @@ func (o *tUserDb) AddAlias(iUid, iNode, iNat, iEn string) error {
    return nil
 }
 
-func (o *tUserDb) DropAlias(iUid, iNode, iAlias string) error {
+func (o *tUserDb) DropAlias(iUid, iAlias string) error {
    //: mark alias defunct in o.alias
-   //: iUid has iNode
    //: iAlias for iUid
-
    aUser, err := o.fetchUser(iUid, eFetchCheck)
    if err != nil { panic(err) }
 
@@ -497,11 +462,6 @@ func (o *tUserDb) DropAlias(iUid, iNode, iAlias string) error {
 
    aUser.Lock()
    defer aUser.Unlock()
-
-   aQid := iNode //todo set properly
-   if aUser.Nodes[iNode].Qid != aQid {
-      return &tUdbError{id: eErrNodeInvalid, msg: fmt.Sprintf("DropAlias: iNode %s invalid", iNode)}
-   }
 
    // check for retry
    for _, aAlias := range aUser.Aliases {
