@@ -450,6 +450,23 @@ func TestUserDb(iPath string) {
       fReport("invalid alias case succeeded: GroupQuit")
    }
 
+   // GROUPGETUSERS
+   aGid1 = "GjoinGid2"
+   aUid1 = "AddUserUid1"
+   var aUids []string
+   aUids, err = aDb.GroupGetUsers(aGid1, aUid1)
+   if err != nil || len(aUids) != 2 {
+      fReport("getusers case failed")
+   }
+   _, err = aDb.GroupGetUsers(aGid1, "GgetusersUid0")
+   if err == nil || err.(*tUdbError).id != eErrUserInvalid {
+      fReport("invalid user case succeeded: GroupGetUsers")
+   }
+   _, err = aDb.GroupGetUsers("GgetusersGid0", aUid1)
+   if err == nil || err.(*tUdbError).id != eErrGroupInvalid {
+      fReport("invalid group case succeeded: GroupGetUsers")
+   }
+
    if aOk {
       fmt.Println("UserDb tests passed")
    }
@@ -896,6 +913,27 @@ func (o *tUserDb) GroupQuit(iGid, iAlias, iByUid string) (aUid string, err error
 func (o *tUserDb) GroupGetUsers(iGid, iByUid string) (aUids []string, err error) {
    //: return uids in iGid
    //: iByUid is member
+   aGroup, err := o.fetchGroup(iGid, eFetchCheck)
+   if err != nil { panic(err) }
+
+   if aGroup == nil {
+      return nil, &tUdbError{id: eErrGroupInvalid, msg: fmt.Sprintf("GroupGetUsers: iGid %s not found", iGid)}
+   }
+
+   aGroup.RLock()
+   defer aGroup.RUnlock()
+
+   if aGroup.Uid[iByUid].Status != eStatJoined &&
+      aGroup.Uid[iByUid].Status != eStatInvited {
+      return nil, &tUdbError{id: eErrUserInvalid, msg: fmt.Sprintf("GroupGetUsers: iByUid %s not a member", iByUid)}
+   }
+
+   for aK, aV := range aGroup.Uid {
+      if aV.Status == eStatJoined {
+         aUids = append(aUids, aK)
+      }
+   }
+
    return aUids, nil
 }
 
