@@ -391,6 +391,31 @@ func TestUserDb(iPath string) {
       fReport("invalid user case succeeded: GroupJoin")
    }
 
+   // GROUPALIAS
+   aGid1 = "GjoinGid1"
+   aUid1 = "AddUserUid1"
+   aAlias1 = "GjoinA1"
+   _, err = aDb.GroupAlias(aGid1, aUid1, aAlias1)
+   if err != nil || aDb.group[aGid1].Uid[aUid1].Alias != aAlias1 {
+      fReport("alias case failed")
+   }
+   _, err = aDb.GroupAlias(aGid1, aUid1, aAlias1)
+   if err != nil || aDb.group[aGid1].Uid[aUid1].Alias != aAlias1 {
+      fReport("re-alias case failed")
+   }
+   _, err = aDb.GroupAlias(aGid1, aUid1, "GaliasA0")
+   if err == nil || err.(*tUdbError).id != eErrAliasInvalid {
+      fReport("invalid alias case succeeded: GroupAlias")
+   }
+   _, err = aDb.GroupAlias("GaliasGid0", aUid1, aAlias1)
+   if err == nil || err.(*tUdbError).id != eErrGroupInvalid {
+      fReport("invalid group case succeeded: GroupAlias")
+   }
+   _, err = aDb.GroupAlias(aGid1, "GaliasUid0", aAlias1)
+   if err == nil || err.(*tUdbError).id != eErrUserInvalid {
+      fReport("invalid group case succeeded: GroupAlias")
+   }
+
    if aOk {
       fmt.Println("UserDb tests passed")
    }
@@ -766,6 +791,31 @@ func (o *tUserDb) GroupAlias(iGid, iUid, iNewAlias string) (aAlias string, err e
    //: update member alias
    //: iUid in group
    //: iNewAlias for iUid
+   aGroup, err := o.fetchGroup(iGid, eFetchCheck)
+   if err != nil { panic(err) }
+
+   if aGroup == nil {
+      return "", &tUdbError{id: eErrGroupInvalid, msg: fmt.Sprintf("GroupAlias: iGid %s not found", iGid)}
+   }
+
+   aGroup.Lock()
+   defer aGroup.Unlock()
+
+   if aGroup.Uid[iUid].Status != eStatJoined {
+      return "", &tUdbError{id: eErrUserInvalid, msg: fmt.Sprintf("GroupAlias: iUid %s not a member", iUid)}
+   }
+   if iNewAlias == aGroup.Uid[iUid].Alias {
+      return iNewAlias, nil
+   }
+   aUid, _ := o.Lookup(iNewAlias)
+   if aUid != iUid {
+      return "", &tUdbError{id: eErrAliasInvalid, msg: fmt.Sprintf("GroupAlias: iNewAlias %s not for iUid %s", iNewAlias, iUid)}
+   }
+   aAlias = aGroup.Uid[iUid].Alias
+   aGroup.Uid[iUid] = tMember{Alias: iNewAlias, Status: aGroup.Uid[iUid].Status}
+
+   err = o.putRecord(eTgroup, iGid, aGroup)
+   if err != nil { panic(err) }
    return aAlias, nil
 }
 
