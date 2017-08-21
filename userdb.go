@@ -416,6 +416,40 @@ func TestUserDb(iPath string) {
       fReport("invalid group case succeeded: GroupAlias")
    }
 
+   // GROUPQUIT
+   aGid1 = "GjoinGid1"
+   aUid1, aUid2 = "AddUserUid1", "GjoinUid2"
+   aAlias1 = "GjoinA1"
+   var aUid string
+   aUid, err = aDb.GroupQuit(aGid1, aAlias1, aUid1)
+   if err != nil || aDb.group[aGid1].Uid[aUid].Status != eStatInvited {
+      fReport("quit self case failed")
+   }
+   aUid, err = aDb.GroupQuit(aGid1, aAlias1, aUid1)
+   if err != nil || aDb.group[aGid1].Uid[aUid].Status != eStatInvited {
+      fReport("re-quit self case failed")
+   }
+   aUid, err = aDb.GroupQuit(aGid1, aAlias1, aUid2)
+   if err != nil || aDb.group[aGid1].Uid[aUid].Status != eStatBarred {
+      fReport("quit other case failed")
+   }
+   aUid, err = aDb.GroupQuit(aGid1, aAlias1, aUid2)
+   if err != nil || aDb.group[aGid1].Uid[aUid].Status != eStatBarred {
+      fReport("re-quit other case failed")
+   }
+   _, err = aDb.GroupQuit(aGid1, aAlias1, "GquitUid0")
+   if err == nil || err.(*tUdbError).id != eErrUserInvalid {
+      fReport("invalid user case succeeded: GroupQuit")
+   }
+   _, err = aDb.GroupQuit("GquitGid0", aAlias1, aUid2)
+   if err == nil || err.(*tUdbError).id != eErrGroupInvalid {
+      fReport("invalid group case succeeded: GroupQuit")
+   }
+   _, err = aDb.GroupQuit(aGid1, "GquitA0", aUid2)
+   if err == nil || err.(*tUdbError).id != eErrAliasInvalid {
+      fReport("invalid alias case succeeded: GroupQuit")
+   }
+
    if aOk {
       fmt.Println("UserDb tests passed")
    }
@@ -819,11 +853,43 @@ func (o *tUserDb) GroupAlias(iGid, iUid, iNewAlias string) (aAlias string, err e
    return aAlias, nil
 }
 
-func (o *tUserDb) GroupDrop(iGid, iAlias, iByUid string) (aUid string, err error) {
+func (o *tUserDb) GroupQuit(iGid, iAlias, iByUid string) (aUid string, err error) {
    //: change member status of member with iUid
    //: iAlias in group, iByUid same or in group
    //: iAlias -> iByUid, status=invited
    //: otherwise, if iAlias status==joined, status=barred else delete member
+   aGroup, err := o.fetchGroup(iGid, eFetchCheck)
+   if err != nil { panic(err) }
+
+   if aGroup == nil {
+      return "", &tUdbError{id: eErrGroupInvalid, msg: fmt.Sprintf("GroupQuit: iGid %s not found", iGid)}
+   }
+
+   aGroup.Lock()
+   defer aGroup.Unlock()
+
+   aUid, _ = o.Lookup(iAlias)
+   if aUid == "" || iAlias != aGroup.Uid[aUid].Alias {
+      return "", &tUdbError{id: eErrAliasInvalid, msg: fmt.Sprintf("GroupQuit: iAlias %s not a member", iAlias)}
+   }
+
+   if iByUid == aUid {
+      if aGroup.Uid[aUid].Status == eStatInvited {
+         return aUid, nil
+      }
+      aGroup.Uid[aUid] = tMember{Status: eStatInvited, Alias: iAlias}
+   } else {
+      if aGroup.Uid[iByUid].Status != eStatJoined {
+         return "", &tUdbError{id: eErrUserInvalid, msg: fmt.Sprintf("GroupQuit: iByUid %s not a member", iByUid)}
+      }
+      if aGroup.Uid[aUid].Status == eStatBarred {
+         return aUid, nil
+      }
+      aGroup.Uid[aUid] = tMember{Status: eStatBarred, Alias: iAlias}
+   }
+
+   err = o.putRecord(eTgroup, iGid, aGroup)
+   if err != nil { panic(err) }
    return aUid, nil
 }
 
