@@ -322,8 +322,7 @@ func TestUserDb(iPath string) {
                     aDb.group[aGid1].Uid[aUid1].Status != eStatInvited {
       fReport("re-invite case failed")
    }
-   aDb.group[aGid2] = &tGroup{Uid: map[string]tMember{
-      aUid2:{Alias:aAlias2, Status:eStatJoined}}} //todo use TempGroup
+   aDb.TempGroup(aGid2, aUid2, aAlias2)
    _, err = aDb.GroupInvite(aGid2, aAlias1, aAlias2, aUid2)
    if err != nil || aDb.group[aGid2].Uid[aUid1].Status != eStatInvited {
       fReport("invite existing case failed")
@@ -344,7 +343,7 @@ func TestUserDb(iPath string) {
    if err == nil || err.(*tUdbError).id != eErrAliasInvalid {
       fReport("invalid invitor uid case succeeded: GroupInvite")
    }
-   aDb.group[aGid2].Uid[aUid1] = tMember{Alias: aAlias1, Status: eStatJoined}
+   aDb.TempGroup(aGid2, aUid1, aAlias1)
    _, err = aDb.GroupInvite(aGid2, aAlias1, aAlias2, aUid2)
    if err == nil || err.(*tUdbError).id != eErrMemberJoined {
       fReport("already joined case succeeded: GroupInvite")
@@ -937,9 +936,31 @@ func (o *tUserDb) GroupGetUsers(iGid, iByUid string) (aUids []string, err error)
    return aUids, nil
 }
 
-func (*tUserDb) TempUser(iUid, iNewNode string) {}
-func (*tUserDb) TempAlias(iUid, iNewAlias string) {}
-func (*tUserDb) TempGroup(iGid, iUid, iAlias string) {}
+// TempXyz methods for testing use only
+
+func (o *tUserDb) TempUser(iUid, iNewNode string) {
+   o.user[iUid] = &tUser{Nodes: map[string]tNode{iNewNode: {Qid:iNewNode}}}
+}
+
+func (o *tUserDb) TempAlias(iUid, iNewAlias string) {
+   o.alias[iNewAlias] = iUid
+}
+
+func (o *tUserDb) TempGroup(iGid, iUid, iAlias string) {
+   if o.group[iGid] == nil {
+      o.group[iGid] = &tGroup{Uid: map[string]tMember{}}
+   }
+   var aS int8 = eStatJoined; if iGid == "blab" { aS = eStatInvited }
+   o.group[iGid].Uid[iUid] = tMember{Alias: iAlias, Status: aS}
+}
+
+func (o *tUserDb) Erase() {
+   err := os.RemoveAll(o.root)
+   if err != nil { panic(err) }
+}
+
+
+// non-public methods follow
 
 type tFetch bool
 const eFetchCheck, eFetchMake tFetch = false, true
