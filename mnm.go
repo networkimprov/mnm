@@ -8,7 +8,6 @@ import (
    "os"
    "qlib"
    "strconv"
-   "mnm/tst_udb"
 )
 
 const kVersionA, kVersionB, kVersionC = 0, 0, 0
@@ -46,7 +45,7 @@ func mainResult() int {
    fmt.Printf("mnm tmtp server v%d.%d.%d %s\n", kVersionA, kVersionB, kVersionC, kVersionDate)
 
    aDbName := "userdb"; if aTcNum != 0 { aDbName += "-test-qlib" }
-   qlib.UDb, err = tst_udb.NewUserDb(aDbName)
+   qlib.UDb, err = NewUserDb(aDbName)
    if err != nil {
       fmt.Fprintf(os.Stderr, "%s\n", err.Error())
       return 1
@@ -56,6 +55,7 @@ func mainResult() int {
 
    if aTcNum != 0 {
       fmt.Printf("Starting Test Pass\n")
+      TestUserDb("userdb-test-unit")
       qlib.LocalTest(aTcNum)
    } else {
       err = startServer(&sConfig)

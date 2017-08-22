@@ -106,26 +106,28 @@ type UserDatabase interface {
    //   the set of Aliases & Uids for each group
 
    AddUser(iUid, iNewNode string) (aQid string, err error)
-   AddNode(iUid, iNode, iNewNode string) (aQid string, err error)
+   AddNode(iUid, iNewNode string) (aQid string, err error)
    DropNode(iUid, iNode string) (aQid string, err error)
-   AddAlias(iUid, iNode, iNat, iEn string) error
-   DropAlias(iUid, iNode, iAlias string) error
+   AddAlias(iUid, iNat, iEn string) error
+   DropAlias(iUid, iAlias string) error
    //DropUser(iUid string) error
 
    Verify(iUid, iNode string) (aQid string, err error)
-   GetNodes(iUid string) (aQids []string, err error)
+   OpenNodes(iUid string) (aQids []string, err error)
+   CloseNodes(iUid string) error
    Lookup(iAlias string) (aUid string, err error)
 
    GroupInvite(iGid, iAlias, iByAlias, iByUid string) (aUid string, err error)
    GroupJoin(iGid, iUid, iNewAlias string) (aAlias string, err error)
    GroupAlias(iGid, iUid, iNewAlias string) (aAlias string, err error)
-   GroupDrop(iGid, iAlias, iByUid string) (aUid string, err error)
+   GroupQuit(iGid, iAlias, iByUid string) (aUid string, err error)
    GroupGetUsers(iGid, iByUid string) (aUids []string, err error)
 
    // for test purposes
    TempUser(iUid, iNewNode string)
    TempAlias(iUid, iNewAlias string)
    TempGroup(iGid, iUid, iAlias string)
+   Erase()
 }
 
 
@@ -209,12 +211,13 @@ func runLink(o *tLink) {
    }
    if o.ohi != nil {
       for _, aUid := range sOhi.unref(o.uid) {
-         aNodes, err := UDb.GetNodes(aUid)
+         aNodes, err := UDb.OpenNodes(aUid)
          if err != nil {
-            fmt.Fprintf(os.Stderr, "%s link.runlink getnodes %s\n", o.uid, err.Error())
+            fmt.Fprintf(os.Stderr, "%s link.runlink opennodes %s\n", o.uid, err.Error())
             continue
          }
          o.sendOhi(aNodes, eOhiOff)
+         _ = UDb.CloseNodes(aUid)
       }
    }
 }
@@ -291,7 +294,7 @@ func (o *tLink) handleMsg(iHead *tHeader, iData []byte) tMsg {
          if len(iHead.NewAlias) < kAliasMinLen { //todo enforce in userdb
             aAck["error"] = fmt.Sprintf("newalias must be %d+ characters", kAliasMinLen)
          } else {
-            err = UDb.AddAlias(aUid, aNodeSha, "", iHead.NewAlias)
+            err = UDb.AddAlias(aUid, "", iHead.NewAlias)
             if err != nil {
                aAck["error"] = err.Error()
             }
@@ -306,17 +309,17 @@ func (o *tLink) handleMsg(iHead *tHeader, iData []byte) tMsg {
       if err != nil {
          return sMsgBase32Bad
       }
-      _, err = UDb.Verify(iHead.Uid, aNodeSha)
+      aQid, err := UDb.Verify(iHead.Uid, aNodeSha)
       if err != nil {
          return sMsgLoginFailure
       }
-      aQ := QueueLink(aNodeSha, o.conn, tMsg{"op":"info", "info":"login ok", "ohi":nil}, iHead.Uid)
+      aQ := QueueLink(aQid, o.conn, tMsg{"op":"info", "info":"login ok", "ohi":nil}, iHead.Uid)
       if aQ == nil {
          return sMsgLoginNodeOnline
       }
       o.conn.SetReadDeadline(time.Time{})
       o.uid = iHead.Uid
-      o.node = aNodeSha
+      o.node = aQid
       o.queue = aQ
       if iHead.Op != eRegister {
          iHead.For = []tHeaderFor{{Id:o.uid, Type:eForUser}}
@@ -329,19 +332,16 @@ func (o *tLink) handleMsg(iHead *tHeader, iData []byte) tMsg {
       if iHead.NewNode != "" && iHead.NewAlias != "" { return sMsgHeaderBad }
       aEtc := tMsg{}
       if iHead.NewAlias != "" {
-         err = UDb.AddAlias(o.uid, o.node, "", iHead.NewAlias)
+         err = UDb.AddAlias(o.uid, "", iHead.NewAlias)
          if err == nil {
             aEtc["newalias"] = iHead.NewAlias
          }
       } else {
          aNodeId, aNodeSha := makeNodeId()
-         _,err = UDb.AddNode(o.uid, o.node, aNodeSha)
+         aQid, err := UDb.AddNode(o.uid, aNodeSha)
          if err == nil {
-            aNd := GetNode(o.node)
-            aNd.dir.Lock()
-            err = sStore.CopyDir(o.node, aNodeSha)
+            err = sStore.CopyDir(o.node, aQid)
             if err != nil { panic(err) }
-            aNd.dir.Unlock()
             aEtc["nodeid"] = aNodeId
          }
       }
@@ -356,8 +356,9 @@ func (o *tLink) handleMsg(iHead *tHeader, iData []byte) tMsg {
    case eOhiEdit:
       if iHead.Type != "add" && iHead.Type != "drop" { return sMsgHeaderBad }
       for _, aTo := range iHead.For {
-         _,err = UDb.GetNodes(aTo.Id)
+         _,err = UDb.OpenNodes(aTo.Id)
          if err != nil { break } //todo if err == defunct && Type == drop, continue
+         _ = UDb.CloseNodes(aTo.Id)
       }
       if err == nil {
          aInit := o.ohi == nil
@@ -367,9 +368,10 @@ func (o *tLink) handleMsg(iHead *tHeader, iData []byte) tMsg {
          aStat := eOhiOff; if iHead.Type == "add" { aStat = eOhiOn }
          for _, aTo := range iHead.For {
             if o.ohi.edit(aTo.Id, iHead.Type == "add") {
-               aNodes, aErr := UDb.GetNodes(aTo.Id)
+               aNodes, aErr := UDb.OpenNodes(aTo.Id)
                if aErr == nil {
                   o.sendOhi(aNodes, aStat)
+                  _ = UDb.CloseNodes(aTo.Id)
                }
             }
          }
@@ -407,7 +409,7 @@ func (o *tLink) handleMsg(iHead *tHeader, iData []byte) tMsg {
          aNewAlias = iHead.NewAlias
       case "drop":
          if iHead.To == "" { return sMsgHeaderBad }
-         aUid, err = UDb.GroupDrop(iHead.Gid, iHead.To, o.uid)
+         aUid, err = UDb.GroupQuit(iHead.Gid, iHead.To, o.uid)
          aAlias = iHead.To
       default:
          return sMsgHeaderBad
@@ -534,8 +536,9 @@ func (o *tLink) postMsg(iHead *tHeader, iEtc tMsg, iData []byte) (aMsgId string,
          if aTo.Type == eForGroupExcl && aUid == o.uid {
             continue
          }
-         aNodes, err := UDb.GetNodes(aUid)
+         aNodes, err := UDb.OpenNodes(aUid)
          if err != nil { return "", err }
+         defer UDb.CloseNodes(aUid)
          for _, aNd := range aNodes {
             aForNodes[aNd] = true
          }

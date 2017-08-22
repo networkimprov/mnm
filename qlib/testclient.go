@@ -45,6 +45,7 @@ func LocalTest(i int) {
    NewLink(newTestClient(eActVerifySend, 100002))
    <-sTestVerifyDone
    time.Sleep(10 * time.Millisecond)
+   UDb.Erase() // assumes no userdb write ops during cycle
    fmt.Fprintf(os.Stderr, "%d verify pass failures, starting cycle\n\n", sTestVerifyFail)
 
    aSegment := []byte(`0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz.!`)
@@ -176,8 +177,7 @@ func newTestClient(iAct tTestAction, iId int) *tTestClient {
           want: `{"id":"0","msgid":"#mid#","op":"ack"}`+"\n"+
                 `{"act":"join","alias":"test1","datalen":0,"from":"u`+fmt.Sprint(iId)+`","gid":"blab","headsum":#sck#,"id":"#sid#","op":"member","posted":"#spdt#"}` ,
       },{ head: tMsg{"Op":eGroupEdit, "Id":"0", "Gid":"blab", "Act":"drop", "To":"test1"} ,
-          want: `{"id":"0","msgid":"#mid#","op":"ack"}`+"\n"+
-                `{"act":"drop","alias":"test1","datalen":0,"from":"u`+fmt.Sprint(iId)+`","gid":"blab","headsum":#sck#,"id":"#sid#","op":"member","posted":"#spdt#"}` ,
+          want: `{"id":"0","msgid":"#mid#","op":"ack"}` ,
       },{ head: tMsg{"Op":eGroupInvite, "Id":"0", "Gid":"talk", "Datalen":5, "From":"test1", "To":"test2"} ,
           data: `hello` ,
           want: `{"id":"0","msgid":"#mid#","op":"ack"}`+"\n"+
