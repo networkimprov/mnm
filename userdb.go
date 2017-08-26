@@ -5,6 +5,7 @@ import (
    "io/ioutil"
    "encoding/json"
    "os"
+   "strings"
    "sync"
 )
 
@@ -93,26 +94,40 @@ const (
    eTgroup tType = "group"
 )
 
-//: add a crash recovery pass on startup
-//: examine temp dir
-//:   complete any pending transactions
-//: in transaction
-//:   sync temp dir instead of data dir
-//:   remove temp file in commitDir
-//:   drop .tmp files
 
 func NewUserDb(iPath string) (*tUserDb, error) {
-   for _, a := range [...]tType{ "temp", eTuser, eTalias, eTgroup } {
-      err := os.MkdirAll(iPath + "/" + string(a), 0700)
+   var err error
+   for _, aDir := range [...]tType{ "temp", eTuser, eTalias, eTgroup } {
+      err = os.MkdirAll(iPath + "/" + string(aDir), 0700)
       if err != nil { return nil, err }
    }
 
    aDb := new(tUserDb)
    aDb.root = iPath+"/"
-   aDb.temp = aDb.root + "temp"
+   aDb.temp = aDb.root + "temp/"
    aDb.user = make(map[string]*tUser)
    aDb.alias = make(map[string]string)
    aDb.group = make(map[string]*tGroup)
+
+   aFd, err := os.Open(aDb.temp)
+   if err != nil { return aDb, err }
+   aTmps, err := aFd.Readdirnames(0)
+   aFd.Close()
+   if err != nil { return aDb, err }
+   for _, aTmp := range aTmps {
+      if strings.HasSuffix(aTmp, ".tmp") {
+         err = os.Remove(aDb.temp + aTmp)
+         if err != nil { return aDb, err }
+      } else {
+         aPair := strings.SplitN(aTmp, "_", 2)
+         if len(aPair) != 2 {
+            fmt.Fprintf(os.Stderr, "NewUserDb: unexpected file %s%s\n", aDb.temp, aTmp)
+         } else {
+            err = aDb.complete(tType(aPair[0]), aPair[1])
+            if err != nil { return aDb, err }
+         }
+      }
+   }
 
    return aDb, nil
 }
@@ -121,6 +136,14 @@ func TestUserDb(iPath string) {
    //: exercise the api, print diagnostics
    //: invoke from main() before tTestClient loop; stop program if tests fail
    _ = os.RemoveAll(iPath)
+
+   err := os.MkdirAll(iPath + "/temp", 0700)
+   if err != nil { panic(err) }
+   err = ioutil.WriteFile(iPath + "/temp/user_test_complete", []byte("{}"), 0600)
+   if err != nil { panic(err) }
+   err = ioutil.WriteFile(iPath + "/temp/user_cleanup.tmp", []byte("{}"), 0600)
+   if err != nil { panic(err) }
+
    aDb, err := NewUserDb(iPath)
    if err != nil { panic(err) }
    defer os.RemoveAll(iPath) // comment out for debugging
@@ -133,6 +156,20 @@ func TestUserDb(iPath string) {
       } else {
          fmt.Fprintf(os.Stderr, cMsg + "\n")
       }
+   }
+
+   // COMPLETE
+   _, err = os.Lstat(iPath + "/user/test_complete")
+   if err != nil {
+      fReport("complete failed")
+   }
+   _, err = os.Lstat(iPath + "/temp/user_test_complete")
+   if err == nil {
+      fReport("complete incomplete")
+   }
+   _, err = os.Lstat(iPath + "/temp/user_cleanup.tmp")
+   if err == nil {
+      fReport("complete cleanup failed")
    }
 
    var aUid1, aUid2, aNode1, aNode2 string
@@ -1028,14 +1065,6 @@ func (o *tUserDb) getRecord(iType tType, iId string) (interface{}, error) {
    var aObj interface{}
    aPath := o.root + string(iType) + "/" + iId
 
-   // in case putRecord was interrupted
-   err = os.Link(aPath + ".tmp", aPath)
-   if err != nil {
-      if !os.IsExist(err) && !os.IsNotExist(err) { return nil, err }
-   } else {
-      fmt.Println("getRecord: finished transaction for "+aPath)
-   }
-
    switch iType {
    default:
       panic("getRecord: unexpected type "+iType)
@@ -1060,60 +1089,58 @@ func (o *tUserDb) getRecord(iType tType, iId string) (interface{}, error) {
    return aObj, err
 }
 
-// save cache object to disk. getRecord must be called before this
+// save cache object to disk
 func (o *tUserDb) putRecord(iType tType, iId string, iObj interface{}) error {
    var err error
-   aPath := o.root + string(iType) + "/" + iId
    aTemp := o.temp + string(iType) + "_" + iId
-
-   err = os.Remove(aPath + ".tmp")
-   if err == nil {
-      fmt.Println("putRecord: removed residual .tmp file for "+aPath)
-   }
 
    switch iType {
    default:
       panic("putRecord: unexpected type "+iType)
    case eTalias:
-      err = os.Symlink(iObj.(string), aPath + ".tmp")
-      if err != nil { return err }
-      return o.commitDir(iType, aPath)
+      err = os.Symlink(iObj.(string), aTemp)
    case eTuser, eTgroup:
-   }
-
-   aBuf, err := json.Marshal(iObj)
-   if err != nil { return err }
-
-   aFd, err := os.OpenFile(aTemp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
-   if err != nil { return err }
-   defer aFd.Close()
-
-   for aPos,aLen := 0,0; aPos < len(aBuf); aPos += aLen {
-      aLen, err = aFd.Write(aBuf[aPos:])
+      aFd, err := os.OpenFile(aTemp + ".tmp", os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
       if err != nil { return err }
+      defer aFd.Close()
+      err = json.NewEncoder(aFd).Encode(iObj)
+      if err != nil { return err }
+      err = aFd.Sync()
+      if err != nil { return err }
+      err = os.Link(aTemp + ".tmp", aTemp)
    }
-
-   err = aFd.Sync()
    if err != nil { return err }
 
-   err = os.Link(aTemp, aPath + ".tmp")
+   err = syncDir(o.temp) // transaction completes at startup if we crash after this
    if err != nil { return err }
-   err = os.Remove(aTemp)
-   if err != nil { return err }
-
-   return o.commitDir(iType, aPath)
+   err = o.complete(iType, iId)
+   return err
 }
 
-// sync the directory and set the filename
-func (o *tUserDb) commitDir(iType tType, iPath string) error {
-   aFd, err := os.Open(o.root + string(iType))
+func syncDir(iPath string) error {
+   aFd, err := os.Open(iPath)
    if err != nil { return err }
-   defer aFd.Close()
    err = aFd.Sync()
+   aFd.Close()
+   return err
+}
+
+// move valid temp/file to data dir
+func (o *tUserDb) complete(iType tType, iId string) error {
+   var err error
+   aPath := o.root + string(iType) + "/" + iId
+   aTemp := o.temp + string(iType) + "_" + iId
+
+   err = os.Remove(aPath)
+   if err != nil && !os.IsNotExist(err) { return err }
+   err = os.Link(aTemp, aPath)
+   if err != nil { return err }
+   err = syncDir(o.root + string(iType))
    if err != nil { return err }
 
-   err = os.Remove(iPath)
+   err = os.Remove(aTemp)
+   if err != nil { return err }
+   err = os.Remove(aTemp + ".tmp")
    if err != nil && !os.IsNotExist(err) { return err }
-   err = os.Rename(iPath + ".tmp", iPath)
-   return err
+   return nil
 }
