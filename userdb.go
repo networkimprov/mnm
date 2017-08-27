@@ -56,9 +56,15 @@ type tNode struct {
 
 type tAlias struct {
    En string // in english
-   EnDefunct bool
    Nat string // in whatever language
-   NatDefunct bool
+   EnDefunct, NatDefunct bool
+   EnTouched, NatTouched bool // requires index update
+}
+
+func (o *tUser) clearTouched() {
+   for a, _ := range o.Aliases {
+      o.Aliases[a].EnTouched, o.Aliases[a].NatTouched = false, false
+   }
 }
 
 type tGroup struct {
@@ -123,7 +129,7 @@ func NewUserDb(iPath string) (*tUserDb, error) {
          if len(aPair) != 2 {
             fmt.Fprintf(os.Stderr, "NewUserDb: unexpected file %s%s\n", aDb.temp, aTmp)
          } else {
-            err = aDb.complete(tType(aPair[0]), aPair[1])
+            err = aDb.complete(tType(aPair[0]), aPair[1], nil)
             if err != nil { return aDb, err }
          }
       }
@@ -139,7 +145,8 @@ func TestUserDb(iPath string) {
 
    err := os.MkdirAll(iPath + "/temp", 0700)
    if err != nil { panic(err) }
-   err = ioutil.WriteFile(iPath + "/temp/user_test_complete", []byte("{}"), 0600)
+   aJson := `{"Aliases":[{"En":"test_alias","EnTouched":true}]}`
+   err = ioutil.WriteFile(iPath + "/temp/user_test_complete", []byte(aJson), 0600)
    if err != nil { panic(err) }
    err = ioutil.WriteFile(iPath + "/temp/user_cleanup.tmp", []byte("{}"), 0600)
    if err != nil { panic(err) }
@@ -162,6 +169,10 @@ func TestUserDb(iPath string) {
    _, err = os.Lstat(iPath + "/user/test_complete")
    if err != nil {
       fReport("complete failed")
+   }
+   _, err = os.Lstat(iPath + "/alias/test_alias")
+   if err != nil {
+      fReport("complete alias failed")
    }
    _, err = os.Lstat(iPath + "/temp/user_test_complete")
    if err == nil {
@@ -562,6 +573,7 @@ func (o *tUserDb) AddNode(iUid, iNewNode string) (aQid string, err error) {
 
    aUser.Nodes[iNewNode] = tNode{Defunct: false, Qid: aQid}
    aUser.NonDefunctNodesCount++
+   aUser.clearTouched()
 
    err = o.putRecord(eTuser, iUid, aUser)
    if err != nil { panic(err) }
@@ -594,6 +606,7 @@ func (o *tUserDb) DropNode(iUid, iNode string) (aQid string, err error) {
 
    aUser.Nodes[iNode] = tNode{Defunct: true, Qid: iNode}
    aUser.NonDefunctNodesCount--
+   aUser.clearTouched()
 
    o.putRecord(eTuser, iUid, aUser)
    if err != nil { panic(err) }
@@ -624,28 +637,29 @@ func (o *tUserDb) AddAlias(iUid, iNat, iEn string) error {
       }
       if aUid == iUid {
          aAddedCount++
-      } else if aUid != "" {
-         return &tUdbError{id: eErrAliasTaken, msg: fmt.Sprintf("AddAlias: alias %s already taken", aAlias)}
       }
    }
    if aAddedCount == 2 {
       return nil
    }
 
-   o.aliasDoor.Lock()
-   for _, aAlias := range aAliases {
-      if aAlias != "" {
-         o.alias[aAlias] = iUid
-         err = o.putRecord(eTalias, aAlias, iUid)
-         if err != nil { panic(err) }
-      }
-   }
-   o.aliasDoor.Unlock()
-
    aUser.Lock()
    defer aUser.Unlock()
 
-   aUser.Aliases = append(aUser.Aliases, tAlias{En: iEn, Nat: iNat})
+   o.aliasDoor.Lock()
+   defer o.aliasDoor.Unlock()
+
+   for _, aAlias := range aAliases {
+      if aAlias != "" && o.alias[aAlias] != "" && o.alias[aAlias] != iUid {
+         return &tUdbError{id: eErrAliasTaken, msg: fmt.Sprintf("AddAlias: alias %s already taken", aAlias)}
+      }
+   }
+   if iNat != "" { o.alias[iNat] = iUid }
+   if iEn  != "" { o.alias[iEn ] = iUid }
+
+   aUser.clearTouched()
+   aUser.Aliases = append(aUser.Aliases, tAlias{En:  iEn,  EnTouched:  iEn  != "",
+                                                Nat: iNat, NatTouched: iNat != ""})
    err = o.putRecord(eTuser, iUid, aUser)
    if err != nil { panic(err) }
 
@@ -680,17 +694,18 @@ func (o *tUserDb) DropAlias(iUid, iAlias string) error {
 
    o.aliasDoor.Lock()
    o.alias[iAlias] = kAliasDefunctUid
-   err = o.putRecord(eTalias, iAlias, kAliasDefunctUid)
-   if err != nil { panic(err) }
    o.aliasDoor.Unlock()
 
+   aUser.clearTouched()
    for a, _ := range aUser.Aliases {
       if iAlias == aUser.Aliases[a].Nat {
          aUser.Aliases[a].NatDefunct = true
+         aUser.Aliases[a].NatTouched = true
          break
       }
       if iAlias == aUser.Aliases[a].En {
          aUser.Aliases[a].EnDefunct = true
+         aUser.Aliases[a].EnTouched = true
          break
       }
    }
@@ -1097,8 +1112,6 @@ func (o *tUserDb) putRecord(iType tType, iId string, iObj interface{}) error {
    switch iType {
    default:
       panic("putRecord: unexpected type "+iType)
-   case eTalias:
-      err = os.Symlink(iObj.(string), aTemp)
    case eTuser, eTgroup:
       aFd, err := os.OpenFile(aTemp + ".tmp", os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
       if err != nil { return err }
@@ -1108,12 +1121,12 @@ func (o *tUserDb) putRecord(iType tType, iId string, iObj interface{}) error {
       err = aFd.Sync()
       if err != nil { return err }
       err = os.Link(aTemp + ".tmp", aTemp)
+      if err != nil { return err }
    }
-   if err != nil { return err }
 
    err = syncDir(o.temp) // transaction completes at startup if we crash after this
    if err != nil { return err }
-   err = o.complete(iType, iId)
+   err = o.complete(iType, iId, iObj)
    return err
 }
 
@@ -1126,7 +1139,7 @@ func syncDir(iPath string) error {
 }
 
 // move valid temp/file to data dir
-func (o *tUserDb) complete(iType tType, iId string) error {
+func (o *tUserDb) complete(iType tType, iId string, iObj interface{}) error {
    var err error
    aPath := o.root + string(iType) + "/" + iId
    aTemp := o.temp + string(iType) + "_" + iId
@@ -1137,6 +1150,32 @@ func (o *tUserDb) complete(iType tType, iId string) error {
    if err != nil { return err }
    err = syncDir(o.root + string(iType))
    if err != nil { return err }
+
+   if iType == eTuser {
+      if iObj == nil {
+         iObj = &tUser{}
+         aBuf, err := ioutil.ReadFile(aPath)
+         if err != nil { return err }
+         err = json.Unmarshal(aBuf, iObj)
+         if err != nil { return err }
+      }
+      aDir := o.root + string(eTalias) + "/"
+      aSync := false
+      fLink := func(cFile string, cDfn bool) {
+         cUid := iId; if cDfn { cUid = kAliasDefunctUid }
+         err = os.Remove(aDir + cFile)
+         if err != nil && !os.IsNotExist(err) { return }
+         err = os.Symlink(cUid, aDir + cFile)
+         aSync = true
+      }
+      for _, aAlias := range iObj.(*tUser).Aliases {
+         if aAlias.EnTouched  { fLink(aAlias.En,  aAlias.EnDefunct ); if err != nil { return err } }
+         if aAlias.NatTouched { fLink(aAlias.Nat, aAlias.NatDefunct); if err != nil { return err } }
+      }
+      if aSync {
+         syncDir(aDir)
+      }
+   }
 
    err = os.Remove(aTemp)
    if err != nil { return err }
