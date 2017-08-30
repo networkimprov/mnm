@@ -1,6 +1,7 @@
 package main
 
 import (
+   "hash/crc32"
    "fmt"
    "io/ioutil"
    "encoding/json"
@@ -11,6 +12,10 @@ import (
 
 const kUserNodeMax = 100
 const kAliasDefunctUid = "*defunct"
+
+var sCrc32c = crc32.MakeTable(crc32.Castagnoli)
+
+func checkSum(iBuf []byte) uint32 { return crc32.Checksum(iBuf, sCrc32c) }
 
 
 //: these are instructions/guidance comments
@@ -47,6 +52,7 @@ type tUser struct {
    Nodes map[string]tNode
    NonDefunctNodesCount int
    Aliases []tAlias // public names for the user
+   CheckSum uint32
 }
 
 type tNode struct {
@@ -70,6 +76,7 @@ func (o *tUser) clearTouched() {
 type tGroup struct {
    sync.RWMutex
    Uid map[string]tMember
+   CheckSum uint32
 }
 
 type tMember struct {
@@ -86,6 +93,7 @@ func (o *tUdbError) Error() string { return string(o.msg) }
 
 const (
    _=iota;
+   eErrChecksum;
    eErrArgument;
    eErrMissingNode;
    eErrUserInvalid; eErrMaxNodes; eErrNodeInvalid; eErrLastNode;
@@ -203,6 +211,7 @@ func TestUserDb(iPath string) {
    if err == nil || err.(*tUdbError).id != eErrMissingNode {
       fReport("add existing case succeeded: AddUser")
    }
+   delete(aDb.user, aUid1) // verify checksum next read
 
    // ADDNODE
    aUid1, aUid2 = "AddUserUid1", "AddNodeUid2"
@@ -230,6 +239,14 @@ func TestUserDb(iPath string) {
    _, err = aDb.AddNode(aUid2, "AddNodeN100")
    if err == nil || err.(*tUdbError).id != eErrMaxNodes {
       fReport("add >100 case succeeded: AddNode")
+   }
+   delete(aDb.user, aUid2)
+   aFd, _ := os.OpenFile(aDb.root + "user/" + aUid2, os.O_WRONLY, 0600)
+   aFd.WriteAt([]byte{'#'}, 2)
+   aFd.Close()
+   _, err = aDb.AddNode(aUid2, "AddNodeN100")
+   if err == nil || err.(*tUdbError).id != eErrChecksum {
+      fReport("checksum case succeeded")
    }
 
    // DROPNODE
@@ -437,6 +454,7 @@ func TestUserDb(iPath string) {
    if err == nil || err.(*tUdbError).id != eErrUserInvalid {
       fReport("invalid user case succeeded: GroupJoin")
    }
+   delete(aDb.group, aGid1) // verify checksum next read
 
    // GROUPALIAS
    aGid1 = "GjoinGid1"
@@ -527,7 +545,7 @@ func (o *tUserDb) AddUser(iUid, iNewNode string) (aQid string, err error) {
    //: add user
    //: iUid not in o.user, or already has iNewNode
    aUser, err := o.fetchUser(iUid, eFetchMake)
-   if err != nil { panic(err) }
+   if err != nil { return "", err }
 
    aUser.Lock()
    defer aUser.Unlock()
@@ -554,7 +572,7 @@ func (o *tUserDb) AddNode(iUid, iNewNode string) (aQid string, err error) {
    //: add node
    //: iUid may already have iNewNode
    aUser, err := o.fetchUser(iUid, eFetchCheck)
-   if err != nil { panic(err) }
+   if err != nil { return "", err }
 
    if aUser == nil {
       return "", &tUdbError{id: eErrUserInvalid, msg: fmt.Sprintf("AddNode: iUid %s not found", iUid)}
@@ -584,7 +602,7 @@ func (o *tUserDb) DropNode(iUid, iNode string) (aQid string, err error) {
    //: mark iNode defunct
    //: iUid has iNode
    aUser, err := o.fetchUser(iUid, eFetchCheck)
-   if err != nil { panic(err) }
+   if err != nil { return "", err }
 
    if aUser == nil {
       return "", &tUdbError{id: eErrUserInvalid, msg: fmt.Sprintf("DropNode: iUid %s not found", iUid)}
@@ -621,7 +639,7 @@ func (o *tUserDb) AddAlias(iUid, iNat, iEn string) error {
    }
 
    aUser, err := o.fetchUser(iUid, eFetchCheck)
-   if err != nil { panic(err) }
+   if err != nil { return err }
 
    if aUser == nil {
       return &tUdbError{id: eErrUserInvalid, msg: fmt.Sprintf("AddAlias: iUid %s not found", iUid)}
@@ -670,7 +688,7 @@ func (o *tUserDb) DropAlias(iUid, iAlias string) error {
    //: mark alias defunct in o.alias
    //: iAlias for iUid
    aUser, err := o.fetchUser(iUid, eFetchCheck)
-   if err != nil { panic(err) }
+   if err != nil { return err }
 
    if aUser == nil {
       return &tUdbError{id: eErrUserInvalid, msg: fmt.Sprintf("DropAlias: iUid %s not found", iUid)}
@@ -720,7 +738,7 @@ func (o *tUserDb) Verify(iUid, iNode string) (aQid string, err error) {
    //: return Qid of node
    //: iUid has iNode
    aUser, err := o.fetchUser(iUid, eFetchCheck)
-   if err != nil { panic(err) }
+   if err != nil { return "", err }
 
    if aUser == nil {
       return "", &tUdbError{id: eErrUserInvalid, msg: fmt.Sprintf("Verify: iUid %s not found", iUid)}
@@ -742,10 +760,10 @@ func (o *tUserDb) Verify(iUid, iNode string) (aQid string, err error) {
 func (o *tUserDb) OpenNodes(iUid string) (aQids []string, err error) {
    //: return Qids for iUid
    aUser, err := o.fetchUser(iUid, eFetchCheck)
-   if err != nil { panic(err) }
+   if err != nil { return nil, err }
 
    if aUser == nil {
-      return aQids, &tUdbError{id: eErrUserInvalid, msg: fmt.Sprintf("OpenNodes: iUid %s not found", iUid)}
+      return nil, &tUdbError{id: eErrUserInvalid, msg: fmt.Sprintf("OpenNodes: iUid %s not found", iUid)}
    }
 
    aUser.RLock()
@@ -761,7 +779,7 @@ func (o *tUserDb) OpenNodes(iUid string) (aQids []string, err error) {
 func (o *tUserDb) CloseNodes(iUid string) error {
    //: done with nodes
    aUser, err := o.fetchUser(iUid, eFetchCheck)
-   if err != nil { panic(err) }
+   if err != nil { return err }
 
    if aUser == nil {
       return &tUdbError{id: eErrUserInvalid, msg: fmt.Sprintf("CloseNodes: iUid %s not found", iUid)}
@@ -813,7 +831,7 @@ func (o *tUserDb) GroupInvite(iGid, iAlias, iByAlias, iByUid string) (aUid strin
    }
 
    aGroup, err := o.fetchGroup(iGid, eFetchMake)
-   if err != nil { panic(err) }
+   if err != nil { return "", err }
 
    aGroup.Lock()
    defer aGroup.Unlock()
@@ -856,7 +874,7 @@ func (o *tUserDb) GroupJoin(iGid, iUid, iNewAlias string) (aAlias string, err er
    //: iNewAlias optional for iUid
 
    aGroup, err := o.fetchGroup(iGid, eFetchCheck)
-   if err != nil { panic(err) }
+   if err != nil { return "", err }
 
    if aGroup == nil {
       return "", &tUdbError{id: eErrGroupInvalid, msg: fmt.Sprintf("GroupJoin: iGid %s not found", iGid)}
@@ -894,7 +912,7 @@ func (o *tUserDb) GroupAlias(iGid, iUid, iNewAlias string) (aAlias string, err e
    //: iUid in group
    //: iNewAlias for iUid
    aGroup, err := o.fetchGroup(iGid, eFetchCheck)
-   if err != nil { panic(err) }
+   if err != nil { return "", err }
 
    if aGroup == nil {
       return "", &tUdbError{id: eErrGroupInvalid, msg: fmt.Sprintf("GroupAlias: iGid %s not found", iGid)}
@@ -927,7 +945,7 @@ func (o *tUserDb) GroupQuit(iGid, iAlias, iByUid string) (aUid string, err error
    //: iAlias -> iByUid, status=invited
    //: otherwise, if iAlias status==joined, status=barred else delete member
    aGroup, err := o.fetchGroup(iGid, eFetchCheck)
-   if err != nil { panic(err) }
+   if err != nil { return "", err }
 
    if aGroup == nil {
       return "", &tUdbError{id: eErrGroupInvalid, msg: fmt.Sprintf("GroupQuit: iGid %s not found", iGid)}
@@ -965,7 +983,7 @@ func (o *tUserDb) GroupGetUsers(iGid, iByUid string) (aUids []string, err error)
    //: return uids in iGid
    //: iByUid is member
    aGroup, err := o.fetchGroup(iGid, eFetchCheck)
-   if err != nil { panic(err) }
+   if err != nil { return nil, err }
 
    if aGroup == nil {
       return nil, &tUdbError{id: eErrGroupInvalid, msg: fmt.Sprintf("GroupGetUsers: iGid %s not found", iGid)}
@@ -1079,6 +1097,7 @@ func (o *tUserDb) getRecord(iType tType, iId string) (interface{}, error) {
    var err error
    var aObj interface{}
    aPath := o.root + string(iType) + "/" + iId
+   var aSum *uint32
 
    switch iType {
    default:
@@ -1087,43 +1106,60 @@ func (o *tUserDb) getRecord(iType tType, iId string) (interface{}, error) {
       aLn, err := os.Readlink(aPath)
       if err != nil {
          if os.IsNotExist(err) { return nil, nil }
-         return nil, err
+         panic(err)
       }
       return aLn, nil
-   case eTuser:  aObj = &tUser{}
-   case eTgroup: aObj = &tGroup{}
+   case eTuser:  aObj = &tUser{};  aSum = & aObj.(*tUser).CheckSum
+   case eTgroup: aObj = &tGroup{}; aSum = & aObj.(*tGroup).CheckSum
    }
 
    aBuf, err := ioutil.ReadFile(aPath)
    if err != nil {
       if os.IsNotExist(err) { return aObj, nil }
-      return nil, err
+      panic(err)
    }
 
    err = json.Unmarshal(aBuf, aObj)
-   return aObj, err
+   if err != nil {
+      return nil, &tUdbError{id: eErrChecksum, msg: fmt.Sprintf("unmarshal failed for %s/%s: %s", string(iType), iId, err.Error())}
+   }
+   aSumPrev := *aSum
+   *aSum = 0
+   aBuf, _ = json.Marshal(aObj)
+   if checkSum(aBuf) != aSumPrev {
+      return nil, &tUdbError{id: eErrChecksum, msg: fmt.Sprintf("checksum failed for %s/%s", string(iType), iId)}
+   }
+   return aObj, nil
 }
 
 // save cache object to disk
 func (o *tUserDb) putRecord(iType tType, iId string, iObj interface{}) error {
    var err error
    aTemp := o.temp + string(iType) + "_" + iId
+   var aSum *uint32
 
    switch iType {
    default:
       panic("putRecord: unexpected type "+iType)
-   case eTuser, eTgroup:
-      aFd, err := os.OpenFile(aTemp + ".tmp", os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-      if err != nil { return err }
-      defer aFd.Close()
-      err = json.NewEncoder(aFd).Encode(iObj)
-      if err != nil { return err }
-      err = aFd.Sync()
-      if err != nil { return err }
-      err = os.Link(aTemp + ".tmp", aTemp)
-      if err != nil { return err }
+   case eTuser:  aSum = & iObj.(*tUser).CheckSum
+   case eTgroup: aSum = & iObj.(*tGroup).CheckSum
    }
 
+   *aSum = 0
+   aBuf, err := json.Marshal(iObj)
+   if err != nil { return err }
+   *aSum = checkSum(aBuf)
+
+   aFd, err := os.OpenFile(aTemp + ".tmp", os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+   if err != nil { return err }
+   defer aFd.Close()
+   err = json.NewEncoder(aFd).Encode(iObj)
+   if err != nil { return err }
+   err = aFd.Sync()
+   if err != nil { return err }
+
+   err = os.Link(aTemp + ".tmp", aTemp)
+   if err != nil { return err }
    err = syncDir(o.temp) // transaction completes at startup if we crash after this
    if err != nil { return err }
    err = o.complete(iType, iId, iObj)
