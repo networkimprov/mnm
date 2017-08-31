@@ -57,7 +57,7 @@ type tUser struct {
 
 type tNode struct {
   Defunct bool
-  Qid string
+  Num uint8
 }
 
 type tAlias struct {
@@ -71,6 +71,10 @@ func (o *tUser) clearTouched() {
    for a, _ := range o.Aliases {
       o.Aliases[a].EnTouched, o.Aliases[a].NatTouched = false, false
    }
+}
+
+func qid(iUid string, iNum uint8) string {
+   return fmt.Sprintf("%s.%02x", iUid, iNum)
 }
 
 type tGroup struct {
@@ -200,11 +204,11 @@ func TestUserDb(iPath string) {
    aUid1 = "AddUserUid1"
    aNode1 = "AddUserN1"
    _, err = aDb.AddUser(aUid1, aNode1)
-   if err != nil || aDb.user[aUid1].Nodes[aNode1].Qid != aNode1 {
+   if err != nil || aDb.user[aUid1].Nodes[aNode1].Num != 1 {
       fReport("add case failed")
    }
    _, err = aDb.AddUser(aUid1, aNode1)
-   if err != nil || aDb.user[aUid1].Nodes[aNode1].Qid != aNode1 {
+   if err != nil || aDb.user[aUid1].Nodes[aNode1].Num != 1 {
       fReport("re-add case failed")
    }
    _, err = aDb.AddUser(aUid1, "AddUserN0")
@@ -217,11 +221,11 @@ func TestUserDb(iPath string) {
    aUid1, aUid2 = "AddUserUid1", "AddNodeUid2"
    aNode1 = "AddNodeN2"
    _, err = aDb.AddNode(aUid1, aNode1)
-   if err != nil || aDb.user[aUid1].Nodes[aNode1].Qid != aNode1 {
+   if err != nil || aDb.user[aUid1].Nodes[aNode1].Num != 2 {
       fReport("add case failed")
    }
    _, err = aDb.AddNode(aUid1, aNode1)
-   if err != nil || aDb.user[aUid1].Nodes[aNode1].Qid != aNode1 {
+   if err != nil || aDb.user[aUid1].Nodes[aNode1].Num != 2 {
       fReport("re-add case failed")
    }
    _, err = aDb.AddNode("AddNodeUid0", aNode1)
@@ -550,17 +554,17 @@ func (o *tUserDb) AddUser(iUid, iNewNode string) (aQid string, err error) {
    aUser.Lock()
    defer aUser.Unlock()
 
-   aQid = iNewNode //todo generate Qid properly
+   aQid = qid(iUid, 1)
 
    if len(aUser.Nodes) != 0 {
-      if aUser.Nodes[iNewNode].Qid != aQid {
+      if aUser.Nodes[iNewNode].Num != 1 {
          return "", &tUdbError{id: eErrMissingNode,
                        msg: fmt.Sprintf("AddUser: Uid %s found, Node %s missing", iUid, iNewNode)}
       }
       return aQid, nil
    }
 
-   aUser.Nodes[iNewNode] = tNode{Defunct: false, Qid: aQid}
+   aUser.Nodes[iNewNode] = tNode{Defunct: false, Num: 1}
    aUser.NonDefunctNodesCount++
 
    err = o.putRecord(eTuser, iUid, aUser)
@@ -581,21 +585,20 @@ func (o *tUserDb) AddNode(iUid, iNewNode string) (aQid string, err error) {
    aUser.Lock()
    defer aUser.Unlock()
 
-   aQid = iNewNode //todo generate properly
-   if aUser.Nodes[iNewNode].Qid == aQid {
-      return aQid, nil
+   if aUser.Nodes[iNewNode].Num != 0 {
+      return qid(iUid, aUser.Nodes[iNewNode].Num), nil
    }
    if aUser.NonDefunctNodesCount == kUserNodeMax {
       return "", &tUdbError{id: eErrMaxNodes, msg: fmt.Sprintf("AddNode: Exceeds %d nodes", kUserNodeMax)}
    }
 
-   aUser.Nodes[iNewNode] = tNode{Defunct: false, Qid: aQid}
+   aUser.Nodes[iNewNode] = tNode{Defunct: false, Num: uint8(len(aUser.Nodes))+1}
    aUser.NonDefunctNodesCount++
    aUser.clearTouched()
 
    err = o.putRecord(eTuser, iUid, aUser)
    if err != nil { panic(err) }
-   return aQid, nil
+   return qid(iUid, aUser.Nodes[iNewNode].Num), nil
 }
 
 func (o *tUserDb) DropNode(iUid, iNode string) (aQid string, err error) {
@@ -611,10 +614,10 @@ func (o *tUserDb) DropNode(iUid, iNode string) (aQid string, err error) {
    aUser.Lock()
    defer aUser.Unlock()
 
-   aQid = iNode //todo set properly
-   if aUser.Nodes[iNode].Qid != aQid {
+   if aUser.Nodes[iNode].Num == 0 {
       return "", &tUdbError{id: eErrNodeInvalid, msg: fmt.Sprintf("DropNode: iNode %s invalid", iNode)}
    }
+   aQid = qid(iUid, aUser.Nodes[iNode].Num)
    if aUser.Nodes[iNode].Defunct {
       return aQid, nil
    }
@@ -622,7 +625,7 @@ func (o *tUserDb) DropNode(iUid, iNode string) (aQid string, err error) {
       return "", &tUdbError{id: eErrLastNode, msg: "DropNode: cannot drop last node"}
    }
 
-   aUser.Nodes[iNode] = tNode{Defunct: true, Qid: iNode}
+   aUser.Nodes[iNode] = tNode{Defunct: true, Num: aUser.Nodes[iNode].Num}
    aUser.NonDefunctNodesCount--
    aUser.clearTouched()
 
@@ -750,11 +753,10 @@ func (o *tUserDb) Verify(iUid, iNode string) (aQid string, err error) {
    if aUser.Nodes[iNode].Defunct {
       return "", &tUdbError{id: eErrNodeInvalid, msg: fmt.Sprintf("Verify: iNode %s defunct", iNode)}
    }
-   aQid = iNode //todo set properly
-   if aUser.Nodes[iNode].Qid != aQid {
+   if aUser.Nodes[iNode].Num == 0 {
       return "", &tUdbError{id: eErrNodeInvalid, msg: fmt.Sprintf("Verify: iNode %s invalid", iNode)}
    }
-   return aQid, nil
+   return qid(iUid, aUser.Nodes[iNode].Num), nil
 }
 
 func (o *tUserDb) OpenNodes(iUid string) (aQids []string, err error) {
@@ -770,7 +772,7 @@ func (o *tUserDb) OpenNodes(iUid string) (aQids []string, err error) {
 
    for _, aNode := range aUser.Nodes {
       if !aNode.Defunct {
-         aQids = append(aQids, aNode.Qid)
+         aQids = append(aQids, qid(iUid, aNode.Num))
       }
    }
    return aQids, nil
@@ -1009,7 +1011,7 @@ func (o *tUserDb) GroupGetUsers(iGid, iByUid string) (aUids []string, err error)
 // TempXyz methods for testing use only
 
 func (o *tUserDb) TempUser(iUid, iNewNode string) {
-   o.user[iUid] = &tUser{Nodes: map[string]tNode{iNewNode: {Qid:iNewNode}}}
+   o.user[iUid] = &tUser{Nodes: map[string]tNode{iNewNode: {Num:1}}, NonDefunctNodesCount:1}
 }
 
 func (o *tUserDb) TempAlias(iUid, iNewAlias string) {
