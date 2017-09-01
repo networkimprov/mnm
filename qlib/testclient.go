@@ -10,6 +10,7 @@ import (
    "os"
    "strconv"
    "strings"
+   "sync"
    "time"
 )
 
@@ -18,7 +19,7 @@ const kTestLoginWait time.Duration = 6 * time.Second
 
 var sTestNodeIds = make(map[int]string)
 var sTestVerifyDone = make(chan int)
-var sTestVerifyWant string // expected results of verifyRead()
+var sTestVerifyWant struct { val string; sync.Mutex } // expected results of verifyRead()
 var sTestVerifyGot [3]string // actual results of verifyRead()
 var sTestVerifyFail int
 var sTestClientCount int32
@@ -31,7 +32,7 @@ var sTestReadSize = [...]int{50, 50, 50, 500, 500, 1500, 2000, 5000, 10000, 5000
 var sTestReadData = make([]byte, 16*1024)
 
 func LocalTest(i int) {
-   sTestVerifyWant = "\n"
+   sTestVerifyWant.val = "\n"
    sTestVerifyGot[2] = "\n"
 
    UDb.TempUser("u100002", testMakeNode(100002))
@@ -250,9 +251,9 @@ func (o *tTestClient) verifyRead(iBuf []byte) (int, error) {
    } else {
       time.Sleep(20 * time.Millisecond)
       aGot := strings.Join(sTestVerifyGot[:], "")
-      if aGot != sTestVerifyWant {
+      if aGot != sTestVerifyWant.val {
          sTestVerifyFail++
-         fmt.Fprintf(os.Stderr, "Verify FAIL:\n  want: %s   got: %s", sTestVerifyWant, aGot)
+         fmt.Fprintf(os.Stderr, "Verify FAIL:\n  want: %s   got: %s", sTestVerifyWant.val, aGot)
       }
       if o.count-1 == len(o.work) {
          close(sTestVerifyDone)
@@ -260,7 +261,7 @@ func (o *tTestClient) verifyRead(iBuf []byte) (int, error) {
       }
       aWk := o.work[o.count-1]
       aNl := "\n"; if aWk.want == "" { aNl = "" }
-      sTestVerifyWant = aWk.want + aNl
+      sTestVerifyWant.val = aWk.want + aNl
       sTestVerifyGot[0], sTestVerifyGot[1], sTestVerifyGot[2] = "","",""
       aMsg = aWk.msg
       if aMsg == nil {
@@ -382,7 +383,9 @@ func (o *tTestClient) Read(iBuf []byte) (int, error) {
 }
 
 func verifyWantEdit(iOld, iNew string) {
-   sTestVerifyWant = strings.Replace(sTestVerifyWant, "#"+iOld+"#", iNew, 1)
+   sTestVerifyWant.Lock()
+   sTestVerifyWant.val = strings.Replace(sTestVerifyWant.val, "#"+iOld+"#", iNew, 1)
+   sTestVerifyWant.Unlock()
 }
 
 func (o *tTestClient) Write(iBuf []byte) (int, error) {
