@@ -489,7 +489,7 @@ func (o *tLink) checkPing(iHead *tHeader, iData *[]byte) error {
 func (o *tLink) sendOhi(iNodes []string, iStat int8) {
    for _, aNid := range iNodes {
       aNd := GetNode(aNid)
-      aNd.dir.RLock()
+      aNd.RLock()
       if aNd.queue != nil {
          aTmr := time.NewTimer(200 * time.Millisecond)
          select {
@@ -499,7 +499,7 @@ func (o *tLink) sendOhi(iNodes []string, iStat int8) {
             fmt.Fprintf(os.Stderr, "%s link.sendohi timeout node %s\n", o.uid, aNid)
          }
       }
-      aNd.dir.RUnlock()
+      aNd.RUnlock()
    }
 }
 
@@ -558,7 +558,7 @@ func (o *tLink) postMsg(iHead *tHeader, iEtc tMsg, iData []byte) (aMsgId string,
          continue
       }
       aNd := GetNode(aNodeId)
-      aNd.dir.RLock()
+      aNd.RLock()
       err = sStore.PutLink(aMsgId, aNodeId, aMsgId)
       if err != nil { panic(err) }
       err = sStore.SyncDirs(aNodeId)
@@ -566,7 +566,7 @@ func (o *tLink) postMsg(iHead *tHeader, iEtc tMsg, iData []byte) (aMsgId string,
       if aNd.queue != nil {
          aNd.queue.in <- aMsgId
       }
-      aNd.dir.RUnlock()
+      aNd.RUnlock()
    }
    return aMsgId, nil
 }
@@ -673,31 +673,31 @@ func (o *tOhi) getOhiTo(iUid string) []string {
 
 type tNodes struct {
    list tNodeMap // nodes that have received msgs or loggedin
-   create sync.RWMutex //todo Mutex when sync.map
+   sync.RWMutex //todo Mutex when sync.map
 }
 
 type tNodeMap map[string]*tNode // indexed by node id
 
 type tNode struct {
-   dir sync.RWMutex // directory lock
+   sync.RWMutex // directory lock
    queue *tQueue // instantiated on login //todo free on idle
 }
 
 func GetNode(iNode string) *tNode {
-   sNode.create.RLock() //todo drop for sync.map
+   sNode.RLock() //todo drop for sync.map
    aNd := sNode.list[iNode]
-   sNode.create.RUnlock()
+   sNode.RUnlock()
    if aNd != nil {
       return aNd
    }
-   sNode.create.Lock()
+   sNode.Lock()
    aNd = sNode.list[iNode]
    if aNd == nil {
       fmt.Printf("%.7s getnode make node\n", iNode)
       aNd = new(tNode)
       sNode.list[iNode] = aNd
    }
-   sNode.create.Unlock()
+   sNode.Unlock()
    return aNd
 }
 
@@ -715,9 +715,9 @@ type tQueue struct {
 func QueueLink(iNode string, iConn net.Conn, iMsg tMsg, iUid string) *tQueue {
    aNd := GetNode(iNode)
    if aNd.queue == nil {
-      aNd.dir.Lock()
+      aNd.Lock()
       if aNd.queue != nil {
-         aNd.dir.Unlock()
+         aNd.Unlock()
          fmt.Fprintf(os.Stderr, "%.7s newqueue attempt to recreate queue\n", iNode)
       } else {
          aNd.queue = new(tQueue)
@@ -731,7 +731,7 @@ func QueueLink(iNode string, iConn net.Conn, iMsg tMsg, iUid string) *tQueue {
          var err error
          aQ.buf, err = sStore.GetDir(iNode)
          if err != nil { panic(err) }
-         aNd.dir.Unlock()
+         aNd.Unlock()
          fmt.Printf("%.7s newqueue create queue\n", iNode)
          go runElasticChan(aQ)
          go runQueue(aQ)
