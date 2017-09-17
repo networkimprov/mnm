@@ -263,6 +263,10 @@ func (o *tHeader) check() bool {
       len(aDef.Type)     > 0 && len(o.Type)     == 0 ||
       len(aDef.Act)      > 0 && len(o.Act)      == 0 ||
       len(aDef.For)      > 0 && len(o.For)      == 0
+   for _, aEl := range o.For {
+      aFail = aFail || len(aEl.Id) == 0 ||
+              o.Op == ePost && (aEl.Type < eForUser || aEl.Type >= eForSelf)
+   }
    return !aFail
 }
 

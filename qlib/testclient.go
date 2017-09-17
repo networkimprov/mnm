@@ -129,7 +129,7 @@ func newTestClient(iAct tTestAction, iId int) *tTestClient {
           want: `{"error":"disallowed op repetition","op":"quit"}` ,
       },{ head: tMsg{"Op":eLogin, "Uid":"noone", "Node":"none"} ,
           want: `{"error":"tmtprev was omitted","op":"quit"}` ,
-      },{ head: tMsg{"Op":ePost, "Id":"zyx", "Datalen":1, "For":[]tHeaderFor{{}}} ,
+      },{ head: tMsg{"Op":ePost, "Id":"zyx", "Datalen":1, "For":[]tHeaderFor{{Id:"x", Type:eForUser}}} ,
           data: `1` ,
           want: `{"error":"disallowed op on unauthenticated link","op":"quit"}` ,
       },  aTmtpRev,
