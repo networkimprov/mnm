@@ -36,14 +36,15 @@ mnm shall be accessible via several network frontends:
 
 ### Status
 
+_25 September 2017_ -
+A client application, [mnm-hammer](https://github.com/networkimprov/mnm-hammer), is in development.
+
 _3 August 2017_ -
 A simulation of 1000 concurrent active clients 
 delivers 1 million messages totaling 6.7GB in 46 minutes. 
 It uses ~200MB RAM, <10MB disk, and minimal CPU time. 
 Each client runs a 19-step cycle that does login, then post for two recipients (15x) 
 or for a group of 100 (2x) every 1-30s, then logout and idle for 1-30s. 
-
-mnm v0.1 should be released in September 2017.
 
 The author previously prototyped this in Node.js.
 (Based on that experience, he can't recommend Node.js.)
