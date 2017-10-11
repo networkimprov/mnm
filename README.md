@@ -128,9 +128,9 @@ At nodes `{"op":"ohiedit", (message headers), datalen:0, "for":[{"id":string}, .
 At recipient `{"op":"ohi", "from":string, "status":uint}`
 
 0. GroupInvite invites someone to a group, creating it if necessary.  
-`{"op":5, "id":string, "gid":string, "datalen":uint, <"datasum":uint>, "from":string, "to":string}`  
+`{"op":5, "id":string, "gid":string, "datalen":uint, <"datahead":uint>, <"datasum":uint>, "from":string, "to":string}`  
 Response `{"op":"ack", (ack headers)}`  
-At recipient `{"op":"invite", (message headers), "datalen":uint, <"datasum":uint>, "gid":string, "to":string}`  
+At recipient `{"op":"invite", (message headers), "datalen":uint, <"datahead":uint>, <"datasum":uint>, "gid":string, "to":string}`  
 At members `{"op":"member", (message headers), "datalen":0, "act":string, "gid":string, "alias":string, <"newalias":string>}`
 
 0. GroupEdit updates a group.  
@@ -143,17 +143,17 @@ Response `{"op":"ack", (ack headers)}`
 At members `{"op":"member", (message headers), "datalen":0, "act":string, "gid":string, "alias":string, <"newalias":string>}`
 
 0. Post sends a message to users and/or groups.  
-`{"op":7, "id":string, "datalen":uint, <"datasum":uint>, "for":[{"id":string, "type":uint}, ...]}`  
+`{"op":7, "id":string, "datalen":uint, <"datahead":uint>, <"datasum":uint>, "for":[{"id":string, "type":uint}, ...]}`  
 .for[i].type: 1) user_id, 2) group_id (include self) 3) group_id (exclude self)  
 Response `{"op":"ack", (ack headers)}`  
-At recipient `{"op":"delivery", (message headers), "datalen":uint, <"datasum":uint>}`
+At recipient `{"op":"delivery", (message headers), "datalen":uint, <"datahead":uint>, <"datasum":uint>}`
 
 0. Ping sends a short text message via a user's alias.
 A reply establishes contact between the parties.  
 _todo: limit number of pings per 24h and consecutive failed pings_  
-`{"op":8, "id":string, "datalen":uint, <"datasum":uint>, "to":string}`  
+`{"op":8, "id":string, "datalen":uint, <"datahead":uint>, <"datasum":uint>, "to":string}`  
 Response `{"op":"ack", (ack headers)}`  
-At recipient `{"op":"ping", (message headers), "datalen":uint, <"datasum":uint>, "to":string}`
+At recipient `{"op":"ping", (message headers), "datalen":uint, <"datahead":uint>, <"datasum":uint>, "to":string}`
 
 0. Ack acknowledges receipt of a message.  
 `{"op":9, "id":string, "type":string}`
