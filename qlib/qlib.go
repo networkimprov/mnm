@@ -232,7 +232,7 @@ func runLink(o *tLink) {
 
 type tHeader struct {
    Op uint8
-   DataLen int64
+   DataLen, DataHead int64
    DataSum uint64
    Uid, Gid string
    Id string
@@ -250,6 +250,7 @@ func (o *tHeader) check() bool {
    aDef := &sHeaderDefs[o.Op]
    aFail :=
       o.DataLen < 0                                  ||
+      o.DataLen < o.DataHead                         ||
       (aDef.DataLen == 0)    != (o.DataLen == 0)     ||
       aDef.DataSum       > 0 && o.DataSum       == 0 ||
       len(aDef.Uid)      > 0 && len(o.Uid)      == 0 ||
@@ -519,6 +520,10 @@ func (o *tLink) postMsg(iHead *tHeader, iEtc tMsg, iData []byte) (aMsgId string,
    aMsgId = sStore.MakeId()
    aHead := tMsg{"op":sResponseOps[iHead.Op], "id":aMsgId, "from":o.uid, "datalen":iHead.DataLen,
                  "posted":time.Now().UTC().Format(kPostDateFormat)}
+   //todo insert "datalen" if != 0
+   if iHead.DataHead != 0 {
+      aHead["datahead"] = iHead.DataHead
+   }
    if iHead.DataSum != 0 {
       aHead["datasum"] = iHead.DataSum
    }
