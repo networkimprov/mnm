@@ -89,7 +89,7 @@ after emitting a quit response:
 `{"op":"quit", "error":string}`
 
 Ack responses from the server have the following required headers:  
-`"id":string, "msgid":string, <"error":string>`
+`"id":string, "msgid":string, "posted":string, <"error":string>`
 
 Messages from the server have the following required message headers:  
 `"id":string, "from":string, "posted":string, "headsum":uint`
