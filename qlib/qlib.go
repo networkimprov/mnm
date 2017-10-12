@@ -273,7 +273,7 @@ func (o *tHeader) check() bool {
 
 func (o *tLink) handleMsg(iHead *tHeader, iData []byte) tMsg {
    var err error
-   var aMid string
+   var aMid, aPosted string
 
    switch iHead.Op {
    case eTmtpRev:
@@ -336,7 +336,7 @@ func (o *tLink) handleMsg(iHead *tHeader, iData []byte) tMsg {
       o.queue = aQ
       if iHead.Op != eRegister {
          iHead.For = []tHeaderFor{{Id:o.uid, Type:eForUser}}
-         _,err = o.postMsg(iHead, tMsg{"node":"tbd"}, nil) //todo tbd=noderef
+         _, _, err = o.postMsg(iHead, tMsg{"node":"tbd"}, nil) //todo tbd=noderef
          if err != nil { panic(err) }
       }
       fmt.Printf("%s link.handlemsg login user %.7s\n", o.uid, aQ.node)
@@ -360,12 +360,12 @@ func (o *tLink) handleMsg(iHead *tHeader, iData []byte) tMsg {
       }
       if err == nil {
          iHead.For = []tHeaderFor{{Id:o.uid, Type:eForUser}}
-         aMid, err = o.postMsg(iHead, aEtc, nil)
+         aMid, aPosted, err = o.postMsg(iHead, aEtc, nil)
       }
       if err != nil {
          fmt.Fprintf(os.Stderr, "%s link.handlemsg useredit %s\n", o.uid, err.Error())
       }
-      o.ack(iHead.Id, aMid, err)
+      o.ack(iHead.Id, aMid, aPosted, err)
    case eOhiEdit:
       if iHead.Type != "add" && iHead.Type != "drop" { return sMsgHeaderBad }
       for _, aTo := range iHead.For {
@@ -391,10 +391,10 @@ func (o *tLink) handleMsg(iHead *tHeader, iData []byte) tMsg {
          if !aInit {
             aHead := &tHeader{Op:eOhiEdit, For: []tHeaderFor{{Id:o.uid, Type:eForUser}}}
             aEtc := tMsg{"for":iHead.For, "type":iHead.Type}
-            aMid, err = o.postMsg(aHead, aEtc, nil)
+            aMid, aPosted, err = o.postMsg(aHead, aEtc, nil)
          }
       }
-      o.ack(iHead.Id, aMid, err)
+      o.ack(iHead.Id, aMid, aPosted, err)
    case eGroupInvite:
       iHead.Act = "invite"
       fallthrough
@@ -411,7 +411,7 @@ func (o *tLink) handleMsg(iHead *tHeader, iData []byte) tMsg {
          aUid, err = UDb.GroupInvite(iHead.Gid, iHead.To, iHead.From, o.uid)
          if err == nil {
             iHead.For = []tHeaderFor{{Id:aUid, Type:eForUser}}
-            _,err = o.postMsg(iHead, tMsg{"gid":iHead.Gid, "to":iHead.To}, iData)
+            _, _, err = o.postMsg(iHead, tMsg{"gid":iHead.Gid, "to":iHead.To}, iData)
             aAlias = iHead.To
          }
       case "join":
@@ -433,18 +433,18 @@ func (o *tLink) handleMsg(iHead *tHeader, iData []byte) tMsg {
             aEtc["newalias"] = aNewAlias
          }
          aHead := &tHeader{Op: eGroupEdit, For: []tHeaderFor{{Id:iHead.Gid, Type:eForGroupAll}}}
-         aMid, err = o.postMsg(aHead, aEtc, nil)
+         aMid, aPosted, err = o.postMsg(aHead, aEtc, nil)
       }
       if err != nil {
          fmt.Fprintf(os.Stderr, "%s link.handlemsg group %s\n", o.uid, err.Error())
       }
-      o.ack(iHead.Id, aMid, err)
+      o.ack(iHead.Id, aMid, aPosted, err)
    case ePost:
-      aMid, err = o.postMsg(iHead, nil, iData)
+      aMid, aPosted, err = o.postMsg(iHead, nil, iData)
       if err != nil {
          fmt.Fprintf(os.Stderr, "%s link.handlemsg post %s\n", o.uid, err.Error())
       }
-      o.ack(iHead.Id, aMid, err)
+      o.ack(iHead.Id, aMid, aPosted, err)
    case ePing:
       if iHead.DataLen > kMsgPingDataMax { return sMsgDatalenLimit }
       err = o.checkPing(iHead, &iData)
@@ -455,12 +455,12 @@ func (o *tLink) handleMsg(iHead *tHeader, iData []byte) tMsg {
       aUid, err := UDb.Lookup(iHead.To)
       if err == nil {
          iHead.For = []tHeaderFor{{Id:aUid, Type:eForUser}}
-         aMid, err = o.postMsg(iHead, tMsg{"to":iHead.To}, iData)
+         aMid, aPosted, err = o.postMsg(iHead, tMsg{"to":iHead.To}, iData)
       }
       if err != nil {
          fmt.Fprintf(os.Stderr, "%s link.handlemsg ping %s\n", o.uid, err.Error())
       }
-      o.ack(iHead.Id, aMid, err)
+      o.ack(iHead.Id, aMid, aPosted, err)
    case eAck:
       aTmr := time.NewTimer(2 * time.Second)
       select {
@@ -508,18 +508,19 @@ func (o *tLink) sendOhi(iNodes []string, iStat int8) {
    }
 }
 
-func (o *tLink) ack(iId, iMsgId string, iErr error) {
-   aMsg := tMsg{"op":"ack", "id":iId, "msgid":iMsgId}
+func (o *tLink) ack(iId, iMsgId, iPosted string, iErr error) {
+   aMsg := tMsg{"op":"ack", "id":iId, "msgid":iMsgId, "posted":iPosted}
    if iErr != nil {
       aMsg["error"] = iErr.Error()
    }
    o.conn.Write(PackMsg(aMsg, nil))
 }
 
-func (o *tLink) postMsg(iHead *tHeader, iEtc tMsg, iData []byte) (aMsgId string, err error) {
+func (o *tLink) postMsg(iHead *tHeader, iEtc tMsg, iData []byte) (aMsgId, aPosted string, err error) {
    aMsgId = sStore.MakeId()
+   aPosted = time.Now().UTC().Format(kPostDateFormat)
    aHead := tMsg{"op":sResponseOps[iHead.Op], "id":aMsgId, "from":o.uid, "datalen":iHead.DataLen,
-                 "posted":time.Now().UTC().Format(kPostDateFormat)}
+                 "posted":aPosted}
    //todo insert "datalen" if != 0
    if iHead.DataHead != 0 {
       aHead["datahead"] = iHead.DataHead
@@ -545,7 +546,7 @@ func (o *tLink) postMsg(iHead *tHeader, iEtc tMsg, iData []byte) (aMsgId string,
       switch aTo.Type {
       case eForGroupAll, eForGroupExcl:
          aUids, err = UDb.GroupGetUsers(aTo.Id, o.uid)
-         if err != nil { return "", err }
+         if err != nil { return "", "", err }
       default:
          aUids = []string{aTo.Id}
       }
@@ -554,7 +555,7 @@ func (o *tLink) postMsg(iHead *tHeader, iEtc tMsg, iData []byte) (aMsgId string,
             continue
          }
          aNodes, err := UDb.OpenNodes(aUid)
-         if err != nil { return "", err }
+         if err != nil { return "", "", err }
          defer UDb.CloseNodes(aUid)
          for _, aNd := range aNodes {
             aForNodes[aNd] = true
@@ -577,7 +578,7 @@ func (o *tLink) postMsg(iHead *tHeader, iEtc tMsg, iData []byte) (aMsgId string,
       }
       aNd.RUnlock()
    }
-   return aMsgId, nil
+   return aMsgId, aPosted, nil
 }
 
 type tMsg map[string]interface{}
