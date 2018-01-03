@@ -406,13 +406,13 @@ func (o *tLink) handleMsg(iHead *tHeader, iData []byte) tMsg {
          err = o.checkPing(iHead, &iData)
          if err != nil {
             if err.Error() == "" { return sMsgDataNonAscii }
-            panic(err) //todo handle net.Error
-         }
-         aUid, err = UDb.GroupInvite(iHead.Gid, iHead.To, iHead.From, o.uid)
-         if err == nil {
-            iHead.For = []tHeaderFor{{Id:aUid, Type:eForUser}}
-            _, _, err = o.postMsg(iHead, tMsg{"gid":iHead.Gid, "to":iHead.To}, iData)
-            aAlias = iHead.To
+         } else {
+            aUid, err = UDb.GroupInvite(iHead.Gid, iHead.To, iHead.From, o.uid)
+            if err == nil {
+               iHead.For = []tHeaderFor{{Id:aUid, Type:eForUser}}
+               _, _, err = o.postMsg(iHead, tMsg{"gid":iHead.Gid, "to":iHead.To}, iData)
+               aAlias = iHead.To
+            }
          }
       case "join":
          aAlias, err = UDb.GroupJoin(iHead.Gid, o.uid, iHead.NewAlias)
@@ -450,12 +450,12 @@ func (o *tLink) handleMsg(iHead *tHeader, iData []byte) tMsg {
       err = o.checkPing(iHead, &iData)
       if err != nil {
          if err.Error() == "" { return sMsgDataNonAscii }
-         panic(err) //todo handle net.Error
-      }
-      aUid, err := UDb.Lookup(iHead.To)
-      if err == nil {
-         iHead.For = []tHeaderFor{{Id:aUid, Type:eForUser}}
-         aMid, aPosted, err = o.postMsg(iHead, tMsg{"to":iHead.To}, iData)
+      } else {
+         aUid, err := UDb.Lookup(iHead.To)
+         if err == nil {
+            iHead.For = []tHeaderFor{{Id:aUid, Type:eForUser}}
+            aMid, aPosted, err = o.postMsg(iHead, tMsg{"to":iHead.To}, iData)
+         }
       }
       if err != nil {
          fmt.Fprintf(os.Stderr, "%s link.handlemsg ping %s\n", o.uid, err.Error())
@@ -534,8 +534,9 @@ func (o *tLink) postMsg(iHead *tHeader, iEtc tMsg, iData []byte) (aMsgId, aPoste
    aHead["headsum"] = crc32.Checksum(PackMsg(aHead, nil), sCrc32c)
 
    err = sStore.RecvFile(aMsgId, PackMsg(aHead, nil), iData, o.conn, iHead.DataLen)
-   if err != nil { panic(err) }
+   if err != nil && err != io.EOF { panic(err) }
    defer sStore.RmFile(aMsgId)
+   if err != nil { return "", "", err }
 
    aForNodes := make(map[string]bool, len(iHead.For)) //todo x2 or more?
    aForMyUid := false
