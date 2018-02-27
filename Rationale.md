@@ -31,6 +31,13 @@ originated at a time when the links between Internet sites were slow and intermi
 and the only people using the Internet were friendly researchers in academia and government. 
 SMTP cannot cope with the 21st Century, and must be phased out.
 
+References  
+https://www.wired.com/story/how-email-open-tracking-quietly-took-over-the-web/  
+http://www.nytimes.com/2017/08/21/business/dealbook/phone-hack-bitcoin-virtual-currency.html  
+http://www.zerohedge.com/news/2017-08-21/one-statistics-professor-was-just-banned-google-here-his-story  
+http://edition.cnn.com/2017/07/31/politics/white-house-officials-tricked-by-email-prankster/  
+https://www.wired.com/2012/08/apple-amazon-mat-honan-hacking/  
+
 _Trusted Messaging for Today's Internet_
 
 Some requirements for a messaging system that doesn't have the above failings...
