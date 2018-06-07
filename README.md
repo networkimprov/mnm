@@ -68,8 +68,15 @@ qstore/: queued messages awaiting delivery
 
 1. go get github.com/networkimprov/mnm
 
-2. go run mnm [testclient_count] #currently starts test sequence  
-_todo: prompt for key (or --key option) to decrypt userdb directory_
+2. Start test sequence  
+a) cd $GOPATH/src/github.com/networkimprov/mnm # or alternate directory for new files  
+b) go run mnm [testclient_count]
+
+3. Enable TCP+TLS (assumes above working directory)  
+a) openssl ecparam -genkey -name secp384r1 -out server.key  
+b) openssl req -new -x509 -sha256 -key server.key -out server.crt -days 3650  
+c) cp mnm.conf mnm.config # adjust the server host:port in laddr as necessary  
+d) go run mnm
 
 ### TMTP Summary
 
