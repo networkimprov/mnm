@@ -16,6 +16,7 @@ import (
    "os"
    "mnm/qlib"
    "strconv"
+   "crypto/tls"
 )
 
 const kVersionA, kVersionB, kVersionC = 0, 0, 0
@@ -80,6 +81,7 @@ type tConfig struct {
    Listen struct {
       Net string
       Laddr string
+      CertPath, KeyPath string
    }
 }
 
@@ -91,7 +93,11 @@ func (o *tConfig) load() error {
 }
 
 func startServer(iConf *tConfig) error {
-   aListener, err := net.Listen(iConf.Listen.Net, iConf.Listen.Laddr)
+   var err error
+   aCert, err := tls.LoadX509KeyPair(iConf.Listen.CertPath, iConf.Listen.KeyPath)
+   if err != nil { return err }
+   aCfgTls := tls.Config{Certificates: []tls.Certificate{aCert}}
+   aListener, err := tls.Listen(iConf.Listen.Net, iConf.Listen.Laddr, &aCfgTls)
    if err != nil { return err }
    defer aListener.Close()
 
