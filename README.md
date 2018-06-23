@@ -2,12 +2,14 @@
 
 _Mnm is Not Mail_
 
-You choose the websites you visit; now choose who can send you mail. 
-See [Why mnm?](Rationale.md)
+mnm provides the benefits of email without the huge risks of allowing 
+anyone, anywhere, claiming any identity to send you any content, any number of times. 
+See [Why TMTP?](Rationale.md)
 
-mnm is a person-to-person (or app-to-app) message relay server, based on a new client/server protocol. 
+mnm is a person-to-person (or app-to-app) message relay server, based on TMTP, 
+a new client/server protocol. 
 (It's not a web app.) 
-Written in Go, mnm aims to be reliable, fast, lightweight, dependency-free, and free of charge.
+Written in Go, mnm is reliable, fast, lightweight, dependency-free, and free of charge.
 
 mnm provides:
 - Members-only access
@@ -20,19 +22,17 @@ mnm provides:
 - Reliable message storage (via fsync) and delivery (via ack)
 - Message storage only until all recipients have ack'd receipt
 - In-order message delivery from any given sender
+- TCP + TLS connections
 
 mnm does not provide:
 - Message encryption; clients are responsible for encryption before/after transmission
 
 mnm may provide:
 - Gateways to whitelisted mnm & SMTP sites
-
-mnm shall be accessible via several network frontends:
-- TCP server
-- HTTP server (separate receiver connection per client, as needed)
-- HTTP + Websockets
-- Unix domain sockets
-- Arbitrary Golang frontend invoking qlib package
+- Alternate connection schemes
+  * HTTP + Websockets
+  * Unix domain sockets
+  * Your Go code calling qlib package
 
 ### Status
 

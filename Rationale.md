@@ -1,4 +1,4 @@
-### Why mnm & TMTP?
+### Why TMTP?
 
 _The Internet Crime Wave_
 
