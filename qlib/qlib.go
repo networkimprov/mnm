@@ -297,7 +297,7 @@ func (o *tLink) handleMsg(iHead *tHeader, iData []byte) tMsg {
    case eRegister:
       aUid := makeUid()
       aNodeId, aNodeSha := makeNodeId()
-      _, err := UDb.AddUser(aUid, aNodeSha) //todo iHead.NewNode
+      _, err = UDb.AddUser(aUid, aNodeSha) //todo iHead.NewNode
       if err != nil {
          fmt.Fprintf(os.Stderr, "%s link.handlemsg register %s\n", o.uid, err.Error())
          return sMsgRegisterFailure
@@ -318,11 +318,12 @@ func (o *tLink) handleMsg(iHead *tHeader, iData []byte) tMsg {
       iHead.Node = aNodeId
       fallthrough
    case eLogin:
-      aNodeSha, err := getNodeSha(&iHead.Node)
+      var aNodeSha, aQid string
+      aNodeSha, err = getNodeSha(&iHead.Node)
       if err != nil {
          return sMsgBase32Bad
       }
-      aQid, err := UDb.Verify(iHead.Uid, aNodeSha)
+      aQid, err = UDb.Verify(iHead.Uid, aNodeSha)
       if err != nil {
          return sMsgLoginFailure
       }
@@ -351,7 +352,8 @@ func (o *tLink) handleMsg(iHead *tHeader, iData []byte) tMsg {
          }
       } else {
          aNodeId, aNodeSha := makeNodeId()
-         aQid, err := UDb.AddNode(o.uid, aNodeSha)
+         var aQid string
+         aQid, err = UDb.AddNode(o.uid, aNodeSha)
          if err == nil {
             err = sStore.CopyDir(o.node, aQid)
             if err != nil { panic(err) }
@@ -451,7 +453,8 @@ func (o *tLink) handleMsg(iHead *tHeader, iData []byte) tMsg {
       if err != nil {
          if err.Error() == "" { return sMsgDataNonAscii }
       } else {
-         aUid, err := UDb.Lookup(iHead.To)
+         var aUid string
+         aUid, err = UDb.Lookup(iHead.To)
          if err == nil {
             iHead.For = []tHeaderFor{{Id:aUid, Type:eForUser}}
             aMid, aPosted, err = o.postMsg(iHead, tMsg{"to":iHead.To}, iData)
@@ -555,7 +558,8 @@ func (o *tLink) postMsg(iHead *tHeader, iEtc tMsg, iData []byte) (aMsgId, aPoste
          if aTo.Type == eForGroupExcl && aUid == o.uid {
             continue
          }
-         aNodes, err := UDb.OpenNodes(aUid)
+         var aNodes []string
+         aNodes, err = UDb.OpenNodes(aUid)
          if err != nil { return "", "", err }
          defer UDb.CloseNodes(aUid)
          for _, aNd := range aNodes {
