@@ -77,21 +77,26 @@ var sResponseOps = [...]string{
    eOpEnd:       "",
 }
 
+type tMsgQuit struct {
+   Error string `json:"error"`
+   Op    string `json:"op"`
+}
+
 var (
-   sMsgLengthBad       = tMsg{"op":"quit", "error":"invalid header length"}
-   sMsgHeaderBad       = tMsg{"op":"quit", "error":"invalid header"}
-   sMsgBase32Bad       = tMsg{"op":"quit", "error":"corrupt base32 value"}
-   sMsgOpRedundant     = tMsg{"op":"quit", "error":"disallowed op repetition"}
-   sMsgOpDisallowedOff = tMsg{"op":"quit", "error":"disallowed op on unauthenticated link"}
-   sMsgOpDisallowedOn  = tMsg{"op":"quit", "error":"disallowed op on connected link"}
-   sMsgNeedTmtpRev     = tMsg{"op":"quit", "error":"tmtprev was omitted"}
-   sMsgRegisterFailure = tMsg{"op":"quit", "error":"register failure"} //todo details
-   sMsgLoginTimeout    = tMsg{"op":"quit", "error":"login timeout"}
-   sMsgLoginFailure    = tMsg{"op":"quit", "error":"login failed"}
-   sMsgLoginNodeOnline = tMsg{"op":"quit", "error":"node already connected"}
-   sMsgQuit            = tMsg{"op":"quit", "error":"logout ok"}
-   sMsgDatalenLimit    = tMsg{"op":"quit", "error":"data too long for request type"}
-   sMsgDataNonAscii    = tMsg{"op":"quit", "error":"data contains non-ASCII characters"}
+   sMsgLengthBad       = &tMsgQuit{Op:"quit", Error:"invalid header length"}
+   sMsgHeaderBad       = &tMsgQuit{Op:"quit", Error:"invalid header"}
+   sMsgBase32Bad       = &tMsgQuit{Op:"quit", Error:"corrupt base32 value"}
+   sMsgOpRedundant     = &tMsgQuit{Op:"quit", Error:"disallowed op repetition"}
+   sMsgOpDisallowedOff = &tMsgQuit{Op:"quit", Error:"disallowed op on unauthenticated link"}
+   sMsgOpDisallowedOn  = &tMsgQuit{Op:"quit", Error:"disallowed op on connected link"}
+   sMsgNeedTmtpRev     = &tMsgQuit{Op:"quit", Error:"tmtprev was omitted"}
+   sMsgRegisterFailure = &tMsgQuit{Op:"quit", Error:"register failure"} //todo details
+   sMsgLoginTimeout    = &tMsgQuit{Op:"quit", Error:"login timeout"}
+   sMsgLoginFailure    = &tMsgQuit{Op:"quit", Error:"login failed"}
+   sMsgLoginNodeOnline = &tMsgQuit{Op:"quit", Error:"node already connected"}
+   sMsgQuit            = &tMsgQuit{Op:"quit", Error:"logout ok"}
+   sMsgDatalenLimit    = &tMsgQuit{Op:"quit", Error:"data too long for request type"}
+   sMsgDataNonAscii    = &tMsgQuit{Op:"quit", Error:"data contains non-ASCII characters"}
 )
 
 // encoding without vowels to avoid words
@@ -154,7 +159,7 @@ func NewLink(iConn net.Conn) {
 func runLink(o *tLink) {
    aBuf := make([]byte, kMsgHeaderMaxLen+4) //todo start smaller, realloc as needed
    var aPos, aHeadEnd int64
-   var aQuitMsg tMsg
+   var aQuitMsg *tMsgQuit
 
    o.conn.SetReadDeadline(time.Now().Add(kLoginTimeout))
    for {
@@ -210,7 +215,7 @@ func runLink(o *tLink) {
    }
 
    if aQuitMsg != nil {
-      fmt.Printf("%s link.runlink quit %s\n", o.uid, aQuitMsg["error"].(string))
+      fmt.Printf("%s link.runlink quit %s\n", o.uid, aQuitMsg.Error)
       o.conn.Write(PackMsg(aQuitMsg, nil))
    }
    o.conn.Close()
@@ -271,7 +276,7 @@ func (o *tHeader) check() bool {
    return !aFail
 }
 
-func (o *tLink) handleMsg(iHead *tHeader, iData []byte) tMsg {
+func (o *tLink) handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
    var err error
    var aMid, aPosted string
 
@@ -588,11 +593,11 @@ func (o *tLink) postMsg(iHead *tHeader, iEtc tMsg, iData []byte) (aMsgId, aPoste
 
 type tMsg map[string]interface{}
 
-func PackMsg(iJso tMsg, iData []byte) []byte {
-   aHead, err := json.Marshal(iJso)
+func PackMsg(iHead interface{}, iData []byte) []byte {
+   aHead, err := json.Marshal(iHead)
    if err != nil { panic(err) }
    aLen := fmt.Sprintf("%04x", len(aHead))
-   if len(aLen) != 4 { panic("packmsg json input too long") }
+   if len(aLen) != 4 { panic("header input too long") }
    aBuf := make([]byte, 0, 4+len(aHead)+len(iData))
    aBuf = append(aBuf, aLen...)
    aBuf = append(aBuf, aHead...)
