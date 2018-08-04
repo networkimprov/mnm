@@ -29,6 +29,7 @@ import (
 )
 
 const kLoginTimeout time.Duration =  5 * time.Second
+const kPulseTimeout time.Duration = 2 * time.Minute
 const kQueueAckTimeout time.Duration = 30 * time.Second
 const kQueueIdleMax time.Duration = 28 * time.Hour
 const kStoreIdIncr = 1000
@@ -45,7 +46,8 @@ const (
    eUserEdit; eOhiEdit;
    eGroupInvite; eGroupEdit
    ePost; ePing
-   eAck; eQuit
+   eAck
+   ePulse; eQuit
    eOpEnd
 )
 
@@ -62,6 +64,7 @@ var sHeaderDefs = [...]tHeader{
    ePost       : { Id:"1", DataLen:1, For:[]tHeaderFor{{}} },
    ePing       : { Id:"1", DataLen:1, To:"1" },
    eAck        : { Id:"1", Type:"1" },
+   ePulse      : {  },
    eQuit       : {  },
 }
 
@@ -152,6 +155,7 @@ type UserDatabase interface {
 
 type tLink struct { // network client msg handler
    conn net.Conn // link to client
+   expectPulse bool
    queue *tQueue
    tmtprev string
    uid, node string
@@ -160,6 +164,14 @@ type tLink struct { // network client msg handler
 
 func NewLink(iConn net.Conn) {
    go runLink(&tLink{conn:iConn})
+}
+
+func (o *tLink) Read(iBuf []byte) (int, error) {
+   if o.expectPulse {
+      err := o.conn.SetReadDeadline(time.Now().Add(kPulseTimeout))
+      if err != nil { panic(err) }
+   }
+   return o.conn.Read(iBuf)
 }
 
 func runLink(o *tLink) {
@@ -171,7 +183,7 @@ func runLink(o *tLink) {
    err := o.conn.SetReadDeadline(time.Now().Add(kLoginTimeout))
    if err != nil { panic(err) }
    for {
-      aLen, err = o.conn.Read(aBuf[aPos:])
+      aLen, err = o.Read(aBuf[aPos:])
       if err != nil {
          if err == io.EOF {
             aQuitMsg = sMsgEof
@@ -346,7 +358,7 @@ func (o *tLink) handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
       if aQ == nil {
          return sMsgLoginNodeOnline
       }
-      o.conn.SetReadDeadline(time.Time{})
+      o.expectPulse = true
       o.uid = iHead.Uid
       o.node = aQid
       o.queue = aQ
@@ -481,6 +493,8 @@ func (o *tLink) handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
       case <-aTmr.C:
          fmt.Fprintf(os.Stderr, "%s link.handlemsg timed out waiting on ack\n", o.uid)
       }
+   case ePulse:
+      // no-op
    case eQuit:
       return sMsgLogout
    default:
@@ -494,7 +508,7 @@ func (o *tLink) checkPing(iHead *tHeader, iData *[]byte) *tMsgQuit {
       return sMsgDatalenLimit
    }
    for len(*iData) < int(iHead.DataLen) {
-      aLen, err := o.conn.Read((*iData)[len(*iData):iHead.DataLen]) // panics if cap() < DataLen
+      aLen, err := o.Read((*iData)[len(*iData):iHead.DataLen]) // panics if cap() < DataLen
       if err != nil {
          if err == io.EOF { return sMsgEof }
          return msgConn(err.(net.Error))
@@ -551,7 +565,7 @@ func (o *tLink) postMsg(iHead *tHeader, iEtc tMsg, iData []byte) (aMsgId, aPoste
    }
    aHead["headsum"] = crc32.Checksum(PackMsg(aHead, nil), sCrc32c)
 
-   err = sStore.RecvFile(aMsgId, PackMsg(aHead, nil), iData, o.conn, iHead.DataLen)
+   err = sStore.RecvFile(aMsgId, PackMsg(aHead, nil), iData, o, iHead.DataLen)
    if err != nil {
       if _, ok := err.(net.Error); !ok && err != io.EOF { panic(err) }
    }

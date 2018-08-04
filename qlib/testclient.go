@@ -213,6 +213,7 @@ func newTestClient(iAct tTestAction, iId int) *tTestClient {
           want: `{"id":"0","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
                 `{"datalen":0,"for":[{"Id":"u`+fmt.Sprint(iId+1)+`","Type":0}],"from":"u`+fmt.Sprint(iId)+`","headsum":#sck#,"id":"#sid#","op":"ohiedit","posted":"#spdt#","type":"add"}`+"\n"+
                 `{"from":"u`+fmt.Sprint(iId)+`","op":"ohi","status":1}` ,
+      },{ head: tMsg{"Op":ePulse} ,
       },{ head: tMsg{"Op":eQuit} ,
           want: `{"error":"logout ok","op":"quit"}`+"\n"+
                 `{"from":"u`+fmt.Sprint(iId)+`","op":"ohi","status":2}` ,

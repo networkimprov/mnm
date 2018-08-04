@@ -165,8 +165,11 @@ At recipient `{"op":"ping", (message headers), "datalen":uint, <"datahead":uint>
 0. Ack acknowledges receipt of a message.  
 `{"op":9, "id":string, "type":string}`
 
-0. Quit performs logout.  
+0. Pulse resets the connection timeout.  
 `{"op":10}`
+
+0. Quit performs logout.  
+`{"op":11}`
 
 ### License
 
