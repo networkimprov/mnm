@@ -83,6 +83,8 @@ type tMsgQuit struct {
 }
 
 var (
+   sMsgEof             = &tMsgQuit{Op:"eof"}
+   sMsgTimeout         = &tMsgQuit{Op:"quit", Error:"connection timeout"}
    sMsgLengthBad       = &tMsgQuit{Op:"quit", Error:"invalid header length"}
    sMsgHeaderBad       = &tMsgQuit{Op:"quit", Error:"invalid header"}
    sMsgBase32Bad       = &tMsgQuit{Op:"quit", Error:"corrupt base32 value"}
@@ -91,13 +93,17 @@ var (
    sMsgOpDisallowedOn  = &tMsgQuit{Op:"quit", Error:"disallowed op on connected link"}
    sMsgNeedTmtpRev     = &tMsgQuit{Op:"quit", Error:"tmtprev was omitted"}
    sMsgRegisterFailure = &tMsgQuit{Op:"quit", Error:"register failure"} //todo details
-   sMsgLoginTimeout    = &tMsgQuit{Op:"quit", Error:"login timeout"}
    sMsgLoginFailure    = &tMsgQuit{Op:"quit", Error:"login failed"}
    sMsgLoginNodeOnline = &tMsgQuit{Op:"quit", Error:"node already connected"}
-   sMsgQuit            = &tMsgQuit{Op:"quit", Error:"logout ok"}
+   sMsgLogout          = &tMsgQuit{Op:"quit", Error:"logout ok"}
    sMsgDatalenLimit    = &tMsgQuit{Op:"quit", Error:"data too long for request type"}
    sMsgDataNonAscii    = &tMsgQuit{Op:"quit", Error:"data contains non-ASCII characters"}
 )
+
+func msgConn(iErr net.Error) *tMsgQuit {
+   if iErr.Timeout() { return sMsgTimeout }
+   return &tMsgQuit{Op:"fail", Error:fmt.Sprintf("(tmp %v) %s", iErr.Temporary(), iErr.Error())}
+}
 
 // encoding without vowels to avoid words
 var sBase32 = base32.NewEncoding("%+123456789BCDFGHJKLMNPQRSTVWXYZ")
@@ -158,20 +164,20 @@ func NewLink(iConn net.Conn) {
 
 func runLink(o *tLink) {
    aBuf := make([]byte, kMsgHeaderMaxLen+4) //todo start smaller, realloc as needed
+   var aLen int
    var aPos, aHeadEnd int64
    var aQuitMsg *tMsgQuit
 
-   o.conn.SetReadDeadline(time.Now().Add(kLoginTimeout))
+   err := o.conn.SetReadDeadline(time.Now().Add(kLoginTimeout))
+   if err != nil { panic(err) }
    for {
-      aLen, err := o.conn.Read(aBuf[aPos:])
+      aLen, err = o.conn.Read(aBuf[aPos:])
       if err != nil {
-         //todo if recoverable continue
          if err == io.EOF {
-            // client close
-         } else if err.(net.Error).Timeout() {
-            aQuitMsg = sMsgLoginTimeout
+            aQuitMsg = sMsgEof
          } else {
-            fmt.Fprintf(os.Stderr, "%s link.runlink net error %s\n", o.uid, err.Error())
+            //todo if recoverable continue
+            aQuitMsg = msgConn(err.(net.Error))
          }
          break
       }
@@ -214,9 +220,13 @@ func runLink(o *tLink) {
       aPos, aHeadEnd = 0,0
    }
 
-   if aQuitMsg != nil {
-      fmt.Printf("%s link.runlink quit %s\n", o.uid, aQuitMsg.Error)
-      o.conn.Write(PackMsg(aQuitMsg, nil))
+   if aQuitMsg.Op == "eof" {
+      fmt.Printf("%s link.runlink eof\n", o.uid)
+   } else {
+      fmt.Fprintf(os.Stderr, "%s link.runlink %s %s\n", o.uid, aQuitMsg.Op, aQuitMsg.Error)
+      if aQuitMsg.Op == "quit" {
+         o.conn.Write(PackMsg(aQuitMsg, nil))
+      }
    }
    o.conn.Close()
    if o.queue != nil {
@@ -409,17 +419,13 @@ func (o *tLink) handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
       var aUid, aAlias, aNewAlias string
       switch iHead.Act {
       case "invite":
-         if iHead.DataLen > kMsgPingDataMax { return sMsgDatalenLimit }
-         err = o.checkPing(iHead, &iData)
-         if err != nil {
-            if err.Error() == "" { return sMsgDataNonAscii }
-         } else {
-            aUid, err = UDb.GroupInvite(iHead.Gid, iHead.To, iHead.From, o.uid)
-            if err == nil {
-               iHead.For = []tHeaderFor{{Id:aUid, Type:eForUser}}
-               _, _, err = o.postMsg(iHead, tMsg{"gid":iHead.Gid, "to":iHead.To}, iData)
-               aAlias = iHead.To
-            }
+         aQuitMsg := o.checkPing(iHead, &iData)
+         if aQuitMsg != nil { return aQuitMsg }
+         aUid, err = UDb.GroupInvite(iHead.Gid, iHead.To, iHead.From, o.uid)
+         if err == nil {
+            iHead.For = []tHeaderFor{{Id:aUid, Type:eForUser}}
+            _, _, err = o.postMsg(iHead, tMsg{"gid":iHead.Gid, "to":iHead.To}, iData)
+            aAlias = iHead.To
          }
       case "join":
          aAlias, err = UDb.GroupJoin(iHead.Gid, o.uid, iHead.NewAlias)
@@ -449,21 +455,19 @@ func (o *tLink) handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
    case ePost:
       aMid, aPosted, err = o.postMsg(iHead, nil, iData)
       if err != nil {
+         if err == io.EOF { return sMsgEof }
+         if aErr, _ := err.(net.Error); aErr != nil { return msgConn(aErr) }
          fmt.Fprintf(os.Stderr, "%s link.handlemsg post %s\n", o.uid, err.Error())
       }
       o.ack(iHead.Id, aMid, aPosted, err)
    case ePing:
-      if iHead.DataLen > kMsgPingDataMax { return sMsgDatalenLimit }
-      err = o.checkPing(iHead, &iData)
-      if err != nil {
-         if err.Error() == "" { return sMsgDataNonAscii }
-      } else {
-         var aUid string
-         aUid, err = UDb.Lookup(iHead.To)
-         if err == nil {
-            iHead.For = []tHeaderFor{{Id:aUid, Type:eForUser}}
-            aMid, aPosted, err = o.postMsg(iHead, tMsg{"to":iHead.To}, iData)
-         }
+      aQuitMsg := o.checkPing(iHead, &iData)
+      if aQuitMsg != nil { return aQuitMsg }
+      var aUid string
+      aUid, err = UDb.Lookup(iHead.To)
+      if err == nil {
+         iHead.For = []tHeaderFor{{Id:aUid, Type:eForUser}}
+         aMid, aPosted, err = o.postMsg(iHead, tMsg{"to":iHead.To}, iData)
       }
       if err != nil {
          fmt.Fprintf(os.Stderr, "%s link.handlemsg ping %s\n", o.uid, err.Error())
@@ -478,22 +482,28 @@ func (o *tLink) handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
          fmt.Fprintf(os.Stderr, "%s link.handlemsg timed out waiting on ack\n", o.uid)
       }
    case eQuit:
-      return sMsgQuit
+      return sMsgLogout
    default:
       panic(fmt.Sprintf("checkHeader failure, op %d", iHead.Op))
    }
    return nil
 }
 
-func (o *tLink) checkPing(iHead *tHeader, iData *[]byte) error {
+func (o *tLink) checkPing(iHead *tHeader, iData *[]byte) *tMsgQuit {
+   if iHead.DataLen > kMsgPingDataMax {
+      return sMsgDatalenLimit
+   }
    for len(*iData) < int(iHead.DataLen) {
       aLen, err := o.conn.Read((*iData)[len(*iData):iHead.DataLen]) // panics if cap() < DataLen
-      if err != nil { return err }
+      if err != nil {
+         if err == io.EOF { return sMsgEof }
+         return msgConn(err.(net.Error))
+      }
       *iData = (*iData)[:len(*iData)+aLen]
    }
    for _, a := range *iData {
       if a > 0x7F {
-         return tError("")
+         return sMsgDataNonAscii
       }
    }
    return nil
@@ -542,7 +552,9 @@ func (o *tLink) postMsg(iHead *tHeader, iEtc tMsg, iData []byte) (aMsgId, aPoste
    aHead["headsum"] = crc32.Checksum(PackMsg(aHead, nil), sCrc32c)
 
    err = sStore.RecvFile(aMsgId, PackMsg(aHead, nil), iData, o.conn, iHead.DataLen)
-   if err != nil && err != io.EOF { panic(err) }
+   if err != nil {
+      if _, ok := err.(net.Error); !ok && err != io.EOF { panic(err) }
+   }
    defer sStore.RmFile(aMsgId)
    if err != nil { return "", "", err }
 

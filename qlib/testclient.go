@@ -234,7 +234,7 @@ func newTestClient(iAct tTestAction, iId int) *tTestClient {
       },{ msg : []byte{255} ,
           want: `{"error":"data contains non-ASCII characters","op":"quit"}` ,
       },{ msg : []byte(`delay`) ,
-          want: `{"error":"login timeout","op":"quit"}` ,
+          want: `{"error":"connection timeout","op":"quit"}` ,
       }}
    }
    return aTc
