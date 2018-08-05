@@ -232,8 +232,8 @@ func newTestClient(iAct tTestAction, iId int) *tTestClient {
                 `{"datalen":15,"from":"u`+fmt.Sprint(iId)+`","headsum":#ck#,"id":"#id#","op":"delivery","posted":"#pdt#"}data for Id:zyx` ,
       },{ head: tMsg{"Op":ePing, "Id":"123", "Datalen":8, "To":"test2"} ,
       },{ msg : []byte(`1234567`) ,
-      },{ msg : []byte{255} ,
-          want: `{"error":"data contains non-ASCII characters","op":"quit"}` ,
+      },{ msg : []byte{255,254,253} ,
+          want: `{"error":"data not valid UTF8","op":"quit"}` ,
       },{ msg : []byte(`delay`) ,
           want: `{"error":"connection timeout","op":"quit"}` ,
       }}

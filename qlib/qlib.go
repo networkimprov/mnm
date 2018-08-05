@@ -26,6 +26,7 @@ import (
    "strings"
    "sync"
    "time"
+   "unicode/utf8"
 )
 
 const kLoginTimeout time.Duration =  5 * time.Second
@@ -100,7 +101,7 @@ var (
    sMsgLoginNodeOnline = &tMsgQuit{Op:"quit", Error:"node already connected"}
    sMsgLogout          = &tMsgQuit{Op:"quit", Error:"logout ok"}
    sMsgDatalenLimit    = &tMsgQuit{Op:"quit", Error:"data too long for request type"}
-   sMsgDataNonAscii    = &tMsgQuit{Op:"quit", Error:"data contains non-ASCII characters"}
+   sMsgDataNotUtf8     = &tMsgQuit{Op:"quit", Error:"data not valid UTF8"}
 )
 
 func msgConn(iErr net.Error) *tMsgQuit {
@@ -515,10 +516,8 @@ func (o *tLink) checkPing(iHead *tHeader, iData *[]byte) *tMsgQuit {
       }
       *iData = (*iData)[:len(*iData)+aLen]
    }
-   for _, a := range *iData {
-      if a > 0x7F {
-         return sMsgDataNonAscii
-      }
+   if !utf8.Valid(*iData) {
+      return sMsgDataNotUtf8
    }
    return nil
 }
