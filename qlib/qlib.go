@@ -10,11 +10,11 @@ package qlib
 
 import (
    "sync/atomic"
+   "encoding/base32"
    "hash/crc32"
    "fmt"
    "io"
    "io/ioutil"
-   "encoding/base32"
    "encoding/json"
    "net"
    "os"
@@ -41,6 +41,30 @@ const kNodeIdLen = 25
 const kAliasMinLen = 8
 const kPostDateFormat = "2006-01-02T15:04:05.000Z07:00"
 
+var UDb UserDatabase // set by caller
+
+// encoding without vowels to avoid words
+var sBase32 = base32.NewEncoding("%+123456789BCDFGHJKLMNPQRSTVWXYZ")
+
+var sCrc32c = crc32.MakeTable(crc32.Castagnoli)
+var sOhi = tOhi{from: tOhiMap{}}
+var sNode = tNodes{list: tNodeMap{}}
+var sStore = tStore{}
+
+
+type tHeader struct {
+   Op uint8
+   DataLen, DataHead int64
+   DataSum uint64
+   Uid, Gid string
+   Id string
+   Node, NewNode string
+   NewAlias, From, To string // alias
+   Type string
+   Act string
+   For []tHeaderFor
+}
+
 const (
    eTmtpRev = iota
    eRegister; eLogin
@@ -51,6 +75,8 @@ const (
    ePulse; eQuit
    eOpEnd
 )
+
+type tHeaderFor struct { Id string; Type int8 }
 
 const ( _=iota; eForUser; eForGroupAll; eForGroupExcl; eForSelf )
 
@@ -68,6 +94,35 @@ var sHeaderDefs = [...]tHeader{
    ePulse      : {  },
    eQuit       : {  },
 }
+
+func (o *tHeader) check() bool {
+   if o.Op >= eOpEnd { return false }
+   aDef := &sHeaderDefs[o.Op]
+   aFail :=
+      o.DataLen < 0                                  ||
+      o.DataLen < o.DataHead                         ||
+      (aDef.DataLen == 0)    != (o.DataLen == 0)     ||
+      aDef.DataSum       > 0 && o.DataSum       == 0 ||
+      len(aDef.Uid)      > 0 && len(o.Uid)      == 0 ||
+      len(aDef.Gid)      > 0 && len(o.Gid)      == 0 ||
+      len(aDef.Id)       > 0 && len(o.Id)       == 0 ||
+      len(aDef.Node)     > 0 && len(o.Node)     == 0 ||
+      len(aDef.NewNode)  > 0 && len(o.NewNode)  == 0 ||
+      len(aDef.NewAlias) > 0 && len(o.NewAlias) == 0 ||
+      len(aDef.From)     > 0 && len(o.From)     == 0 ||
+      len(aDef.To)       > 0 && len(o.To)       == 0 ||
+      len(aDef.Type)     > 0 && len(o.Type)     == 0 ||
+      len(aDef.Act)      > 0 && len(o.Act)      == 0 ||
+      len(aDef.For)      > 0 && len(o.For)      == 0
+   for _, aEl := range o.For {
+      aFail = aFail || len(aEl.Id) == 0 ||
+              o.Op == ePost && (aEl.Type < eForUser || aEl.Type >= eForSelf)
+   }
+   return !aFail
+}
+
+
+type tMsg map[string]interface{}
 
 var sResponseOps = [...]string{
    eRegister:    "registered",
@@ -109,15 +164,21 @@ func msgConn(iErr net.Error) *tMsgQuit {
    return &tMsgQuit{Op:"fail", Error:fmt.Sprintf("(tmp %v) %s", iErr.Temporary(), iErr.Error())}
 }
 
-// encoding without vowels to avoid words
-var sBase32 = base32.NewEncoding("%+123456789BCDFGHJKLMNPQRSTVWXYZ")
+func packMsg(iHead interface{}, iData []byte) []byte {
+   aHead, err := json.Marshal(iHead)
+   if err != nil { panic(err) }
+   aLen := fmt.Sprintf("%04x", len(aHead))
+   if len(aLen) != 4 { panic("header input too long") }
+   aBuf := make([]byte, 0, 4+len(aHead)+len(iData))
+   aBuf = append(aBuf, aLen...)
+   aBuf = append(aBuf, aHead...)
+   aBuf = append(aBuf, iData...)
+   return aBuf
+}
 
-var sCrc32c = crc32.MakeTable(crc32.Castagnoli)
 
-var sOhi = tOhi{from: tOhiMap{}}
-var sNode = tNodes{list: tNodeMap{}}
-var sStore = tStore{}
-var UDb UserDatabase // set by caller
+type tError string
+func (o tError) Error() string { return string(o) }
 
 
 type UserDatabase interface {
@@ -256,47 +317,6 @@ func _runLink(o *tLink) {
          _ = UDb.CloseNodes(aUid)
       }
    }
-}
-
-type tHeader struct {
-   Op uint8
-   DataLen, DataHead int64
-   DataSum uint64
-   Uid, Gid string
-   Id string
-   Node, NewNode string
-   NewAlias, From, To string // alias
-   Type string
-   Act string
-   For []tHeaderFor
-}
-
-type tHeaderFor struct { Id string; Type int8 }
-
-func (o *tHeader) check() bool {
-   if o.Op >= eOpEnd { return false }
-   aDef := &sHeaderDefs[o.Op]
-   aFail :=
-      o.DataLen < 0                                  ||
-      o.DataLen < o.DataHead                         ||
-      (aDef.DataLen == 0)    != (o.DataLen == 0)     ||
-      aDef.DataSum       > 0 && o.DataSum       == 0 ||
-      len(aDef.Uid)      > 0 && len(o.Uid)      == 0 ||
-      len(aDef.Gid)      > 0 && len(o.Gid)      == 0 ||
-      len(aDef.Id)       > 0 && len(o.Id)       == 0 ||
-      len(aDef.Node)     > 0 && len(o.Node)     == 0 ||
-      len(aDef.NewNode)  > 0 && len(o.NewNode)  == 0 ||
-      len(aDef.NewAlias) > 0 && len(o.NewAlias) == 0 ||
-      len(aDef.From)     > 0 && len(o.From)     == 0 ||
-      len(aDef.To)       > 0 && len(o.To)       == 0 ||
-      len(aDef.Type)     > 0 && len(o.Type)     == 0 ||
-      len(aDef.Act)      > 0 && len(o.Act)      == 0 ||
-      len(aDef.For)      > 0 && len(o.For)      == 0
-   for _, aEl := range o.For {
-      aFail = aFail || len(aEl.Id) == 0 ||
-              o.Op == ePost && (aEl.Type < eForUser || aEl.Type >= eForSelf)
-   }
-   return !aFail
 }
 
 func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
@@ -616,20 +636,6 @@ func (o *tLink) _postMsg(iHead *tHeader, iEtc tMsg, iData []byte) (aMsgId, aPost
    return aMsgId, aPosted, nil
 }
 
-type tMsg map[string]interface{}
-
-func packMsg(iHead interface{}, iData []byte) []byte {
-   aHead, err := json.Marshal(iHead)
-   if err != nil { panic(err) }
-   aLen := fmt.Sprintf("%04x", len(aHead))
-   if len(aLen) != 4 { panic("header input too long") }
-   aBuf := make([]byte, 0, 4+len(aHead)+len(iData))
-   aBuf = append(aBuf, aLen...)
-   aBuf = append(aBuf, aHead...)
-   aBuf = append(aBuf, iData...)
-   return aBuf
-}
-
 
 type tOhi struct {
    from tOhiMap // users notifying others of presence
@@ -745,6 +751,7 @@ func getNode(iNode string) *tNode {
    sNode.Unlock()
    return aNd
 }
+
 
 type tQueue struct {
    node string
@@ -894,10 +901,6 @@ closed:
    }
    close(o.out)
 }
-
-
-type tError string
-func (o tError) Error() string { return string(o) }
 
 
 func makeUid() string {
