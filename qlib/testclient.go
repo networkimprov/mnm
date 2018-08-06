@@ -27,8 +27,8 @@ const kTestLoginWait time.Duration = 6 * time.Second
 
 var sTestNodeIds = make(map[int]string)
 var sTestVerifyDone = make(chan int)
-var sTestVerifyWant struct { val string; sync.Mutex } // expected results of verifyRead()
-var sTestVerifyGot [3]string // actual results of verifyRead()
+var sTestVerifyWant struct { val string; sync.Mutex } // expected results of _verifyRead()
+var sTestVerifyGot [3]string // actual results of _verifyRead()
 var sTestVerifyFail int
 var sTestClientCount int32
 var sTestClientId chan int
@@ -43,15 +43,15 @@ func LocalTest(i int) {
    sTestVerifyWant.val = "\n"
    sTestVerifyGot[2] = "\n"
 
-   UDb.TempUser("u100002", testMakeNode(100002))
-   UDb.TempUser("u100003", testMakeNode(100003))
+   UDb.TempUser("u100002", _testMakeNode(100002))
+   UDb.TempUser("u100003", _testMakeNode(100003))
    UDb.TempAlias("u100002", "test1")
    UDb.TempAlias("u100002", "test11")
    UDb.TempAlias("u100003", "test2")
    UDb.TempGroup("blab", "u100002", "test1") // Status eStatInvited
 
-   NewLink(newTestClient(eActVerifyRecv, 100003))
-   NewLink(newTestClient(eActVerifySend, 100002))
+   NewLink(_newTestClient(eActVerifyRecv, 100003))
+   NewLink(_newTestClient(eActVerifySend, 100002))
    <-sTestVerifyDone
    time.Sleep(10 * time.Millisecond)
    UDb.Erase() // assumes no userdb write ops during cycle
@@ -67,7 +67,7 @@ func LocalTest(i int) {
    for a := 0; a <= i; a++ {
       aId := 111000 + a
       aS := fmt.Sprint(aId)
-      UDb.TempUser("u"+aS, testMakeNode(aId))
+      UDb.TempUser("u"+aS, _testMakeNode(aId))
       UDb.TempAlias("u"+aS, "a"+aS)
       UDb.TempGroup("g"+fmt.Sprint(a/100), "u"+aS, "a"+aS)
       if a < i {
@@ -76,11 +76,11 @@ func LocalTest(i int) {
       }
    }
    for a := 0; true; a++ {
-      NewLink(newTestClient(eActCycle, <-sTestClientId))
+      NewLink(_newTestClient(eActCycle, <-sTestClientId))
    }
 }
 
-func testMakeNode(id int) string {
+func _testMakeNode(id int) string {
    aNodeId := sBase32.EncodeToString([]byte(fmt.Sprint(id)))
    sTestNodeIds[id] = aNodeId
    aNodeSha, err := getNodeSha(&aNodeId)
@@ -106,7 +106,7 @@ type tTestWork struct { msg []byte; head tMsg; data, want string }
 
 type tTestForOhi struct { Id string }
 
-func newTestClient(iAct tTestAction, iId int) *tTestClient {
+func _newTestClient(iAct tTestAction, iId int) *tTestClient {
    aTc := &tTestClient{
       id: iId,
       action: iAct,
@@ -241,20 +241,20 @@ func newTestClient(iAct tTestAction, iId int) *tTestClient {
    return aTc
 }
 
-func (o *tTestClient) verifyRead(iBuf []byte) (int, error) {
+func (o *tTestClient) _verifyRead(iBuf []byte) (int, error) {
    var aMsg []byte
    o.count++
 
    if o.action == eActVerifyRecv {
       if o.count == 1 {
-         aMsg = PackMsg(tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(o.id), "Node":sTestNodeIds[o.id]}, nil)
-         aMsg = PackMsg(tMsg{"Op":eTmtpRev, "Id":"1"}, aMsg)
+         aMsg = packMsg(tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(o.id), "Node":sTestNodeIds[o.id]}, nil)
+         aMsg = packMsg(tMsg{"Op":eTmtpRev, "Id":"1"}, aMsg)
       } else {
          select {
          case <-sTestVerifyDone:
             return 0, io.EOF
          case aId := <-o.ack:
-            aMsg = PackMsg(tMsg{"Op":eAck, "Id":aId, "Type":"n"}, nil)
+            aMsg = packMsg(tMsg{"Op":eAck, "Id":aId, "Type":"n"}, nil)
          }
       }
    } else {
@@ -274,20 +274,20 @@ func (o *tTestClient) verifyRead(iBuf []byte) (int, error) {
       sTestVerifyGot[0], sTestVerifyGot[1], sTestVerifyGot[2] = "","",""
       aMsg = aWk.msg
       if aMsg == nil {
-         aMsg = PackMsg(aWk.head, []byte(aWk.data))
+         aMsg = packMsg(aWk.head, []byte(aWk.data))
       } else if string(aMsg) == "delay" {
          return 0, &net.OpError{Op:"read", Err:&tTimeoutError{}}
       }
       select {
       case aId := <-o.ack:
-         aMsg = PackMsg(tMsg{"Op":eAck, "Id":aId, "Type":"n"}, aMsg)
+         aMsg = packMsg(tMsg{"Op":eAck, "Id":aId, "Type":"n"}, aMsg)
       default:
       }
    }
    return copy(iBuf, aMsg), nil
 }
 
-func loginSummary() {
+func _testLoginSummary() {
    if atomic.AddInt32(&sTestLoginTotal, 1) % (sTestClientCount * 1) == 0 {
       var aMinV, aMaxV, aMinK, aMaxK int = 1e9, 0,0,0
       for aK, aV := range sTestLogins {
@@ -298,7 +298,7 @@ func loginSummary() {
    }
 }
 
-func recvSummary(i int) {
+func _testRecvSummary(i int) {
    aB := atomic.AddInt64(&sTestRecvBytes, int64(i))
    aN := atomic.AddInt32(&sTestRecvCount, 1)
    if aN % (sTestClientCount * 2) == 0 {
@@ -306,7 +306,7 @@ func recvSummary(i int) {
    }
 }
 
-func (o *tTestClient) cycleRead(iBuf []byte) (int, error) {
+func (o *tTestClient) _cycleRead(iBuf []byte) (int, error) {
    fGetBuf := func() []byte {
       cData := sTestReadData
       if o.toRead < len(cData) {
@@ -347,7 +347,7 @@ func (o *tTestClient) cycleRead(iBuf []byte) (int, error) {
       } else if o.count == 2 {
          aHead = tMsg{"Op":eLogin, "Uid":"u"+fmt.Sprint(o.id), "Node":sTestNodeIds[o.id]}
          *sTestLogins[o.id]++
-         loginSummary()
+         _testLoginSummary()
       } else if o.count == 3 {
          var aFor []tTestForOhi
          aMax := int(sTestClientCount); if aMax > 100 { aMax = 100 }
@@ -379,19 +379,19 @@ func (o *tTestClient) cycleRead(iBuf []byte) (int, error) {
       return 0, &net.OpError{Op:"read", Err:&tTimeoutError{}}
    }
 
-   aMsg := PackMsg(aHead, aData)
+   aMsg := packMsg(aHead, aData)
    //fmt.Printf("%d PUT %s\n", o.id, string(aMsg))
    return copy(iBuf, aMsg), nil
 }
 
 func (o *tTestClient) Read(iBuf []byte) (int, error) {
    if o.action == eActCycle {
-      return o.cycleRead(iBuf)
+      return o._cycleRead(iBuf)
    }
-   return o.verifyRead(iBuf)
+   return o._verifyRead(iBuf)
 }
 
-func verifyWantEdit(iOld, iNew string) {
+func _testVerifyWantEdit(iOld, iNew string) {
    sTestVerifyWant.Lock()
    sTestVerifyWant.val = strings.Replace(sTestVerifyWant.val, "#"+iOld+"#", iNew, 1)
    sTestVerifyWant.Unlock()
@@ -417,18 +417,18 @@ func (o *tTestClient) Write(iBuf []byte) (int, error) {
       if o.action == eActVerifySend || !(aOp == "tmtprev" || aOp == "info" || aOp == "login") {
          aI := 0; if o.action == eActVerifyRecv { aI = 2 }
          if aHead["msgid"] != nil {
-            verifyWantEdit("mid", aHead["msgid"].(string))
-            verifyWantEdit("pst", aHead["posted"].(string))
+            _testVerifyWantEdit("mid", aHead["msgid"].(string))
+            _testVerifyWantEdit("pst", aHead["posted"].(string))
          } else if aHead["from"] != nil && aOp != "ohi" {
             aS := ""; if o.action == eActVerifySend { aS = "s"; aI = 1 }
-            verifyWantEdit(aS+"id", aHead["id"].(string))
-            verifyWantEdit(aS+"pdt", aHead["posted"].(string))
-            verifyWantEdit(aS+"ck", fmt.Sprint(uint32(aHead["headsum"].(float64))))
+            _testVerifyWantEdit(aS+"id", aHead["id"].(string))
+            _testVerifyWantEdit(aS+"pdt", aHead["posted"].(string))
+            _testVerifyWantEdit(aS+"ck", fmt.Sprint(uint32(aHead["headsum"].(float64))))
          } else if aOp == "registered" {
-            verifyWantEdit("uid", aHead["uid"].(string))
+            _testVerifyWantEdit("uid", aHead["uid"].(string))
          }
          if aHead["nodeid"] != nil {
-            verifyWantEdit("nid", aHead["nodeid"].(string))
+            _testVerifyWantEdit("nid", aHead["nodeid"].(string))
          }
          sTestVerifyGot[aI] += string(iBuf[4:]) + "\n"
       }
@@ -445,12 +445,12 @@ func (o *tTestClient) Write(iBuf []byte) (int, error) {
    } else if aHead["from"] != nil {
       aHeadsum := uint32(aHead["headsum"].(float64))
       delete(aHead, "headsum")
-      if aHeadsum != crc32.Checksum(PackMsg(aHead, nil), sCrc32c) {
+      if aHeadsum != crc32.Checksum(packMsg(aHead, nil), sCrc32c) {
          fmt.Fprintf(os.Stderr, "%d testclient.write headsum failed\n", o.id)
       }
 
       aDatalen := int(aHead["datalen"].(float64))
-      if o.action == eActCycle { recvSummary(aDatalen) }
+      if o.action == eActCycle { _testRecvSummary(aDatalen) }
       o.toWrite = aDatalen - len(iBuf) + int(aHeadLen+4)
 
       aTmr := time.NewTimer(2 * time.Second)
@@ -478,7 +478,7 @@ func (o *tTestClient) Close() error {
       case <-sTestVerifyDone:
          return nil
       default:
-         aTc := newTestClient(eActVerifySend, o.id)
+         aTc := _newTestClient(eActVerifySend, o.id)
          aTc.count = o.count
          time.AfterFunc(10*time.Millisecond, func(){ NewLink(aTc) })
       }

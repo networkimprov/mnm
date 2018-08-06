@@ -164,7 +164,7 @@ type tLink struct { // network client msg handler
 }
 
 func NewLink(iConn net.Conn) {
-   go runLink(&tLink{conn:iConn})
+   go _runLink(&tLink{conn:iConn})
 }
 
 func (o *tLink) Read(iBuf []byte) (int, error) {
@@ -175,7 +175,7 @@ func (o *tLink) Read(iBuf []byte) (int, error) {
    return o.conn.Read(iBuf)
 }
 
-func runLink(o *tLink) {
+func _runLink(o *tLink) {
    aBuf := make([]byte, kMsgHeaderMaxLen+4) //todo start smaller, realloc as needed
    var aLen int
    var aPos, aHeadEnd int64
@@ -216,12 +216,12 @@ func runLink(o *tLink) {
          aQuitMsg = sMsgHeaderBad
          break
       }
-      aData := aBuf[aHeadEnd:aHeadEnd] // checkPing may write into this
+      aData := aBuf[aHeadEnd:aHeadEnd] // _checkPing may write into this
       if aPos > aHeadEnd && aHead.DataLen > 0 {
          aEnd := aHeadEnd + aHead.DataLen; if aPos < aEnd { aEnd = aPos }
          aData = aBuf[aHeadEnd:aEnd]
       }
-      aQuitMsg = o.handleMsg(aHead, aData)
+      aQuitMsg = o._handleMsg(aHead, aData)
       if aQuitMsg != nil {
          break
       }
@@ -234,25 +234,25 @@ func runLink(o *tLink) {
    }
 
    if aQuitMsg.Op == "eof" {
-      fmt.Printf("%s link.runlink eof\n", o.uid)
+      fmt.Printf("%s link._runLink eof\n", o.uid)
    } else {
-      fmt.Fprintf(os.Stderr, "%s link.runlink %s %s\n", o.uid, aQuitMsg.Op, aQuitMsg.Error)
+      fmt.Fprintf(os.Stderr, "%s link._runLink %s %s\n", o.uid, aQuitMsg.Op, aQuitMsg.Error)
       if aQuitMsg.Op == "quit" {
-         o.conn.Write(PackMsg(aQuitMsg, nil))
+         o.conn.Write(packMsg(aQuitMsg, nil))
       }
    }
    o.conn.Close()
    if o.queue != nil {
-      o.queue.Unlink()
+      o.queue.unlink()
    }
    if o.ohi != nil {
       for _, aUid := range sOhi.unref(o.uid) {
          aNodes, err := UDb.OpenNodes(aUid)
          if err != nil {
-            fmt.Fprintf(os.Stderr, "%s link.runlink opennodes %s\n", o.uid, err.Error())
+            fmt.Fprintf(os.Stderr, "%s link._runLink opennodes %s\n", o.uid, err.Error())
             continue
          }
-         o.sendOhi(aNodes, eOhiOff)
+         o._sendOhi(aNodes, eOhiOff)
          _ = UDb.CloseNodes(aUid)
       }
    }
@@ -299,7 +299,7 @@ func (o *tHeader) check() bool {
    return !aFail
 }
 
-func (o *tLink) handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
+func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
    var err error
    var aMid, aPosted string
 
@@ -321,13 +321,13 @@ func (o *tLink) handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
       default:
          o.tmtprev = "1"
       }
-      o.conn.Write(PackMsg(tMsg{"op":"tmtprev", "id":o.tmtprev}, nil))
+      o.conn.Write(packMsg(tMsg{"op":"tmtprev", "id":o.tmtprev}, nil))
    case eRegister:
       aUid := makeUid()
       aNodeId, aNodeSha := makeNodeId()
       _, err = UDb.AddUser(aUid, aNodeSha) //todo iHead.NewNode
       if err != nil {
-         fmt.Fprintf(os.Stderr, "%s link.handlemsg register %s\n", o.uid, err.Error())
+         fmt.Fprintf(os.Stderr, "%s link._handleMsg register %s\n", o.uid, err.Error())
          return sMsgRegisterFailure
       }
       aAck := tMsg{"op":sResponseOps[iHead.Op], "uid":aUid, "nodeid":aNodeId}
@@ -341,7 +341,7 @@ func (o *tLink) handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
             }
          }
       }
-      o.conn.Write(PackMsg(aAck, nil))
+      o.conn.Write(packMsg(aAck, nil))
       iHead.Uid = aUid
       iHead.Node = aNodeId
       fallthrough
@@ -355,7 +355,7 @@ func (o *tLink) handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
       if err != nil {
          return sMsgLoginFailure
       }
-      aQ := QueueLink(aQid, o.conn, tMsg{"op":"info", "info":"login ok", "ohi":nil}, iHead.Uid)
+      aQ := queueLink(aQid, o.conn, tMsg{"op":"info", "info":"login ok", "ohi":nil}, iHead.Uid)
       if aQ == nil {
          return sMsgLoginNodeOnline
       }
@@ -365,10 +365,10 @@ func (o *tLink) handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
       o.queue = aQ
       if iHead.Op != eRegister {
          iHead.For = []tHeaderFor{{Id:o.uid, Type:eForUser}}
-         _, _, err = o.postMsg(iHead, tMsg{"node":"tbd"}, nil) //todo tbd=noderef
+         _, _, err = o._postMsg(iHead, tMsg{"node":"tbd"}, nil) //todo tbd=noderef
          if err != nil { panic(err) }
       }
-      fmt.Printf("%s link.handlemsg login user %.7s\n", o.uid, aQ.node)
+      fmt.Printf("%s link._handleMsg login user %.7s\n", o.uid, aQ.node)
    case eUserEdit:
       if iHead.NewNode == "" && iHead.NewAlias == "" { return sMsgHeaderBad }
       if iHead.NewNode != "" && iHead.NewAlias != "" { return sMsgHeaderBad }
@@ -383,19 +383,19 @@ func (o *tLink) handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
          var aQid string
          aQid, err = UDb.AddNode(o.uid, aNodeSha)
          if err == nil {
-            err = sStore.CopyDir(o.node, aQid)
+            err = sStore.copyDir(o.node, aQid)
             if err != nil { panic(err) }
             aEtc["nodeid"] = aNodeId
          }
       }
       if err == nil {
          iHead.For = []tHeaderFor{{Id:o.uid, Type:eForUser}}
-         aMid, aPosted, err = o.postMsg(iHead, aEtc, nil)
+         aMid, aPosted, err = o._postMsg(iHead, aEtc, nil)
       }
       if err != nil {
-         fmt.Fprintf(os.Stderr, "%s link.handlemsg useredit %s\n", o.uid, err.Error())
+         fmt.Fprintf(os.Stderr, "%s link._handleMsg useredit %s\n", o.uid, err.Error())
       }
-      o.ack(iHead.Id, aMid, aPosted, err)
+      o._ack(iHead.Id, aMid, aPosted, err)
    case eOhiEdit:
       if iHead.Type != "add" && iHead.Type != "drop" { return sMsgHeaderBad }
       for _, aTo := range iHead.For {
@@ -413,7 +413,7 @@ func (o *tLink) handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
             if o.ohi.edit(aTo.Id, iHead.Type == "add") {
                aNodes, aErr := UDb.OpenNodes(aTo.Id)
                if aErr == nil {
-                  o.sendOhi(aNodes, aStat)
+                  o._sendOhi(aNodes, aStat)
                   _ = UDb.CloseNodes(aTo.Id)
                }
             }
@@ -421,10 +421,10 @@ func (o *tLink) handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
          if !aInit {
             aHead := &tHeader{Op:eOhiEdit, For: []tHeaderFor{{Id:o.uid, Type:eForUser}}}
             aEtc := tMsg{"for":iHead.For, "type":iHead.Type}
-            aMid, aPosted, err = o.postMsg(aHead, aEtc, nil)
+            aMid, aPosted, err = o._postMsg(aHead, aEtc, nil)
          }
       }
-      o.ack(iHead.Id, aMid, aPosted, err)
+      o._ack(iHead.Id, aMid, aPosted, err)
    case eGroupInvite:
       iHead.Act = "invite"
       fallthrough
@@ -432,12 +432,12 @@ func (o *tLink) handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
       var aUid, aAlias, aNewAlias string
       switch iHead.Act {
       case "invite":
-         aQuitMsg := o.checkPing(iHead, &iData)
+         aQuitMsg := o._checkPing(iHead, &iData)
          if aQuitMsg != nil { return aQuitMsg }
          aUid, err = UDb.GroupInvite(iHead.Gid, iHead.To, iHead.From, o.uid)
          if err == nil {
             iHead.For = []tHeaderFor{{Id:aUid, Type:eForUser}}
-            _, _, err = o.postMsg(iHead, tMsg{"gid":iHead.Gid, "to":iHead.To}, iData)
+            _, _, err = o._postMsg(iHead, tMsg{"gid":iHead.Gid, "to":iHead.To}, iData)
             aAlias = iHead.To
          }
       case "join":
@@ -459,40 +459,40 @@ func (o *tLink) handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
             aEtc["newalias"] = aNewAlias
          }
          aHead := &tHeader{Op: eGroupEdit, For: []tHeaderFor{{Id:iHead.Gid, Type:eForGroupAll}}}
-         aMid, aPosted, err = o.postMsg(aHead, aEtc, nil)
+         aMid, aPosted, err = o._postMsg(aHead, aEtc, nil)
       }
       if err != nil {
-         fmt.Fprintf(os.Stderr, "%s link.handlemsg group %s\n", o.uid, err.Error())
+         fmt.Fprintf(os.Stderr, "%s link._handleMsg group %s\n", o.uid, err.Error())
       }
-      o.ack(iHead.Id, aMid, aPosted, err)
+      o._ack(iHead.Id, aMid, aPosted, err)
    case ePost:
-      aMid, aPosted, err = o.postMsg(iHead, nil, iData)
+      aMid, aPosted, err = o._postMsg(iHead, nil, iData)
       if err != nil {
          if err == io.EOF { return sMsgEof }
          if aErr, _ := err.(net.Error); aErr != nil { return msgConn(aErr) }
-         fmt.Fprintf(os.Stderr, "%s link.handlemsg post %s\n", o.uid, err.Error())
+         fmt.Fprintf(os.Stderr, "%s link._handleMsg post %s\n", o.uid, err.Error())
       }
-      o.ack(iHead.Id, aMid, aPosted, err)
+      o._ack(iHead.Id, aMid, aPosted, err)
    case ePing:
-      aQuitMsg := o.checkPing(iHead, &iData)
+      aQuitMsg := o._checkPing(iHead, &iData)
       if aQuitMsg != nil { return aQuitMsg }
       var aUid string
       aUid, err = UDb.Lookup(iHead.To)
       if err == nil {
          iHead.For = []tHeaderFor{{Id:aUid, Type:eForUser}}
-         aMid, aPosted, err = o.postMsg(iHead, tMsg{"to":iHead.To}, iData)
+         aMid, aPosted, err = o._postMsg(iHead, tMsg{"to":iHead.To}, iData)
       }
       if err != nil {
-         fmt.Fprintf(os.Stderr, "%s link.handlemsg ping %s\n", o.uid, err.Error())
+         fmt.Fprintf(os.Stderr, "%s link._handleMsg ping %s\n", o.uid, err.Error())
       }
-      o.ack(iHead.Id, aMid, aPosted, err)
+      o._ack(iHead.Id, aMid, aPosted, err)
    case eAck:
       aTmr := time.NewTimer(2 * time.Second)
       select {
       case o.queue.ack <- iHead.Id:
          aTmr.Stop()
       case <-aTmr.C:
-         fmt.Fprintf(os.Stderr, "%s link.handlemsg timed out waiting on ack\n", o.uid)
+         fmt.Fprintf(os.Stderr, "%s link._handleMsg timed out waiting on ack\n", o.uid)
       }
    case ePulse:
       // no-op
@@ -504,7 +504,7 @@ func (o *tLink) handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
    return nil
 }
 
-func (o *tLink) checkPing(iHead *tHeader, iData *[]byte) *tMsgQuit {
+func (o *tLink) _checkPing(iHead *tHeader, iData *[]byte) *tMsgQuit {
    if iHead.DataLen > kMsgPingDataMax {
       return sMsgDatalenLimit
    }
@@ -522,9 +522,9 @@ func (o *tLink) checkPing(iHead *tHeader, iData *[]byte) *tMsgQuit {
    return nil
 }
 
-func (o *tLink) sendOhi(iNodes []string, iStat int8) {
+func (o *tLink) _sendOhi(iNodes []string, iStat int8) {
    for _, aNid := range iNodes {
-      aNd := GetNode(aNid)
+      aNd := getNode(aNid)
       aNd.RLock()
       if aNd.queue != nil {
          aTmr := time.NewTimer(200 * time.Millisecond)
@@ -532,23 +532,23 @@ func (o *tLink) sendOhi(iNodes []string, iStat int8) {
          case aNd.queue.ohi <- tOhiMsg{from:o.uid, status:iStat}:
             aTmr.Stop()
          case <-aTmr.C:
-            fmt.Fprintf(os.Stderr, "%s link.sendohi timeout node %s\n", o.uid, aNid)
+            fmt.Fprintf(os.Stderr, "%s link._sendOhi timeout node %s\n", o.uid, aNid)
          }
       }
       aNd.RUnlock()
    }
 }
 
-func (o *tLink) ack(iId, iMsgId, iPosted string, iErr error) {
+func (o *tLink) _ack(iId, iMsgId, iPosted string, iErr error) {
    aMsg := tMsg{"op":"ack", "id":iId, "msgid":iMsgId, "posted":iPosted}
    if iErr != nil {
       aMsg["error"] = iErr.Error()
    }
-   o.conn.Write(PackMsg(aMsg, nil))
+   o.conn.Write(packMsg(aMsg, nil))
 }
 
-func (o *tLink) postMsg(iHead *tHeader, iEtc tMsg, iData []byte) (aMsgId, aPosted string, err error) {
-   aMsgId = sStore.MakeId()
+func (o *tLink) _postMsg(iHead *tHeader, iEtc tMsg, iData []byte) (aMsgId, aPosted string, err error) {
+   aMsgId = sStore.makeId()
    aPosted = time.Now().UTC().Format(kPostDateFormat)
    aHead := tMsg{"op":sResponseOps[iHead.Op], "id":aMsgId, "from":o.uid, "datalen":iHead.DataLen,
                  "posted":aPosted}
@@ -562,13 +562,13 @@ func (o *tLink) postMsg(iHead *tHeader, iEtc tMsg, iData []byte) (aMsgId, aPoste
    if iEtc != nil {
       for aK, aV := range iEtc { aHead[aK] = aV }
    }
-   aHead["headsum"] = crc32.Checksum(PackMsg(aHead, nil), sCrc32c)
+   aHead["headsum"] = crc32.Checksum(packMsg(aHead, nil), sCrc32c)
 
-   err = sStore.RecvFile(aMsgId, PackMsg(aHead, nil), iData, o, iHead.DataLen)
+   err = sStore.recvFile(aMsgId, packMsg(aHead, nil), iData, o, iHead.DataLen)
    if err != nil {
       if _, ok := err.(net.Error); !ok && err != io.EOF { panic(err) }
    }
-   defer sStore.RmFile(aMsgId)
+   defer sStore.rmFile(aMsgId)
    if err != nil { return "", "", err }
 
    aForNodes := make(map[string]bool, len(iHead.For)) //todo x2 or more?
@@ -602,11 +602,11 @@ func (o *tLink) postMsg(iHead *tHeader, iEtc tMsg, iData []byte) (aMsgId, aPoste
       if aNodeId == o.node && !aForMyUid {
          continue
       }
-      aNd := GetNode(aNodeId)
+      aNd := getNode(aNodeId)
       aNd.RLock()
-      err = sStore.PutLink(aMsgId, aNodeId, aMsgId)
+      err = sStore.putLink(aMsgId, aNodeId, aMsgId)
       if err != nil { panic(err) }
-      err = sStore.SyncDirs(aNodeId)
+      err = sStore.syncDirs(aNodeId)
       if err != nil { panic(err) }
       if aNd.queue != nil {
          aNd.queue.in <- aMsgId
@@ -618,7 +618,7 @@ func (o *tLink) postMsg(iHead *tHeader, iEtc tMsg, iData []byte) (aMsgId, aPoste
 
 type tMsg map[string]interface{}
 
-func PackMsg(iHead interface{}, iData []byte) []byte {
+func packMsg(iHead interface{}, iData []byte) []byte {
    aHead, err := json.Marshal(iHead)
    if err != nil { panic(err) }
    aLen := fmt.Sprintf("%04x", len(aHead))
@@ -728,7 +728,7 @@ type tNode struct {
    queue *tQueue // instantiated on login //todo free on idle
 }
 
-func GetNode(iNode string) *tNode {
+func getNode(iNode string) *tNode {
    sNode.RLock() //todo drop for sync.map
    aNd := sNode.list[iNode]
    sNode.RUnlock()
@@ -757,8 +757,8 @@ type tQueue struct {
    ohi chan tOhiMsg // presence notifications to us
 }
 
-func QueueLink(iNode string, iConn net.Conn, iMsg tMsg, iUid string) *tQueue {
-   aNd := GetNode(iNode)
+func queueLink(iNode string, iConn net.Conn, iMsg tMsg, iUid string) *tQueue {
+   aNd := getNode(iNode)
    if aNd.queue == nil {
       aNd.Lock()
       if aNd.queue != nil {
@@ -774,12 +774,12 @@ func QueueLink(iNode string, iConn net.Conn, iMsg tMsg, iUid string) *tQueue {
          aQ.out = make(chan string)
          aQ.ohi = make(chan tOhiMsg, 100) //todo tune size
          var err error
-         aQ.buf, err = sStore.GetDir(iNode)
+         aQ.buf, err = sStore.getDir(iNode)
          if err != nil { panic(err) }
          aNd.Unlock()
          fmt.Printf("%.7s newqueue create queue\n", iNode)
-         go runElasticChan(aQ)
-         go runQueue(aQ)
+         go _runElasticChan(aQ)
+         go _runQueue(aQ)
       }
    }
    if !atomic.CompareAndSwapInt32(&aNd.queue.hasConn, 0, 1) {
@@ -791,51 +791,51 @@ func QueueLink(iNode string, iConn net.Conn, iMsg tMsg, iUid string) *tQueue {
    } else {
       delete(iMsg, "ohi")
    }
-   iConn.Write(PackMsg(iMsg, nil))
+   iConn.Write(packMsg(iMsg, nil))
    aNd.queue.connChan <- iConn
    return aNd.queue
 }
 
-func (o *tQueue) Unlink() {
+func (o *tQueue) unlink() {
    <-o.connChan
    o.hasConn = 0
 }
 
-func (o *tQueue) waitForMsg() string {
+func (o *tQueue) _waitForMsg() string {
    for {
       select {
       case aMid := <-o.out:
          return aMid
       case aOhi := <-o.ohi:
-         o.tryOhi(&aOhi)
+         o._tryOhi(&aOhi)
       }
    }
 }
 
-func (o *tQueue) tryOhi(iOhi *tOhiMsg) {
-   aMsg := PackMsg(tMsg{"op":"ohi", "from":iOhi.from, "status":iOhi.status}, nil)
+func (o *tQueue) _tryOhi(iOhi *tOhiMsg) {
+   aMsg := packMsg(tMsg{"op":"ohi", "from":iOhi.from, "status":iOhi.status}, nil)
    select {
    case aConn := <-o.connChan:
       o.connChan <- aConn
       _,err := aConn.Write(aMsg)
       if err != nil {
-         fmt.Fprintf(os.Stderr, "%.7s queue.runqueue write error %s\n", o.node, err.Error())
+         fmt.Fprintf(os.Stderr, "%.7s queue._tryOhi write error %s\n", o.node, err.Error())
       }
    default: // drop msg
    }
 }
 
-func (o *tQueue) waitForConn() net.Conn {
+func (o *tQueue) _waitForConn() net.Conn {
    aConn := <-o.connChan
    o.connChan <- aConn
    return aConn
 }
 
-func runQueue(o *tQueue) {
-   aMsgId := o.waitForMsg()
-   aConn := o.waitForConn()
+func _runQueue(o *tQueue) {
+   aMsgId := o._waitForMsg()
+   aConn := o._waitForConn()
    for {
-      err := sStore.SendFile(o.node, aMsgId, aConn)
+      err := sStore.sendFile(o.node, aMsgId, aConn)
       if _,ok := err.(*os.PathError); ok { panic(err) } //todo move to sStore?
       if err == nil {
          aTimeout := time.NewTimer(kQueueAckTimeout)
@@ -844,28 +844,28 @@ func runQueue(o *tQueue) {
          case aAckId := <-o.ack:
             aTimeout.Stop()
             if aAckId != aMsgId {
-               fmt.Fprintf(os.Stderr, "%.7s queue.runqueue got ack for %s, expected %s\n", o.node, aAckId, aMsgId)
+               fmt.Fprintf(os.Stderr, "%.7s queue._runQueue got ack for %s, expected %s\n", o.node, aAckId, aMsgId)
                continue
             }
-            sStore.RmLink(o.node, aMsgId)
-            aMsgId = o.waitForMsg()
+            sStore.rmLink(o.node, aMsgId)
+            aMsgId = o._waitForMsg()
          case <-aTimeout.C:
-            fmt.Fprintf(os.Stderr, "%.7s queue.runqueue timed out awaiting ack\n", o.node)
+            fmt.Fprintf(os.Stderr, "%.7s queue._runQueue timed out awaiting ack\n", o.node)
          case aOhi := <-o.ohi:
-            o.tryOhi(&aOhi)
+            o._tryOhi(&aOhi)
             goto WaitForAck
          }
-         aConn = o.waitForConn()
+         aConn = o._waitForConn()
       } else if false {
          //todo transient
       } else {
-         fmt.Fprintf(os.Stderr, "%.7s queue.runqueue sendfile error %s\n", o.node, err.Error())
-         aConn = o.waitForConn()
+         fmt.Fprintf(os.Stderr, "%.7s queue._runQueue sendfile error %s\n", o.node, err.Error())
+         aConn = o._waitForConn()
       }
    }
 }
 
-func runElasticChan(o *tQueue) {
+func _runElasticChan(o *tQueue) {
    var aS string
    var ok bool
    for {
@@ -881,7 +881,7 @@ func runElasticChan(o *tQueue) {
          if !ok { goto closed }
          o.buf = append(o.buf, aS)
          if len(o.buf) % 100 == 0 {
-            fmt.Fprintf(os.Stderr, "%.7s queue.runelasticchan buf len %d\n", o.node, len(o.buf))
+            fmt.Fprintf(os.Stderr, "%.7s queue._runElasticChan buf len %d\n", o.node, len(o.buf))
          }
       case o.out <- o.buf[0]:
          o.buf = o.buf[1:]
@@ -902,7 +902,7 @@ func (o tError) Error() string { return string(o) }
 
 func makeUid() string {
    aT := time.Now()
-   aSeed := fmt.Sprintf("%s%00d%000000000d", sStore.MakeId(), aT.Second(), aT.Nanosecond())
+   aSeed := fmt.Sprintf("%s%00d%000000000d", sStore.makeId(), aT.Second(), aT.Nanosecond())
    aData := sha1.Sum([]byte(aSeed))
    return sBase32.EncodeToString(aData[:])
 }
@@ -953,11 +953,11 @@ func Init(iMain string) {
 
    var aWg sync.WaitGroup
    aWg.Add(1)
-   go runIdStore(o, &aWg)
+   go _runIdStore(o, &aWg)
    aWg.Wait()
 }
 
-func runIdStore(o *tStore, iWg *sync.WaitGroup) {
+func _runIdStore(o *tStore, iWg *sync.WaitGroup) {
    aBuf, err := ioutil.ReadFile(o.Root+"NEXTID")
    if err != nil {
       if !os.IsNotExist(err) { panic(err) }
@@ -992,7 +992,7 @@ func runIdStore(o *tStore, iWg *sync.WaitGroup) {
    }
 }
 
-func (o *tStore) MakeId() string {
+func (o *tStore) makeId() string {
    aN := atomic.AddUint64(&o.nextId, 1)
    if aN % 1000 == 0 {
       o.idStore <- aN
@@ -1000,7 +1000,7 @@ func (o *tStore) MakeId() string {
    return fmt.Sprintf("%016x", aN)
 }
 
-func (o *tStore) RecvFile(iId string, iHead, iData []byte, iStream io.Reader, iLen int64) error {
+func (o *tStore) recvFile(iId string, iHead, iData []byte, iStream io.Reader, iLen int64) error {
    aFd, err := os.OpenFile(o.temp+iId, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
    if err != nil { return err }
    defer aFd.Close()
@@ -1016,36 +1016,36 @@ func (o *tStore) RecvFile(iId string, iHead, iData []byte, iStream io.Reader, iL
    return err
 }
 
-func (o *tStore) ZeroFile(iNode, iId string) error {
-   aFd, err := os.OpenFile(o.nodeSub(iNode)+"/"+iId, os.O_WRONLY|os.O_TRUNC, 0600)
+func (o *tStore) zeroFile(iNode, iId string) error {
+   aFd, err := os.OpenFile(o._nodeSub(iNode)+"/"+iId, os.O_WRONLY|os.O_TRUNC, 0600)
    if err != nil { return err }
    aFd.Close()
    return nil
 }
 
-func (o *tStore) PutLink(iSrc, iNode, iId string) error {
-   aPath := o.nodeSub(iNode)
+func (o *tStore) putLink(iSrc, iNode, iId string) error {
+   aPath := o._nodeSub(iNode)
    err := os.MkdirAll(aPath, 0700)
    if err != nil { return err }
    err = os.Link(o.temp+iSrc, aPath+"/"+iId)
    return err
 }
 
-func (o *tStore) RmFile(iId string) error {
+func (o *tStore) rmFile(iId string) error {
    return os.Remove(o.temp+iId)
 }
 
-func (o *tStore) RmLink(iNode, iId string) error {
-   return os.Remove(o.nodeSub(iNode)+"/"+iId)
+func (o *tStore) rmLink(iNode, iId string) error {
+   return os.Remove(o._nodeSub(iNode)+"/"+iId)
 }
 
-func (o *tStore) RmDir(iNode string) error {
-   err := os.Remove(o.nodeSub(iNode))
+func (o *tStore) rmDir(iNode string) error {
+   err := os.Remove(o._nodeSub(iNode))
    if os.IsNotExist(err) { return nil }
    return err
 }
 
-func (o *tStore) SyncDirs(iNode string) error {
+func (o *tStore) syncDirs(iNode string) error {
    var aFd *os.File
    var err error
    fSync := func(aDir string) {
@@ -1056,23 +1056,23 @@ func (o *tStore) SyncDirs(iNode string) error {
    }
    fSync(o.Root)
    if err != nil { return err }
-   fSync(o.rootSub(iNode))
+   fSync(o._rootSub(iNode))
    if err != nil { return err }
-   fSync(o.nodeSub(iNode))
+   fSync(o._nodeSub(iNode))
    return err
 }
 
-func (o *tStore) SendFile(iNode, iId string, iConn net.Conn) error {
-   aFd, err := os.Open(o.nodeSub(iNode)+"/"+iId)
+func (o *tStore) sendFile(iNode, iId string, iConn net.Conn) error {
+   aFd, err := os.Open(o._nodeSub(iNode)+"/"+iId)
    if err != nil { return err }
    defer aFd.Close()
    _,err = io.Copy(iConn, aFd) // calls sendfile(2) in iConn.ReadFrom()
    return err
 }
 
-func (o *tStore) GetDir(iNode string) (ret []string, err error) {
-   fmt.Printf("read dir %s\n", o.nodeSub(iNode))
-   aFd, err := os.Open(o.nodeSub(iNode))
+func (o *tStore) getDir(iNode string) (ret []string, err error) {
+   fmt.Printf("read dir %s\n", o._nodeSub(iNode))
+   aFd, err := os.Open(o._nodeSub(iNode))
    if err != nil {
       if os.IsNotExist(err) { err = nil }
       return
@@ -1083,25 +1083,25 @@ func (o *tStore) GetDir(iNode string) (ret []string, err error) {
    return
 }
 
-func (o *tStore) CopyDir(iNode, iToNode string) error {
-   aDirs, err := o.GetDir(iNode)
+func (o *tStore) copyDir(iNode, iToNode string) error {
+   aDirs, err := o.getDir(iNode)
    if err != nil { return err }
    if len(aDirs) == 0 {
       return nil
    }
-   os.MkdirAll(o.nodeSub(iToNode), 0700)
+   os.MkdirAll(o._nodeSub(iToNode), 0700)
    for _, aId := range aDirs {
-      err = os.Link(o.nodeSub(iNode)+"/"+aId, o.nodeSub(iToNode)+"/"+aId)
+      err = os.Link(o._nodeSub(iNode)+"/"+aId, o._nodeSub(iToNode)+"/"+aId)
       if err != nil && !os.IsNotExist(err) && !os.IsExist(err) { return err }
    }
    return nil
 }
 
-func (o *tStore) rootSub(iNode string) string {
+func (o *tStore) _rootSub(iNode string) string {
    return o.Root + strings.ToLower(iNode[:4])
 }
 
-func (o *tStore) nodeSub(iNode string) string {
-   return o.rootSub(iNode) + "/" + strings.ToLower(iNode)
+func (o *tStore) _nodeSub(iNode string) string {
+   return o._rootSub(iNode) + "/" + strings.ToLower(iNode)
 }
 
