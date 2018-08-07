@@ -66,13 +66,13 @@ type tHeader struct {
 }
 
 const (
-   eTmtpRev = iota
-   eRegister; eLogin
-   eUserEdit; eOhiEdit;
-   eGroupInvite; eGroupEdit
-   ePost; ePing
-   eAck
-   ePulse; eQuit
+   eOpTmtpRev = iota
+   eOpRegister; eOpLogin
+   eOpUserEdit; eOpOhiEdit;
+   eOpGroupInvite; eOpGroupEdit
+   eOpPost; eOpPing
+   eOpAck
+   eOpPulse; eOpQuit
    eOpEnd
 )
 
@@ -81,18 +81,18 @@ type tHeaderFor struct { Id string; Type int8 }
 const ( _=iota; eForUser; eForGroupAll; eForGroupExcl; eForSelf )
 
 var sHeaderDefs = [...]tHeader{
-   eTmtpRev    : { Id:"1" },
-   eRegister   : { NewNode:"1", NewAlias:"1" },
-   eLogin      : { Uid:"1", Node:"1" },
-   eUserEdit   : { Id:"1" },
-   eOhiEdit    : { Id:"1", For:[]tHeaderFor{{}}, Type:"1" },
-   eGroupInvite: { Id:"1", DataLen:1, Gid:"1", From:"1", To:"1" },
-   eGroupEdit  : { Id:"1", Act:"1", Gid:"1" },
-   ePost       : { Id:"1", DataLen:1, For:[]tHeaderFor{{}} },
-   ePing       : { Id:"1", DataLen:1, To:"1" },
-   eAck        : { Id:"1", Type:"1" },
-   ePulse      : {  },
-   eQuit       : {  },
+   eOpTmtpRev    : { Id:"1" },
+   eOpRegister   : { NewNode:"1", NewAlias:"1" },
+   eOpLogin      : { Uid:"1", Node:"1" },
+   eOpUserEdit   : { Id:"1" },
+   eOpOhiEdit    : { Id:"1", For:[]tHeaderFor{{}}, Type:"1" },
+   eOpGroupInvite: { Id:"1", DataLen:1, Gid:"1", From:"1", To:"1" },
+   eOpGroupEdit  : { Id:"1", Act:"1", Gid:"1" },
+   eOpPost       : { Id:"1", DataLen:1, For:[]tHeaderFor{{}} },
+   eOpPing       : { Id:"1", DataLen:1, To:"1" },
+   eOpAck        : { Id:"1", Type:"1" },
+   eOpPulse      : {  },
+   eOpQuit       : {  },
 }
 
 func (o *tHeader) check() bool {
@@ -116,7 +116,7 @@ func (o *tHeader) check() bool {
       len(aDef.For)      > 0 && len(o.For)      == 0
    for _, aEl := range o.For {
       aFail = aFail || len(aEl.Id) == 0 ||
-              o.Op == ePost && (aEl.Type < eForUser || aEl.Type >= eForSelf)
+              o.Op == eOpPost && (aEl.Type < eForUser || aEl.Type >= eForSelf)
    }
    return !aFail
 }
@@ -124,16 +124,16 @@ func (o *tHeader) check() bool {
 
 type tMsg map[string]interface{}
 
-var sResponseOps = [...]string{
-   eRegister:    "registered",
-   eLogin:       "login",
-   eUserEdit:    "user",
-   eOhiEdit:     "ohiedit",
-   eGroupInvite: "invite",
-   eGroupEdit:   "member",
-   ePost:        "delivery",
-   ePing:        "ping",
-   eOpEnd:       "",
+var sMsgOps = [...]string{
+   eOpRegister:    "registered",
+   eOpLogin:       "login",
+   eOpUserEdit:    "user",
+   eOpOhiEdit:     "ohiedit",
+   eOpGroupInvite: "invite",
+   eOpGroupEdit:   "member",
+   eOpPost:        "delivery",
+   eOpPing:        "ping",
+   eOpEnd:         "",
 }
 
 type tMsgQuit struct {
@@ -324,9 +324,9 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
    var aMid, aPosted string
 
    switch iHead.Op {
-   case eTmtpRev:
+   case eOpTmtpRev:
       if o.tmtprev != "" { return sMsgOpRedundant }
-   case eRegister, eLogin:
+   case eOpRegister, eOpLogin:
       if o.tmtprev == "" { return sMsgNeedTmtpRev }
       if o.node    != "" { return sMsgOpDisallowedOn }
    default:
@@ -334,7 +334,7 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
    }
 
    switch iHead.Op {
-   case eTmtpRev:
+   case eOpTmtpRev:
       switch iHead.Id {
       case "1":
          o.tmtprev = iHead.Id
@@ -342,7 +342,7 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
          o.tmtprev = "1"
       }
       o.conn.Write(packMsg(tMsg{"op":"tmtprev", "id":o.tmtprev}, nil))
-   case eRegister:
+   case eOpRegister:
       aUid := makeUid()
       aNodeId, aNodeSha := makeNodeId()
       _, err = UDb.AddUser(aUid, aNodeSha) //todo iHead.NewNode
@@ -350,7 +350,7 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
          fmt.Fprintf(os.Stderr, "%s link._handleMsg register %s\n", o.uid, err.Error())
          return sMsgRegisterFailure
       }
-      aAck := tMsg{"op":sResponseOps[iHead.Op], "uid":aUid, "nodeid":aNodeId}
+      aAck := tMsg{"op":sMsgOps[iHead.Op], "uid":aUid, "nodeid":aNodeId}
       if iHead.NewAlias != "_" {
          if len(iHead.NewAlias) < kAliasMinLen { //todo enforce in userdb
             aAck["error"] = fmt.Sprintf("newalias must be %d+ characters", kAliasMinLen)
@@ -365,7 +365,7 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
       iHead.Uid = aUid
       iHead.Node = aNodeId
       fallthrough
-   case eLogin:
+   case eOpLogin:
       var aNodeSha, aQid string
       aNodeSha, err = getNodeSha(&iHead.Node)
       if err != nil {
@@ -383,13 +383,13 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
       o.uid = iHead.Uid
       o.node = aQid
       o.queue = aQ
-      if iHead.Op != eRegister {
+      if iHead.Op != eOpRegister {
          iHead.For = []tHeaderFor{{Id:o.uid, Type:eForUser}}
          _, _, err = o._postMsg(iHead, tMsg{"node":"tbd"}, nil) //todo tbd=noderef
          if err != nil { panic(err) }
       }
       fmt.Printf("%s link._handleMsg login user %.7s\n", o.uid, aQ.node)
-   case eUserEdit:
+   case eOpUserEdit:
       if iHead.NewNode == "" && iHead.NewAlias == "" { return sMsgHeaderBad }
       if iHead.NewNode != "" && iHead.NewAlias != "" { return sMsgHeaderBad }
       aEtc := tMsg{}
@@ -416,7 +416,7 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
          fmt.Fprintf(os.Stderr, "%s link._handleMsg useredit %s\n", o.uid, err.Error())
       }
       o._ack(iHead.Id, aMid, aPosted, err)
-   case eOhiEdit:
+   case eOpOhiEdit:
       if iHead.Type != "add" && iHead.Type != "drop" { return sMsgHeaderBad }
       for _, aTo := range iHead.For {
          _,err = UDb.OpenNodes(aTo.Id)
@@ -439,16 +439,16 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
             }
          }
          if !aInit {
-            aHead := &tHeader{Op:eOhiEdit, For: []tHeaderFor{{Id:o.uid, Type:eForUser}}}
+            aHead := &tHeader{Op: eOpOhiEdit, For: []tHeaderFor{{Id:o.uid, Type:eForUser}}}
             aEtc := tMsg{"for":iHead.For, "type":iHead.Type}
             aMid, aPosted, err = o._postMsg(aHead, aEtc, nil)
          }
       }
       o._ack(iHead.Id, aMid, aPosted, err)
-   case eGroupInvite:
+   case eOpGroupInvite:
       iHead.Act = "invite"
       fallthrough
-   case eGroupEdit:
+   case eOpGroupEdit:
       var aUid, aAlias, aNewAlias string
       switch iHead.Act {
       case "invite":
@@ -478,14 +478,14 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
          if aNewAlias != "" {
             aEtc["newalias"] = aNewAlias
          }
-         aHead := &tHeader{Op: eGroupEdit, For: []tHeaderFor{{Id:iHead.Gid, Type:eForGroupAll}}}
+         aHead := &tHeader{Op: eOpGroupEdit, For: []tHeaderFor{{Id:iHead.Gid, Type:eForGroupAll}}}
          aMid, aPosted, err = o._postMsg(aHead, aEtc, nil)
       }
       if err != nil {
          fmt.Fprintf(os.Stderr, "%s link._handleMsg group %s\n", o.uid, err.Error())
       }
       o._ack(iHead.Id, aMid, aPosted, err)
-   case ePost:
+   case eOpPost:
       aMid, aPosted, err = o._postMsg(iHead, nil, iData)
       if err != nil {
          if err == io.EOF { return sMsgEof }
@@ -493,7 +493,7 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
          fmt.Fprintf(os.Stderr, "%s link._handleMsg post %s\n", o.uid, err.Error())
       }
       o._ack(iHead.Id, aMid, aPosted, err)
-   case ePing:
+   case eOpPing:
       aQuitMsg := o._checkPing(iHead, &iData)
       if aQuitMsg != nil { return aQuitMsg }
       var aUid string
@@ -506,7 +506,7 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
          fmt.Fprintf(os.Stderr, "%s link._handleMsg ping %s\n", o.uid, err.Error())
       }
       o._ack(iHead.Id, aMid, aPosted, err)
-   case eAck:
+   case eOpAck:
       aTmr := time.NewTimer(2 * time.Second)
       select {
       case o.queue.ack <- iHead.Id:
@@ -514,9 +514,9 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
       case <-aTmr.C:
          fmt.Fprintf(os.Stderr, "%s link._handleMsg timed out waiting on ack\n", o.uid)
       }
-   case ePulse:
+   case eOpPulse:
       // no-op
-   case eQuit:
+   case eOpQuit:
       return sMsgLogout
    default:
       panic(fmt.Sprintf("checkHeader failure, op %d", iHead.Op))
@@ -570,7 +570,7 @@ func (o *tLink) _ack(iId, iMsgId, iPosted string, iErr error) {
 func (o *tLink) _postMsg(iHead *tHeader, iEtc tMsg, iData []byte) (aMsgId, aPosted string, err error) {
    aMsgId = sStore.makeId()
    aPosted = time.Now().UTC().Format(kPostDateFormat)
-   aHead := tMsg{"op":sResponseOps[iHead.Op], "id":aMsgId, "from":o.uid, "datalen":iHead.DataLen,
+   aHead := tMsg{"op":sMsgOps[iHead.Op], "id":aMsgId, "from":o.uid, "datalen":iHead.DataLen,
                  "posted":aPosted}
    //todo insert "datalen" if != 0
    if iHead.DataHead != 0 {
