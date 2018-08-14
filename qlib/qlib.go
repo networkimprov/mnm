@@ -46,6 +46,7 @@ var UDb UserDatabase // set by caller
 var sBase32 = base32.NewEncoding("%+123456789BCDFGHJKLMNPQRSTVWXYZ")
 
 var sCrc32c = crc32.MakeTable(crc32.Castagnoli)
+var sSendDoor, sRecvDoor sync.RWMutex
 var sOhi = tOhi{from: tOhiMap{}}
 var sNode = tNodes{list: tNodeMap{}}
 var sStore = tStore{}
@@ -214,6 +215,12 @@ type UserDatabase interface {
 }
 
 
+func Suspend() {
+   sSendDoor.Lock()
+   sRecvDoor.Lock()
+}
+
+
 type tLink struct { // network client msg handler
    conn net.Conn // link to client
    expectPulse bool
@@ -319,6 +326,7 @@ func _runLink(o *tLink) {
 }
 
 func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
+   sRecvDoor.RLock(); defer sRecvDoor.RUnlock()
    var err error
    var aMid, aPosted string
 
@@ -836,9 +844,11 @@ func _runQueue(o *tQueue) {
    for {
       aConn := <-o.connChan
       o.connChan <- aConn
+      sSendDoor.RLock()
    SendFile:
       err := sStore.sendFile(o.node, aMsgId, aConn)
       if err != nil {
+         sSendDoor.RUnlock()
          if _, ok := err.(*os.PathError); ok { panic(err) } //todo move to sStore?
          //todo recoverable?
          fmt.Fprintf(os.Stderr, "%.7s queue._runQueue sendfile error %s\n", o.node, err.Error())
@@ -857,8 +867,10 @@ func _runQueue(o *tQueue) {
             goto SendFile
          }
          sStore.rmLink(o.node, aMsgId)
+         sSendDoor.RUnlock()
          aMsgId = o._waitForMsg()
       case <-aTimeout.C:
+         sSendDoor.RUnlock()
          fmt.Fprintf(os.Stderr, "%.7s queue._runQueue timed out awaiting ack\n", o.node)
       }
    }

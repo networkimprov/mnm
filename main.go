@@ -14,7 +14,9 @@ import (
    "net"
    "os"
    pQ "mnm/qlib"
+   "os/signal"
    "strconv"
+   "strings"
    "crypto/tls"
 )
 
@@ -71,6 +73,7 @@ func mainResult() int {
          fmt.Fprintf(os.Stderr, "server exit: %s\n", err.Error())
          return 1
       }
+      fmt.Printf("server done\n")
    }
 
    return 0
@@ -98,12 +101,27 @@ func startServer(iConf *tConfig) error {
    aCfgTls := tls.Config{Certificates: []tls.Certificate{aCert}}
    aListener, err := tls.Listen(iConf.Listen.Net, iConf.Listen.Laddr, &aCfgTls)
    if err != nil { return err }
-   defer aListener.Close()
+
+   aIntWatch := make(chan os.Signal, 1)
+   signal.Notify(aIntWatch, os.Interrupt)
+   go func() {
+      <-aIntWatch
+      aListener.Close()
+   }()
 
    for {
       var aConn net.Conn
       aConn, err = aListener.Accept()
-      if err != nil { return err }
+      if err != nil {
+         if !err.(net.Error).Temporary() {
+            pQ.Suspend()
+            if strings.Contains(err.Error(), "use of closed network connection") {
+               return nil
+            }
+            return err
+         }
+         continue
+      }
       pQ.NewLink(aConn)
    }
 }

@@ -15,6 +15,7 @@ import (
    "encoding/json"
    "net"
    "os"
+   "os/signal"
    "strconv"
    "strings"
    "sync"
@@ -74,9 +75,19 @@ func LocalTest(i int) {
          sTestClientId <- aId
       }
    }
-   for a := 0; true; a++ {
-      NewLink(_newTestClient(eActCycle, <-sTestClientId))
+
+   aIntWatch := make(chan os.Signal, 1)
+   signal.Notify(aIntWatch, os.Interrupt)
+   for aLoop := true; aLoop; {
+      select {
+      case <-aIntWatch:
+         aLoop = false
+      case aId := <-sTestClientId:
+         NewLink(_newTestClient(eActCycle, aId))
+      }
    }
+   fmt.Fprintf(os.Stderr, " shutting down\n")
+   Suspend()
 }
 
 func _testMakeNode(id int) string {
