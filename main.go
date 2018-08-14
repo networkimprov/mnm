@@ -13,7 +13,7 @@ import (
    "encoding/json"
    "net"
    "os"
-   "mnm/qlib"
+   pQ "mnm/qlib"
    "strconv"
    "crypto/tls"
 )
@@ -53,18 +53,18 @@ func mainResult() int {
    fmt.Printf("mnm tmtp server v%d.%d.%d %s\n", kVersionA, kVersionB, kVersionC, kVersionDate)
 
    aDbName := "userdb"; if aTcNum != 0 { aDbName += "-test-qlib" }
-   qlib.UDb, err = NewUserDb(aDbName)
+   pQ.UDb, err = NewUserDb(aDbName)
    if err != nil {
       fmt.Fprintf(os.Stderr, "%s\n", err.Error())
       return 1
    }
 
-   qlib.Init("qstore")
+   pQ.Init("qstore")
 
    if aTcNum != 0 {
       fmt.Printf("Starting Test Pass\n")
       TestUserDb("userdb-test-unit")
-      qlib.LocalTest(aTcNum)
+      pQ.LocalTest(aTcNum)
    } else {
       err = startServer(&sConfig)
       if err != nil {
@@ -104,6 +104,6 @@ func startServer(iConf *tConfig) error {
       var aConn net.Conn
       aConn, err = aListener.Accept()
       if err != nil { return err }
-      qlib.NewLink(aConn)
+      pQ.NewLink(aConn)
    }
 }
