@@ -831,42 +831,35 @@ func (o *tQueue) _tryOhi(iOhi *tOhiMsg) {
    }
 }
 
-func (o *tQueue) _waitForConn() net.Conn {
-   aConn := <-o.connChan
-   o.connChan <- aConn
-   return aConn
-}
-
 func _runQueue(o *tQueue) {
    aMsgId := o._waitForMsg()
-   aConn := o._waitForConn()
    for {
+      aConn := <-o.connChan
+      o.connChan <- aConn
+   SendFile:
       err := sStore.sendFile(o.node, aMsgId, aConn)
-      if _,ok := err.(*os.PathError); ok { panic(err) } //todo move to sStore?
-      if err == nil {
-         aTimeout := time.NewTimer(kQueueAckTimeout)
-      WaitForAck:
-         select {
-         case aAckId := <-o.ack:
-            aTimeout.Stop()
-            if aAckId != aMsgId {
-               fmt.Fprintf(os.Stderr, "%.7s queue._runQueue got ack for %s, expected %s\n", o.node, aAckId, aMsgId)
-               continue
-            }
-            sStore.rmLink(o.node, aMsgId)
-            aMsgId = o._waitForMsg()
-         case <-aTimeout.C:
-            fmt.Fprintf(os.Stderr, "%.7s queue._runQueue timed out awaiting ack\n", o.node)
-         case aOhi := <-o.ohi:
-            o._tryOhi(&aOhi)
-            goto WaitForAck
-         }
-         aConn = o._waitForConn()
-      } else if false {
-         //todo transient
-      } else {
+      if err != nil {
+         if _, ok := err.(*os.PathError); ok { panic(err) } //todo move to sStore?
+         //todo recoverable?
          fmt.Fprintf(os.Stderr, "%.7s queue._runQueue sendfile error %s\n", o.node, err.Error())
-         aConn = o._waitForConn()
+         continue
+      }
+      aTimeout := time.NewTimer(kQueueAckTimeout)
+   RecvAck:
+      select {
+      case aOhi := <-o.ohi:
+         o._tryOhi(&aOhi)
+         goto RecvAck
+      case aAckId := <-o.ack:
+         aTimeout.Stop()
+         if aAckId != aMsgId {
+            fmt.Fprintf(os.Stderr, "%.7s queue._runQueue ack got %s, want %s\n", o.node, aAckId, aMsgId)
+            goto SendFile
+         }
+         sStore.rmLink(o.node, aMsgId)
+         aMsgId = o._waitForMsg()
+      case <-aTimeout.C:
+         fmt.Fprintf(os.Stderr, "%.7s queue._runQueue timed out awaiting ack\n", o.node)
       }
    }
 }
