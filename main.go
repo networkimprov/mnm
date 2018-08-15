@@ -17,6 +17,7 @@ import (
    "os/signal"
    "strconv"
    "strings"
+   "time"
    "crypto/tls"
 )
 
@@ -109,8 +110,10 @@ func startServer(iConf *tConfig) error {
       aListener.Close()
    }()
 
+   var aConn net.Conn
+   const kPauseMin, kPauseMax = time.Millisecond, time.Second
+   aPause := kPauseMin
    for {
-      var aConn net.Conn
       aConn, err = aListener.Accept()
       if err != nil {
          if !err.(net.Error).Temporary() {
@@ -120,8 +123,15 @@ func startServer(iConf *tConfig) error {
             }
             return err
          }
+         if aPause > kPauseMax {
+            aPause = kPauseMax
+            fmt.Fprintf(os.Stderr, "listener recurring error %s\n", err.Error())
+         }
+         time.Sleep(aPause)
+         aPause *= 2
          continue
       }
+      aPause = kPauseMin
       pQ.NewLink(aConn)
    }
 }
