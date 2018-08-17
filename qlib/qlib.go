@@ -845,7 +845,6 @@ func _runQueue(o *tQueue) {
       aConn := <-o.connChan
       o.connChan <- aConn
       sSendDoor.RLock()
-   SendFile:
       err := sStore.sendFile(o.node, aMsgId, aConn)
       if err != nil {
          sSendDoor.RUnlock()
@@ -861,11 +860,11 @@ func _runQueue(o *tQueue) {
          o._tryOhi(&aOhi)
          goto RecvAck
       case aAckId := <-o.ack:
-         aTimeout.Stop()
          if aAckId != aMsgId {
             fmt.Fprintf(os.Stderr, "%.7s queue._runQueue ack got %s, want %s\n", o.node, aAckId, aMsgId)
-            goto SendFile
+            goto RecvAck
          }
+         aTimeout.Stop()
          sStore.rmLink(o.node, aMsgId)
          sSendDoor.RUnlock()
          aMsgId = o._waitForMsg()
