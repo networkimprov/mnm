@@ -34,7 +34,7 @@ func mainResult() int {
    // return 2 reserved for use by Go internals
    var err error
 
-   aTcNum := 10
+   aTcNum := 0
    if len(os.Args) == 2 {
       aTcNum, err = strconv.Atoi(os.Args[1])
       if err != nil || aTcNum < 2 || aTcNum > 1000 {
@@ -46,10 +46,10 @@ func mainResult() int {
       if err != nil {
          if !os.IsNotExist(err) {
             fmt.Fprintf(os.Stderr, "config load: %s\n", err.Error())
-            return 1
+         } else {
+            fmt.Fprintf(os.Stderr, "config load: %s missing; see mnm.conf for example\n", kConfigFile)
          }
-      } else {
-         aTcNum = 0
+         return 1
       }
    }
 
