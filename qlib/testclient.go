@@ -88,6 +88,7 @@ func LocalTest(i int) {
    }
    fmt.Fprintf(os.Stderr, " shutting down\n")
    Suspend()
+   _ = os.RemoveAll(sStore.Root)
 }
 
 func _testMakeNode(id int) string {

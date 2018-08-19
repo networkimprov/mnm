@@ -13,7 +13,6 @@ import (
    "hash/crc32"
    "fmt"
    "io"
-   "io/ioutil"
    "encoding/json"
    "net"
    "os"
@@ -945,65 +944,24 @@ type tStore struct { // queue and msg storage
    Root string // top-level directory
    temp string // msg files land here before hardlinks land in queue directories
    nextId uint64 // incrementing msg filename
-   idStore chan uint64 // updates nextId on disk
 }
 
-func Init(iMain string) {
+func Init(iMain string, iTime time.Time) {
    o := &sStore
    o.Root = iMain + "/"
    o.temp = o.Root + "temp/"
-   o.idStore = make(chan uint64, 1)
 
    err := os.MkdirAll(o.temp, 0700)
    if err != nil { panic(err) }
 
-   var aWg sync.WaitGroup
-   aWg.Add(1)
-   go _runIdStore(o, &aWg)
-   aWg.Wait()
-}
-
-func _runIdStore(o *tStore, iWg *sync.WaitGroup) {
-   aBuf, err := ioutil.ReadFile(o.Root+"NEXTID")
-   if err != nil {
-      if !os.IsNotExist(err) { panic(err) }
-      aBuf = make([]byte, 16)
-   } else {
-      o.nextId, err = strconv.ParseUint(string(aBuf), 16, 64)
-      if err != nil { panic(err) }
+   if iTime.IsZero() {
+      iTime = time.Now() // only for test runs
    }
-   o.idStore <- o.nextId
-
-   aFd, err := os.OpenFile(o.Root+"NEXTID", os.O_WRONLY|os.O_CREATE, 0600)
-   if err != nil { panic(err) }
-   defer aFd.Close()
-
-   for {
-      aId := <-o.idStore + (2 * kStoreIdIncr)
-      copy(aBuf, fmt.Sprintf("%016x", aId))
-
-      _, err = aFd.Seek(0, 0)
-      if err != nil { panic(err) }
-
-      _, err = aFd.Write(aBuf)
-      if err != nil { panic (err) }
-
-      err = aFd.Sync()
-      if err != nil { panic (err) }
-
-      if iWg != nil {
-         iWg.Done()
-         iWg = nil
-      }
-   }
+   o.nextId = uint64(iTime.UnixNano())
 }
 
 func (o *tStore) makeId() string {
-   aN := atomic.AddUint64(&o.nextId, 1)
-   if aN % 1000 == 0 {
-      o.idStore <- aN
-   }
-   return fmt.Sprintf("%016x", aN)
+   return fmt.Sprintf("%016x", atomic.AddUint64(&o.nextId, 1))
 }
 
 func (o *tStore) recvFile(iId string, iHead, iData []byte, iStream io.Reader, iLen int64) error {

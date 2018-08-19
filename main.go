@@ -13,6 +13,7 @@ import (
    "encoding/json"
    "net"
    "os"
+   pNtp "github.com/beevik/ntp-0.2.0"
    pQ "mnm/qlib"
    "os/signal"
    "strconv"
@@ -53,7 +54,8 @@ func mainResult() int {
       }
    }
 
-   fmt.Printf("mnm tmtp server v%d.%d.%d %s\n", kVersionA, kVersionB, kVersionC, kVersionDate)
+   fmt.Printf("mnm tmtp server v%d.%d.%d %s\nntp time %v\n",
+              kVersionA, kVersionB, kVersionC, kVersionDate, sConfig.Ntp.time.UTC())
 
    aDbName := "userdb"; if aTcNum != 0 { aDbName += "-test-qlib" }
    pQ.UDb, err = NewUserDb(aDbName)
@@ -62,7 +64,8 @@ func mainResult() int {
       return 1
    }
 
-   pQ.Init("qstore")
+   aQstore := "qstore"; if aTcNum != 0 { aQstore += "-test" }
+   pQ.Init(aQstore, sConfig.Ntp.time)
 
    if aTcNum != 0 {
       fmt.Printf("Starting Test Pass\n")
@@ -81,6 +84,11 @@ func mainResult() int {
 }
 
 type tConfig struct {
+   Ntp struct {
+      Hosts []string
+      Retries uint8
+      time time.Time
+   }
    Listen struct {
       Net string
       Laddr string
@@ -92,7 +100,19 @@ func (o *tConfig) load() error {
    aBuf, err := ioutil.ReadFile(kConfigFile)
    if err != nil { return err }
    err = json.Unmarshal(aBuf, o)
-   return err
+   if err != nil { return err }
+
+   for _, aHost := range o.Ntp.Hosts {
+      for a := uint8(0); a < o.Ntp.Retries; a++ {
+         o.Ntp.time, err = pNtp.Time(aHost)
+         if err == nil {
+            return nil
+         }
+         fmt.Fprintf(os.Stderr, "ntp site %s error: %s\n", aHost, err.Error())
+         time.Sleep(time.Second / 2)
+      }
+   }
+   return tError("ntp not available")
 }
 
 func startServer(iConf *tConfig) error {
@@ -135,3 +155,7 @@ func startServer(iConf *tConfig) error {
       pQ.NewLink(aConn)
    }
 }
+
+type tError string
+func (o tError) Error() string { return string(o) }
+
