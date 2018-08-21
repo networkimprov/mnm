@@ -32,6 +32,8 @@ and the only people using the Internet were friendly researchers in academia and
 SMTP cannot cope with the 21st Century, and must be phased out.
 
 References  
+https://krebsonsecurity.com/2013/06/the-value-of-a-hacked-email-account/  
+https://qz.com/1329961/hackers-account-for-90-of-login-attempts-at-online-retailers/  
 https://www.wired.com/story/how-email-open-tracking-quietly-took-over-the-web/  
 http://www.nytimes.com/2017/08/21/business/dealbook/phone-hack-bitcoin-virtual-currency.html  
 http://www.zerohedge.com/news/2017-08-21/one-statistics-professor-was-just-banned-google-here-his-story  

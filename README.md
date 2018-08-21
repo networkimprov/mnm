@@ -1,22 +1,27 @@
-## mnm
-
 _Mnm is Not Mail_
 
 mnm provides the benefits of email without the huge risks of allowing 
 anyone, anywhere, claiming any identity to send you any content, any number of times. 
+
+mnm also offers electronic correspondence features missing from traditional email, 
+including forms/surveys which may be filled out and returned, 
+charts via [Chart.js or Vega-Lite], hyperlinks to messages, and slide shows. 
+It creates HTML-formatted messages via Markdown, which enables 
+mouseless (i.e. rapid) composition of rich text with graphical elements. 
+
+This codebase is for the **TMTP message relay server.** 
+(See also the [mnm client](https://github.com/networkimprov/mnm-hammer).) 
+Written in Go, the relay server is reliable, fast, lightweight, dependency-free, and open source.
+
+TMTP is a new client/server protocol for person-to-person or machine-to-machine message delivery. 
 See [Why TMTP?](Rationale.md)
 
-mnm is a person-to-person (or app-to-app) message relay server, based on TMTP, 
-a new client/server protocol. 
-(It's not a web app.) 
-Written in Go, mnm is reliable, fast, lightweight, dependency-free, and free of charge.
-
-mnm provides:
+A TMTP server provides:
 - Members-only access
 - Member aliases (including single-use aliases) to limit first-contact content
 - Authorization for receive/send or receive-only
 - Distribution groups, with invitations and member blocking
-- IM/chat presence notifications
+- Online presence notification
 - Multiple messaging clients/devices per member
 - Per-client strong (200 bit) passwords
 - Reliable message storage (via fsync) and delivery (via ack)
@@ -24,11 +29,11 @@ mnm provides:
 - In-order message delivery from any given sender
 - TCP + TLS connections
 
-mnm does not provide:
+It does not provide:
 - Message encryption; clients are responsible for encryption before/after transmission
 
-mnm may provide:
-- Gateways to whitelisted mnm & SMTP sites
+It may provide:
+- Gateways to whitelisted TMTP & SMTP sites
 - Alternate connection schemes
   * HTTP + Websockets
   * Unix domain sockets
@@ -36,8 +41,11 @@ mnm may provide:
 
 ### Status
 
+_19 August 2018_ -
+After testing with mnm client, made a handful of fixes. Changed license to MPL.
+
 _25 September 2017_ -
-A client application, [mnm-hammer](https://github.com/networkimprov/mnm-hammer), is in development.
+A [client application](https://github.com/networkimprov/mnm-hammer) is in development.
 
 _3 August 2017_ -
 A simulation of 1000 concurrent active clients 
@@ -53,15 +61,15 @@ http://github.com/networkimprov/websocket.MQ
 
 ### What's here
 
-- qlib/qlib.go: package with simple API to the reciever & sender threads
+- qlib/qlib.go: TMTP package with simple API
 - qlib/testclient.go: in-process test client, invoked from main()
+- vendor/: [NTP](https://github.com/beevik/ntp) package (kudos to Brett Vickers)
 - userdb.go: user records management
-- mnm.go: main(), frontends (coming soon)
+- main.go: main(), network frontend
 - mnm.conf: site-specific parameters; rename to mnm.config to enable TCP server
 - codestyle.txt: how to make Go source much more clear
-- vendor/: package NTP (kudos to [Brett Vickers](https://github.com/beevik))
-- After build & run:  
-mnm: the app!  
+- mnm: the server executable
+- After first run:  
 userdb/: user & group data  
 qstore/: queued messages awaiting delivery
 
@@ -71,13 +79,15 @@ qstore/: queued messages awaiting delivery
 
 2. Start test sequence  
 a) cd $GOPATH/src/github.com/networkimprov/mnm # or alternate directory for new files  
-b) go run mnm 10 # run continuous test with simulated clients (may be 2-1000); ctrl-C to stop
+b) go run mnm 10 # run continuous test with simulated clients (may be 2-1000)  
+c) ctrl-C to stop
 
 3. Enable TCP+TLS (assumes above working directory)  
 a) openssl ecparam -genkey -name secp384r1 -out server.key  
 b) openssl req -new -x509 -sha256 -key server.key -out server.crt -days 3650  
 c) cp mnm.conf mnm.config # revise ntp.hosts and adjust listen.laddr with host:port as necessary  
-d) go run mnm # ctrl-C to stop, or send SIGINT signal
+d) go run mnm # default port 443 may require sudo  
+e) ctrl-C or send SIGINT signal to trigger graceful shutdown
 
 ### TMTP Summary
 
