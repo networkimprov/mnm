@@ -1,0 +1,103 @@
+
+check use of ack msgid; not valid when msg originates on server
+
+testclient cycle addnode every 100 logins
+testclient trigger ack & register errors
+
+userdb
+  node labels
+  groupalias: if crash after putrecord, retry won't send orig alias in update to group
+  testuserdb: fReport use aFuncName to print name when needed
+
+check/fix pending transactions on qlib start
+
+systemd script
+
+tmtp "via" header on msgs to a group
+tmtp send online-nodes on login
+tmtp include alias in from/for
+tmtp ping add from:alias
+tmtp register return service name
+
+0.2+
+
+replace json lib with faster third-party one
+
+discards pings from blocked address
+
+decrypt For[].Id with sender's key; encrypt From with recipient's key
+
+prioritize ack msgs as with ohi
+
+receive-only accounts which cannot ping or post
+  register field
+  assigned to site-specifc group
+  can ping designated aliases?
+
+sebatical mode: deny or redirect post requests
+  resign option makes permanent
+out-of-office mode: flagged in ack
+
+server-to-server proxy
+  client proxy-request to local service
+    extra params: foreign service ref, <foreign uid, nodeid>
+  server register/login & post to foreign service
+    extra params: send-only; original-from; ping-proxy
+    foreign service queues msg to agent
+    relay ack to client
+  foreign service ping local service when msg queued
+  client proxy-request to receive msgs
+
+user mgmt policy config
+  disk quota
+  detect defunct nodes & users
+    after max quiet period, delete queue and require p2p resync
+    reminder notice to user to connect quiet nodes
+    for defunct user, return previously queued msgs to sender?
+
+multiple services per instance
+
+on post For: error, drop conn if datalen > limit
+
+enable plugins to safety-check attachments
+  default plugin takes list of disallowed file types
+
+service prefs for client
+  look: backgrounds, typefaces, etc
+  inbox ringtone
+  login period
+
+service message size limit
+per-user adjustable message size limit
+let client skip/defer large messages
+  send first N bytes
+  if defer, client can download via separate connection
+    retried at next connect
+
+limit number of pings per 24h period
+let service charge for ping credits, on ping user.credits-=1
+
+make client reauthenticate
+  for certain requests
+  after inactive period
+
+safeguard against compromised mnm host
+  encrypt user database, require key to start mnm
+  validate from header before sending queued message
+
+per-user blocked uids list in userdb
+
+directly joinable groups
+
+anonymous group posts omit "from" header
+
+group moderator address (itself a group?)
+  distributes msg to moderators
+  keeps msg on server
+  on first moderator ack
+    msg forwards to group
+    may add sender to group
+
+get-form request for ping/groupinvite
+
+
