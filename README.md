@@ -168,8 +168,9 @@ Response `{"op":"ack", (ack headers)}`
 At members `{"op":"member", (message headers), "datalen":0, "act":string, "gid":string, "alias":string, <"newalias":string>}`
 
 0. Post sends a message to users and/or groups.  
-`{"op":7, "id":string, "datalen":uint, <"datahead":uint>, <"datasum":uint>, "for":[{"id":string, "type":uint}, ...]}`  
+`{"op":7, "id":string, "datalen":uint, <"datahead":uint>, <"datasum":uint>, "for":[<{"id":string, "type":uint}, ...>]}`  
 .for[i].type: 1) user_id, 2) group_id (include self) 3) group_id (exclude self)  
+.for[]: only nodes of self  
 Response `{"op":"ack", (ack headers)}`  
 At recipient `{"op":"delivery", (message headers), "datalen":uint, <"datahead":uint>, <"datasum":uint>}`
 

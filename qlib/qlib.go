@@ -87,7 +87,7 @@ var sHeaderDefs = [...]tHeader{
    eOpOhiEdit    : { Id:"1", For:[]tHeaderFor{{}}, Type:"1" },
    eOpGroupInvite: { Id:"1", DataLen:1, Gid:"1", From:"1", To:"1" },
    eOpGroupEdit  : { Id:"1", Act:"1", Gid:"1" },
-   eOpPost       : { Id:"1", DataLen:1, For:[]tHeaderFor{{}} },
+   eOpPost       : { Id:"1", DataLen:1, For:[]tHeaderFor{} },
    eOpPing       : { Id:"1", DataLen:1, To:"1" },
    eOpAck        : { Id:"1", Type:"1" },
    eOpPulse      : {  },
@@ -112,7 +112,8 @@ func (o *tHeader) check() bool {
       len(aDef.To)       > 0 && len(o.To)       == 0 ||
       len(aDef.Type)     > 0 && len(o.Type)     == 0 ||
       len(aDef.Act)      > 0 && len(o.Act)      == 0 ||
-      len(aDef.For)      > 0 && len(o.For)      == 0
+      len(aDef.For)      > 0 && len(o.For)      == 0 ||
+      aDef.For        != nil && o.For         == nil
    for _, aEl := range o.For {
       aFail = aFail || len(aEl.Id) == 0 ||
               o.Op == eOpPost && (aEl.Type < eForUser || aEl.Type >= eForSelf)
