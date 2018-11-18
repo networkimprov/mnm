@@ -98,7 +98,7 @@ func (o *tHeader) check() bool {
    if o.Op >= eOpEnd { return false }
    aDef := &sHeaderDefs[o.Op]
    aFail :=
-      o.DataLen < 0                                  ||
+      o.DataLen | o.DataHead < 0                     ||
       o.DataLen < o.DataHead                         ||
       (aDef.DataLen == 0)    != (o.DataLen == 0)     ||
       aDef.DataSum       > 0 && o.DataSum       == 0 ||
