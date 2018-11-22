@@ -183,6 +183,13 @@ func _newTestClient(iAct tTestAction, iId int) *tTestClient {
           data: `data for Id:zyx` ,
           want: `{"id":"zyx","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
                 `{"datahead":5,"datalen":15,"datasum":1,"from":"u`+fmt.Sprint(iId)+`","headsum":#ck#,"id":"#id#","op":"delivery","posted":"#pdt#"}data for Id:zyx` ,
+      },{ head: tMsg{"Op":eOpPostNotify, "Id":"id", "Datalen":14, "Datahead":5, "Datasum":5,
+                     "For":[]tHeaderFor{{Id:"u"+fmt.Sprint(iId+1), Type:eForUser}}, "Fornotself":true,
+                     "Notelen":5, "Notehead":1, "Notesum":1} , //todo add Notefor
+          data: `note.post data` ,
+          want: `{"id":"id","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
+                `{"datahead":5,"datalen":9,"datasum":5,"from":"u`+fmt.Sprint(iId)+`","headsum":#ck#,"id":"#id#","op":"delivery","posted":"#pdt#"}post data`+"\n"+
+                `{"datahead":1,"datalen":5,"datasum":1,"from":"u`+fmt.Sprint(iId)+`","headsum":#ck#,"id":"#id#","op":"notify","posted":"#pdt#","postid":"#pid#"}note.` ,
       },{ head: tMsg{"Op":eOpPing, "Id":"123", "Datalen":1, "To":"test2"} ,
           data: `1` ,
           want: `{"id":"123","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
@@ -230,7 +237,7 @@ func _newTestClient(iAct tTestAction, iId int) *tTestClient {
                 `{"from":"u`+fmt.Sprint(iId)+`","op":"ohi","status":2}` ,
       },  aTmtpRev,
         { msg : []byte(`0034{"Op":2, "Uid":"u`+fmt.Sprint(iId)+`", "Node":"`+sTestNodeIds[iId]+`"}`+
-                       `002f{"Op":8, "Id":"123", "Datalen":1, "To":"test2"}1`) ,
+                       `002f{"Op":9, "Id":"123", "Datalen":1, "To":"test2"}1`) ,
           want: `{"info":"login ok","op":"info"}`+"\n"+
                 `{"id":"123","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
                 `{"datalen":0,"from":"u`+fmt.Sprint(iId)+`","headsum":#sck#,"id":"#sid#","node":"tbd","op":"login","posted":"#spdt#"}`+"\n"+
@@ -440,6 +447,9 @@ func (o *tTestClient) Write(iBuf []byte) (int, error) {
          }
          if aHead["nodeid"] != nil {
             _testVerifyWantEdit("nid", aHead["nodeid"].(string))
+         }
+         if aOp == "notify" {
+            _testVerifyWantEdit("pid", aHead["postid"].(string))
          }
          sTestVerifyGot[aI] += string(iBuf[4:]) + "\n"
       }

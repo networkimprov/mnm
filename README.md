@@ -174,21 +174,32 @@ At members `{"op":"member", (message headers), "datalen":0, "act":string, "gid":
 Response `{"op":"ack", (ack headers)}`  
 At recipient `{"op":"delivery", (message headers), "datalen":uint, <"datahead":uint>, <"datasum":uint>}`
 
+0. PostNotify sends a message to users/groups and a separate notification to a larger set of users/groups.  
+`{"op":8, "id":string, "datalen":uint, <"datahead":uint>, <"datasum":uint>,`  
+` "for":[{"id":string, "type":uint}, ...], <"fornotself":true>,`  
+` "notelen":uint, <"notehead":uint>, <"notesum":uint>, <"notefor":[{"id":string, "type":uint}, ...]>}`  
+.notelen segment follows the header and is sent to the .notefor & .for lists and nodes of self  
+.datasum pertains to data following .notelen with length (.datalen - .notelen)  
+.fornotself excludes nodes of self, which are otherwise implicit in .for list  
+Response `{"op":"ack", (ack headers)}` (ack.msgid = delivery.id = notify.postid)  
+At recipient `{"op":"delivery", (message headers), "datalen":uint, <"datahead":uint>, <"datasum":uint>}`  
+At notified `{"op":"notify", (message headers), "datalen":uint, <"datahead":uint>, <"datasum":uint>, "postid":string}`
+
 0. Ping sends a short text message via a user's alias.
 A reply establishes contact between the parties.  
 _todo: limit number of pings per 24h and consecutive failed pings_  
-`{"op":8, "id":string, "datalen":uint, <"datahead":uint>, <"datasum":uint>, "to":string}`  
+`{"op":9, "id":string, "datalen":uint, <"datahead":uint>, <"datasum":uint>, "to":string}`  
 Response `{"op":"ack", (ack headers)}`  
 At recipient `{"op":"ping", (message headers), "datalen":uint, <"datahead":uint>, <"datasum":uint>, "to":string}`
 
 0. Ack acknowledges receipt of a message.  
-`{"op":9, "id":string, "type":string}`
+`{"op":10, "id":string, "type":string}`
 
 0. Pulse resets the connection timeout.  
-`{"op":10}`
+`{"op":11}`
 
 0. Quit performs logout.  
-`{"op":11}`
+`{"op":12}`
 
 ### License
 

@@ -53,15 +53,16 @@ var sStore = tStore{}
 
 type tHeader struct {
    Op uint8
-   DataLen, DataHead int64
-   DataSum uint64
+   DataLen, DataHead, NoteLen, NoteHead int64
+   DataSum, NoteSum uint64
    Uid, Gid string
    Id string
    Node, NewNode string
    NewAlias, From, To string // alias
    Type string
    Act string
-   For []tHeaderFor
+   For, NoteFor []tHeaderFor
+   ForNotSelf bool
 }
 
 const (
@@ -69,7 +70,7 @@ const (
    eOpRegister; eOpLogin
    eOpUserEdit; eOpOhiEdit;
    eOpGroupInvite; eOpGroupEdit
-   eOpPost; eOpPing
+   eOpPost; eOpPostNotify; eOpPing
    eOpAck
    eOpPulse; eOpQuit
    eOpEnd
@@ -88,6 +89,7 @@ var sHeaderDefs = [...]tHeader{
    eOpGroupInvite: { Id:"1", DataLen:1, Gid:"1", From:"1", To:"1" },
    eOpGroupEdit  : { Id:"1", Act:"1", Gid:"1" },
    eOpPost       : { Id:"1", DataLen:1, For:[]tHeaderFor{} },
+   eOpPostNotify : { Id:"1", DataLen:1, For:[]tHeaderFor{}, NoteLen:1 },
    eOpPing       : { Id:"1", DataLen:1, To:"1" },
    eOpAck        : { Id:"1", Type:"1" },
    eOpPulse      : {  },
@@ -99,8 +101,11 @@ func (o *tHeader) check() bool {
    aDef := &sHeaderDefs[o.Op]
    aFail :=
       o.DataLen | o.DataHead < 0                     ||
+      o.NoteLen | o.NoteHead < 0                     ||
       o.DataLen < o.DataHead                         ||
+      o.NoteLen < o.NoteHead                         ||
       (aDef.DataLen == 0)    != (o.DataLen == 0)     ||
+      (aDef.NoteLen == 0)    != (o.NoteLen == 0)     ||
       len(aDef.Uid)      > 0 && len(o.Uid)      == 0 ||
       len(aDef.Gid)      > 0 && len(o.Gid)      == 0 ||
       len(aDef.Id)       > 0 && len(o.Id)       == 0 ||
@@ -113,11 +118,15 @@ func (o *tHeader) check() bool {
       len(aDef.Act)      > 0 && len(o.Act)      == 0 ||
       len(aDef.For)      > 0 && len(o.For)      == 0 ||
       aDef.For        != nil && o.For         == nil
-   for _, aEl := range o.For {
-      aFail = aFail || len(aEl.Id) == 0 ||
-              o.Op == eOpPost && (aEl.Type < eForUser || aEl.Type >= eForSelf)
+   fFor := func(cFor []tHeaderFor) bool {
+      for _, cEl := range cFor {
+         if len(cEl.Id) == 0 || o.Op != eOpOhiEdit && (cEl.Type < eForUser || cEl.Type >= eForSelf) {
+            return true
+         }
+      }
+      return false
    }
-   return !aFail
+   return !(aFail || fFor(o.For) || fFor(o.NoteFor))
 }
 
 
@@ -131,6 +140,7 @@ var sMsgOps = [...]string{
    eOpGroupInvite: "invite",
    eOpGroupEdit:   "member",
    eOpPost:        "delivery",
+   eOpPostNotify:  "delivery",
    eOpPing:        "ping",
    eOpEnd:         "",
 }
@@ -154,8 +164,10 @@ var (
    sMsgLoginFailure    = &tMsgQuit{Op:"quit", Error:"login failed"}
    sMsgLoginNodeOnline = &tMsgQuit{Op:"quit", Error:"node already connected"}
    sMsgLogout          = &tMsgQuit{Op:"quit", Error:"logout ok"}
-   sMsgDatalenLimit    = &tMsgQuit{Op:"quit", Error:"data too long for request type"}
+   sMsgDatalenHigh     = &tMsgQuit{Op:"quit", Error:"data too long for request type"}
+   sMsgDatalenLow      = &tMsgQuit{Op:"quit", Error:"data too short for request type"}
    sMsgDataNotUtf8     = &tMsgQuit{Op:"quit", Error:"data not valid UTF8"}
+   sMsgForEmpty        = &tMsgQuit{Op:"quit", Error:"recipient list empty"}
 )
 
 func msgConn(iErr net.Error) *tMsgQuit {
@@ -499,6 +511,16 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
          fmt.Fprintf(os.Stderr, "%s link._handleMsg post %s\n", o.uid, err.Error())
       }
       o._ack(iHead.Id, aMid, aPosted, err)
+   case eOpPostNotify:
+      if iHead.DataLen <= iHead.NoteLen { return sMsgDatalenLow }
+      if iHead.ForNotSelf && len(iHead.For) == 0 { return sMsgForEmpty }
+      aMid, aPosted, err = o._postNotify(iHead, iData)
+      if err != nil {
+         if err == io.EOF { return sMsgEof }
+         if aErr, _ := err.(net.Error); aErr != nil { return msgConn(aErr) }
+         fmt.Fprintf(os.Stderr, "%s link._handleMsg postNotify %s\n", o.uid, err.Error())
+      }
+      o._ack(iHead.Id, aMid, aPosted, err)
    case eOpPing:
       aQuitMsg := o._checkPing(iHead, &iData)
       if aQuitMsg != nil { return aQuitMsg }
@@ -532,7 +554,7 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
 
 func (o *tLink) _checkPing(iHead *tHeader, iData *[]byte) *tMsgQuit {
    if iHead.DataLen > kMsgPingDataMax {
-      return sMsgDatalenLimit
+      return sMsgDatalenHigh
    }
    for len(*iData) < int(iHead.DataLen) {
       aLen, err := o.Read((*iData)[len(*iData):iHead.DataLen]) // panics if cap() < DataLen
@@ -573,10 +595,48 @@ func (o *tLink) _ack(iId, iMsgId, iPosted string, iErr error) {
    o.conn.Write(packMsg(aMsg, nil))
 }
 
-func (o *tLink) _postMsg(iHead *tHeader, iEtc tMsg, iData []byte) (aMsgId, aPosted string, err error) {
+func (o *tLink) _postNotify(iHead *tHeader, iData []byte) (aMsgId, aPosted string, err error) {
    aMsgId = sStore.makeId()
    aPosted = time.Now().UTC().Format(kPostDateFormat)
-   aHead := tMsg{"op":sMsgOps[iHead.Op], "id":aMsgId, "from":o.uid, "datalen":iHead.DataLen,
+   aNoteId := sStore.makeId()
+   aHead := tMsg{"op":"notify", "id":aNoteId, "from":o.uid, "datalen":iHead.NoteLen,
+                 "posted":aPosted, "postid":aMsgId}
+   if iHead.NoteHead != 0 {
+      aHead["datahead"] = iHead.NoteHead
+   }
+   if iHead.NoteSum != 0 {
+      aHead["datasum"] = iHead.NoteSum
+   }
+   aHead["headsum"] = crc32.Checksum(packMsg(aHead, nil), sCrc32c)
+
+   aData := iData; if len(iData) > int(iHead.NoteLen) { aData = iData[:iHead.NoteLen] }
+   err = sStore.recvFile(aNoteId, packMsg(aHead, nil), aData, o, iHead.NoteLen)
+   if err != nil {
+      if _, ok := err.(net.Error); !ok && err != io.EOF { panic(err) }
+   }
+   defer sStore.rmFile(aNoteId)
+   if err != nil { return "", "", err }
+
+   aData = nil; if len(iData) > int(iHead.NoteLen) { aData = iData[iHead.NoteLen:] }
+   iHead.DataLen -= iHead.NoteLen
+   _, _, err = o._postMsgId(iHead, nil, aData, aMsgId)
+   iHead.DataLen += iHead.NoteLen
+   if err != nil { return "", "", err }
+
+   err = o._queueMsg(aNoteId, iHead.NoteFor, iHead.For, true) // modifies .NoteFor
+   if err != nil { return "", "", err }
+
+   return aMsgId, aPosted, nil
+}
+
+func (o *tLink) _postMsg(iHead *tHeader, iEtc tMsg, iData []byte) (string, string, error) {
+   return o._postMsgId(iHead, iEtc, iData, sStore.makeId())
+}
+
+func (o *tLink) _postMsgId(iHead *tHeader, iEtc tMsg, iData []byte, iId string) (
+                                                            _, aPosted string, err error) {
+   aPosted = time.Now().UTC().Format(kPostDateFormat)
+   aHead := tMsg{"op":sMsgOps[iHead.Op], "id":iId, "from":o.uid, "datalen":iHead.DataLen,
                  "posted":aPosted}
    //todo insert "datalen" if != 0
    if iHead.DataHead != 0 {
@@ -590,23 +650,34 @@ func (o *tLink) _postMsg(iHead *tHeader, iEtc tMsg, iData []byte) (aMsgId, aPost
    }
    aHead["headsum"] = crc32.Checksum(packMsg(aHead, nil), sCrc32c)
 
-   err = sStore.recvFile(aMsgId, packMsg(aHead, nil), iData, o, iHead.DataLen)
+   err = sStore.recvFile(iId, packMsg(aHead, nil), iData, o, iHead.DataLen)
    if err != nil {
       if _, ok := err.(net.Error); !ok && err != io.EOF { panic(err) }
    }
-   defer sStore.rmFile(aMsgId)
+   defer sStore.rmFile(iId)
    if err != nil { return "", "", err }
 
-   aForNodes := make(map[string]bool, len(iHead.For)) //todo x2 or more?
-   aForMyUid := false
-   iHead.For = append(iHead.For, tHeaderFor{Id:o.uid, Type:eForSelf})
+   err = o._queueMsg(iId, iHead.For, nil, iHead.Op != eOpPostNotify || !iHead.ForNotSelf) // may chg .For
+   if err != nil { return "", "", err }
 
-   for _, aTo := range iHead.For {
+   return iId, aPosted, nil
+}
+
+func (o *tLink) _queueMsg(iMsgId string, iForA, iForB []tHeaderFor, iSelf bool) error {
+   var err error
+   if iSelf {
+      iForA = append(iForA, tHeaderFor{Id:o.uid, Type:eForSelf})
+   }
+   iForA = append(iForA, iForB...)
+   aForNodes := make(map[string]bool, len(iForA)) //todo x2 or more?
+   aForMyUid := false
+
+   for _, aTo := range iForA {
       var aUids []string
       switch aTo.Type {
       case eForGroupAll, eForGroupExcl:
          aUids, err = UDb.GroupGetUsers(aTo.Id, o.uid)
-         if err != nil { return "", "", err }
+         if err != nil { return err }
       default:
          aUids = []string{aTo.Id}
       }
@@ -616,7 +687,7 @@ func (o *tLink) _postMsg(iHead *tHeader, iEtc tMsg, iData []byte) (aMsgId, aPost
          }
          var aNodes []string
          aNodes, err = UDb.OpenNodes(aUid)
-         if err != nil { return "", "", err }
+         if err != nil { return err }
          defer UDb.CloseNodes(aUid)
          for _, aNd := range aNodes {
             aForNodes[aNd] = true
@@ -630,16 +701,16 @@ func (o *tLink) _postMsg(iHead *tHeader, iEtc tMsg, iData []byte) (aMsgId, aPost
       }
       aNd := getNode(aNodeId)
       aNd.RLock()
-      err = sStore.putLink(aMsgId, aNodeId, aMsgId)
+      err = sStore.putLink(iMsgId, aNodeId, iMsgId)
       if err != nil { panic(err) }
       err = sStore.syncDirs(aNodeId)
       if err != nil { panic(err) }
       if aNd.queue != nil {
-         aNd.queue.in <- aMsgId
+         aNd.queue.in <- iMsgId
       }
       aNd.RUnlock()
    }
-   return aMsgId, aPosted, nil
+   return nil
 }
 
 
