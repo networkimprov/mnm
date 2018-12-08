@@ -182,7 +182,7 @@ At recipient `{"op":"delivery", (message headers), "datalen":uint, <"datahead":u
 .datasum pertains to data following .notelen with length (.datalen - .notelen)  
 .fornotself excludes nodes of self, which are otherwise implicit in .for list  
 Response `{"op":"ack", (ack headers)}` (ack.msgid = delivery.id = notify.postid)  
-At recipient `{"op":"delivery", (message headers), "datalen":uint, <"datahead":uint>, <"datasum":uint>}`  
+At recipient `{"op":"delivery", (message headers), "datalen":uint, <"datahead":uint>, <"datasum":uint>, "notify":uint}`  
 At notified `{"op":"notify", (message headers), "datalen":uint, <"datahead":uint>, <"datasum":uint>, "postid":string}`
 
 0. Ping sends a short text message via a user's alias.

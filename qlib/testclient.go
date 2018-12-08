@@ -188,7 +188,7 @@ func _newTestClient(iAct tTestAction, iId int) *tTestClient {
                      "Notelen":5, "Notehead":1, "Notesum":1} , //todo add Notefor
           data: `note.post data` ,
           want: `{"id":"id","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
-                `{"datahead":5,"datalen":9,"datasum":5,"from":"u`+fmt.Sprint(iId)+`","headsum":#ck#,"id":"#id#","op":"delivery","posted":"#pdt#"}post data`+"\n"+
+                `{"datahead":5,"datalen":9,"datasum":5,"from":"u`+fmt.Sprint(iId)+`","headsum":#ck#,"id":"#id#","notify":1,"op":"delivery","posted":"#pdt#"}post data`+"\n"+
                 `{"datahead":1,"datalen":5,"datasum":1,"from":"u`+fmt.Sprint(iId)+`","headsum":#ck#,"id":"#id#","op":"notify","posted":"#pdt#","postid":"#pid#"}note.` ,
       },{ head: tMsg{"Op":eOpPing, "Id":"123", "Datalen":1, "To":"test2"} ,
           data: `1` ,

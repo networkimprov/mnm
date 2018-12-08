@@ -618,8 +618,9 @@ func (o *tLink) _postNotify(iHead *tHeader, iData []byte) (aMsgId, aPosted strin
    if err != nil { return "", "", err }
 
    aData = nil; if len(iData) > int(iHead.NoteLen) { aData = iData[iHead.NoteLen:] }
+   aNotify := len(iHead.For)+len(iHead.NoteFor); if !iHead.ForNotSelf { aNotify++ }
    iHead.DataLen -= iHead.NoteLen
-   _, _, err = o._postMsgId(iHead, nil, aData, aMsgId)
+   _, _, err = o._postMsgId(iHead, nil, aData, aMsgId, aNotify)
    iHead.DataLen += iHead.NoteLen
    if err != nil { return "", "", err }
 
@@ -630,10 +631,10 @@ func (o *tLink) _postNotify(iHead *tHeader, iData []byte) (aMsgId, aPosted strin
 }
 
 func (o *tLink) _postMsg(iHead *tHeader, iEtc tMsg, iData []byte) (string, string, error) {
-   return o._postMsgId(iHead, iEtc, iData, sStore.makeId())
+   return o._postMsgId(iHead, iEtc, iData, sStore.makeId(), 0)
 }
 
-func (o *tLink) _postMsgId(iHead *tHeader, iEtc tMsg, iData []byte, iId string) (
+func (o *tLink) _postMsgId(iHead *tHeader, iEtc tMsg, iData []byte, iId string, iNotify int) (
                                                             _, aPosted string, err error) {
    aPosted = time.Now().UTC().Format(kPostDateFormat)
    aHead := tMsg{"op":sMsgOps[iHead.Op], "id":iId, "from":o.uid, "datalen":iHead.DataLen,
@@ -644,6 +645,9 @@ func (o *tLink) _postMsgId(iHead *tHeader, iEtc tMsg, iData []byte, iId string) 
    }
    if iHead.DataSum != 0 {
       aHead["datasum"] = iHead.DataSum
+   }
+   if iNotify > 0 {
+      aHead["notify"] = iNotify
    }
    if iEtc != nil {
       for aK, aV := range iEtc { aHead[aK] = aV }
