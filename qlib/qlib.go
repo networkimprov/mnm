@@ -843,6 +843,7 @@ type tQueue struct {
    in chan string // elastic channel input
    out chan string // elastic channel output
    ohi chan tOhiMsg // presence notifications to us
+   off chan struct{} // connection offline
 }
 
 func queueLink(iNode string, iConn net.Conn, iMsg tMsg, iUid string) *tQueue {
@@ -861,6 +862,7 @@ func queueLink(iNode string, iConn net.Conn, iMsg tMsg, iUid string) *tQueue {
          aQ.in = make(chan string)
          aQ.out = make(chan string)
          aQ.ohi = make(chan tOhiMsg, 100) //todo tune size
+         aQ.off = make(chan struct{})
          var err error
          aQ.buf, err = sStore.getDir(iNode)
          if err != nil { panic(err) }
@@ -886,6 +888,10 @@ func queueLink(iNode string, iConn net.Conn, iMsg tMsg, iUid string) *tQueue {
 
 func (o *tQueue) unlink() {
    <-o.connChan
+   select {
+   case o.off <- struct{}{}:
+   default:
+   }
    o.hasConn = 0
 }
 
@@ -942,6 +948,9 @@ func _runQueue(o *tQueue) {
          sStore.rmLink(o.node, aMsgId)
          sSendDoor.RUnlock()
          aMsgId = o._waitForMsg()
+      case <-o.off:
+         aTimeout.Stop()
+         sSendDoor.RUnlock()
       case <-aTimeout.C:
          sSendDoor.RUnlock()
          fmt.Fprintf(os.Stderr, "%.7s queue._runQueue timed out awaiting ack\n", o.node)
