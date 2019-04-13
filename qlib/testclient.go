@@ -129,18 +129,22 @@ func _newTestClient(iAct tTestAction, iId int) *tTestClient {
          want: `{"id":"1","op":"tmtprev"}` ,
       }
       aTc.work = []tTestWork{
+        { head: tMsg{"Op":eOpLogin, "Uid":"noone", "Node":"none"} ,
+          want: `` , // print "quit tmtprev was omitted"
+      },  aTmtpRev,
         { msg : []byte(`00z1{"Op":3, "Uid":"noone"}`) ,
           want: `{"error":"invalid header length","op":"quit"}` ,
-      },{ msg : []byte(`000a{"Op":12f3`) ,
+      },  aTmtpRev,
+        { msg : []byte(`000a{"Op":12f3`) ,
           want: `{"error":"invalid header","op":"quit"}` ,
-      },{ head: tMsg{"Op":eOpLogin, "Uid":"noone", "NoId":"none"} ,
+      },  aTmtpRev,
+        { head: tMsg{"Op":eOpLogin, "Uid":"noone", "NoId":"none"} ,
           want: `{"error":"invalid header","op":"quit"}` ,
       },  aTmtpRev,
         { head: tMsg{"Op":eOpTmtpRev, "Id":"1"} ,
           want: `{"error":"disallowed op repetition","op":"quit"}` ,
-      },{ head: tMsg{"Op":eOpLogin, "Uid":"noone", "Node":"none"} ,
-          want: `{"error":"tmtprev was omitted","op":"quit"}` ,
-      },{ head: tMsg{"Op":eOpPost, "Id":"zyx", "Datalen":1, "For":[]tHeaderFor{{Id:"x", Type:eForUser}}} ,
+      },  aTmtpRev,
+        { head: tMsg{"Op":eOpPost, "Id":"zyx", "Datalen":1, "For":[]tHeaderFor{{Id:"x", Type:eForUser}}} ,
           data: `1` ,
           want: `{"error":"disallowed op on unauthenticated link","op":"quit"}` ,
       },  aTmtpRev,
@@ -252,7 +256,8 @@ func _newTestClient(iAct tTestAction, iId int) *tTestClient {
       },{ msg : []byte(`1234567`) ,
       },{ msg : []byte{255,254,253} ,
           want: `{"error":"data not valid UTF8","op":"quit"}` ,
-      },{ msg : []byte(`delay`) ,
+      },  aTmtpRev,
+        { msg : []byte(`delay`) ,
           want: `{"error":"connection timeout","op":"quit"}` ,
       }}
    }

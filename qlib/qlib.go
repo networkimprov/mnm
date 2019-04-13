@@ -316,7 +316,7 @@ func _runLink(o *tLink) {
       fmt.Printf("%s link._runLink eof\n", aSrc)
    } else {
       fmt.Fprintf(os.Stderr, "%s link._runLink %s %s\n", aSrc, aQuitMsg.Op, aQuitMsg.Error)
-      if aQuitMsg.Op == "quit" {
+      if aQuitMsg.Op == "quit" && o.tmtprev != "" {
          o.conn.Write(packMsg(aQuitMsg, nil))
       }
    }
