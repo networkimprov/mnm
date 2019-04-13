@@ -3,14 +3,9 @@ _Mnm is Not Mail_
 mnm provides the benefits of email without the huge risks of allowing 
 anyone, anywhere, claiming any identity to send you any content, any number of times. 
 
-mnm also offers electronic correspondence features missing from traditional email, 
-including forms/surveys which may be filled out and returned, 
-charts via [Chart.js or Vega-Lite], hyperlinks to messages, and slide shows. 
-It creates HTML-formatted messages via Markdown, which enables 
-mouseless (i.e. rapid) composition of rich text with graphical elements. 
-
-This codebase is for the **TMTP message relay server.** 
-(See also the [mnm client](https://github.com/networkimprov/mnm-hammer).) 
+This codebase is the **TMTP message relay server.** 
+(See also the [mnm app](https://github.com/networkimprov/mnm-hammer), 
+which offers electronic correspondence features missing from traditional email.) 
 Written in Go, the relay server is reliable, fast, lightweight, dependency-free, and open source.
 
 TMTP is a new client/server protocol for person-to-person or machine-to-machine message delivery. 
@@ -41,6 +36,9 @@ It may provide:
 
 ### Status
 
+_13 April 2019_ -
+A private preview is now live! Contact the author if you'd like to try it.
+
 _19 August 2018_ -
 After testing with mnm client, made a handful of fixes. Changed license to MPL.
 
@@ -54,11 +52,6 @@ It uses ~200MB RAM, <10MB disk, and minimal CPU time.
 Each client runs a 19-step cycle that does login, then post for two recipients (15x) 
 or for a group of 100 (2x) every 1-30s, then logout and idle for 1-30s. 
 
-The author previously prototyped this in Node.js.
-(Based on that experience, he can't recommend Node.js.)
-_Warning, unreadable Javascript hackery follows._
-http://github.com/networkimprov/websocket.MQ
-
 ### What's here
 
 - qlib/qlib.go: TMTP package with simple API
@@ -70,24 +63,36 @@ http://github.com/networkimprov/websocket.MQ
 - codestyle.txt: how to make Go source much more clear
 - mnm: the server executable
 - After first run:  
-userdb/: user & group data  
-qstore/: queued messages awaiting delivery
+  userdb/: user & group data  
+  qstore/: queued messages awaiting delivery
 
 ### Quick start
 
-1. go get github.com/networkimprov/mnm
+1. Download & Build  
+a) `go get github.com/networkimprov/mnm`  
+b) `cd $GOPATH/src/github.com/networkimprov/mnm`
 
-2. Start test sequence  
-a) cd $GOPATH/src/github.com/networkimprov/mnm # or alternate directory for new files  
-b) go run mnm 10 # run continuous test with simulated clients (may be 2-1000)  
-c) ctrl-C to stop
+1. Enable TCP+TLS with self-signed certificate  
+a) `openssl ecparam -genkey -name secp384r1 -out server.key`  
+b) `openssl req -new -x509 -sha256 -key server.key -out server.crt -days 3650`  
+c) `cp mnm.conf mnm.config` # edit to revise ntp.hosts and adjust listen.laddr with "host:port"
 
-3. Enable TCP+TLS (assumes above working directory)  
-a) openssl ecparam -genkey -name secp384r1 -out server.key  
-b) openssl req -new -x509 -sha256 -key server.key -out server.crt -days 3650  
-c) cp mnm.conf mnm.config # revise ntp.hosts and adjust listen.laddr with host:port as necessary  
-d) go run mnm # default port 443 may require sudo  
-e) ctrl-C or send SIGINT signal to trigger graceful shutdown
+   Note: On a public Internet host, port 443 will see a steady trickle of probe requests 
+   (often with nefarious intent) which pollutes the mnm logs. 
+   Choose a port above 1024 to avoid this. 
+
+1. Run  
+a) `./mnm` # default port 443 may require sudo; logs to stdout/stderr  
+b) ctrl-C to stop  
+or  
+a) `./mnm >> logfile 2>&1 &` # run in background, logs to end of logfile  
+b) `kill -s INT <background_pid>` # send SIGINT signal, triggering graceful shutdown
+
+### Testing
+
+Continuous test sequence with simulated clients  
+a) `./mnm 10` # may be 2-1000  
+b) ctrl-C to stop
 
 ### TMTP Summary
 
@@ -102,7 +107,8 @@ Each message starts with a header, wherein four hex digits give the size of a JS
 which may be followed by arbitrary format 8-bit data: 
 `001f{ ... <"dataLen":uint> }dataLen 8-bit bytes of data`
 
-Protocol errors by the client and login failure/timeout cause the server to terminate the connection 
+Link errors & timeouts cause the server to close the connection without notice. 
+Protocol errors or login failure by TMTP clients cause the server to close the connection 
 after emitting a quit response:  
 `{"op":"quit", "error":string}`
 
