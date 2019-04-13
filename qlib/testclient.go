@@ -510,8 +510,8 @@ func (o *tTestClient) Close() error {
    return nil
 }
 
-func (o *tTestClient) LocalAddr() net.Addr { return &net.UnixAddr{"e", "a"} }
-func (o *tTestClient) RemoteAddr() net.Addr { return &net.UnixAddr{"e", "a"} }
+func (o *tTestClient) LocalAddr()  net.Addr { return &net.UnixAddr{Name:"0.0.0.0"} }
+func (o *tTestClient) RemoteAddr() net.Addr { return &net.UnixAddr{Name:"1.1.1.1"} }
 func (o *tTestClient) SetDeadline(time.Time) error { return nil }
 func (o *tTestClient) SetWriteDeadline(time.Time) error { return nil }
 
