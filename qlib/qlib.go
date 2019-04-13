@@ -24,6 +24,7 @@ import (
    "strings"
    "sync"
    "time"
+   "crypto/tls"
    "unicode/utf8"
 )
 
@@ -152,6 +153,8 @@ type tMsgQuit struct {
 
 var (
    sMsgEof             = &tMsgQuit{Op:"eof"}
+   sMsgTlsRecord       = &tMsgQuit{Op:"fail", Error:"invalid TLS record"}
+   sMsgReset           = &tMsgQuit{Op:"fail", Error:"connection reset by peer"}
    sMsgTimeout         = &tMsgQuit{Op:"fail", Error:"connection timeout"}
    sMsgLengthBad       = &tMsgQuit{Op:"quit", Error:"invalid header length"}
    sMsgHeaderBad       = &tMsgQuit{Op:"quit", Error:"invalid header"}
@@ -171,7 +174,12 @@ var (
 )
 
 func msgConn(iErr net.Error) *tMsgQuit {
-   if iErr.Timeout() { return sMsgTimeout }
+   if iErr.Timeout() {
+      return sMsgTimeout
+   }
+   if strings.HasSuffix(iErr.Error(), "reset by peer") {
+      return sMsgReset
+   }
    return &tMsgQuit{Op:"fail", Error:fmt.Sprintf("(tmp %v) %s", iErr.Temporary(), iErr.Error())}
 }
 
@@ -266,6 +274,8 @@ func _runLink(o *tLink) {
       if err != nil {
          if err == io.EOF {
             aQuitMsg = sMsgEof
+         } else if _, ok := err.(tls.RecordHeaderError); ok {
+            aQuitMsg = sMsgTlsRecord
          } else if aErr, _ := err.(net.Error); aErr != nil {
             //todo if recoverable continue
             aQuitMsg = msgConn(aErr)
