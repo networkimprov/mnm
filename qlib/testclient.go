@@ -258,7 +258,7 @@ func _newTestClient(iAct tTestAction, iId int) *tTestClient {
           want: `{"error":"data not valid UTF8","op":"quit"}` ,
       },  aTmtpRev,
         { msg : []byte(`delay`) ,
-          want: `{"error":"connection timeout","op":"quit"}` ,
+          want: `` , // print "fail connection timeout"
       }}
    }
    return aTc

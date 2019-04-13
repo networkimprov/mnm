@@ -152,7 +152,7 @@ type tMsgQuit struct {
 
 var (
    sMsgEof             = &tMsgQuit{Op:"eof"}
-   sMsgTimeout         = &tMsgQuit{Op:"quit", Error:"connection timeout"}
+   sMsgTimeout         = &tMsgQuit{Op:"fail", Error:"connection timeout"}
    sMsgLengthBad       = &tMsgQuit{Op:"quit", Error:"invalid header length"}
    sMsgHeaderBad       = &tMsgQuit{Op:"quit", Error:"invalid header"}
    sMsgBase32Bad       = &tMsgQuit{Op:"quit", Error:"corrupt base32 value"}
@@ -266,9 +266,11 @@ func _runLink(o *tLink) {
       if err != nil {
          if err == io.EOF {
             aQuitMsg = sMsgEof
-         } else {
+         } else if aErr, _ := err.(net.Error); aErr != nil {
             //todo if recoverable continue
-            aQuitMsg = msgConn(err.(net.Error))
+            aQuitMsg = msgConn(aErr)
+         } else {
+            aQuitMsg = &tMsgQuit{Op:"fail", Error:err.Error()}
          }
          break
       }
@@ -560,8 +562,12 @@ func (o *tLink) _checkPing(iHead *tHeader, iData *[]byte) *tMsgQuit {
    for len(*iData) < int(iHead.DataLen) {
       aLen, err := o.Read((*iData)[len(*iData):iHead.DataLen]) // panics if cap() < DataLen
       if err != nil {
-         if err == io.EOF { return sMsgEof }
-         return msgConn(err.(net.Error))
+         if err == io.EOF {
+            return sMsgEof
+         } else if aErr, _ := err.(net.Error); aErr != nil {
+            return msgConn(aErr)
+         }
+         return &tMsgQuit{Op:"fail", Error:err.Error()}
       }
       *iData = (*iData)[:len(*iData)+aLen]
    }
