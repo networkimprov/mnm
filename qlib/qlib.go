@@ -924,11 +924,11 @@ func (o *tQueue) _waitForMsg() string {
 }
 
 func (o *tQueue) _tryOhi(iOhi *tOhiMsg) {
-   aMsg := packMsg(tMsg{"op":"ohi", "from":iOhi.from, "status":iOhi.status}, nil)
    select {
    case aConn := <-o.connChan:
       o.connChan <- aConn
-      _,err := aConn.Write(aMsg)
+      aMsg := packMsg(tMsg{"op":"ohi", "from":iOhi.from, "status":iOhi.status}, nil)
+      _, err := aConn.Write(aMsg)
       if err != nil {
          fmt.Fprintf(os.Stderr, "%.7s queue._tryOhi write error %s\n", o.node, err.Error())
       }
