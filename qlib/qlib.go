@@ -938,9 +938,16 @@ func (o *tQueue) _tryOhi(iOhi *tOhiMsg) {
 
 func _runQueue(o *tQueue) {
    aMsgId := o._waitForMsg()
+   var aConn net.Conn
    for {
-      aConn := <-o.connChan
-      o.connChan <- aConn
+   WaitConn:
+      select {
+         case aConn = <-o.connChan:
+            o.connChan <- aConn
+         case aOhi := <-o.ohi:
+            o._tryOhi(&aOhi)
+            goto WaitConn
+      }
       sSendDoor.RLock()
       err := sStore.sendFile(o.node, aMsgId, aConn)
       if err != nil {
