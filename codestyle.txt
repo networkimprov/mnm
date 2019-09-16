@@ -26,7 +26,8 @@ sVar - package variable (s = static)
    var sWhat []string
 aVar - function variable; exceptions: err & ok return values
    aFile, err := Open(...)
-   for a := 0; a < kMax; a++ {} // instead of i
+   for a := 0; a < kMax; a++ { // instead of i
+      for a1 := range ... {    // instead of j
 iVar - function argument (i = input)
    func xyz(iWhat, iWhere string) {...}
 o - function receiver argument, fka "this" (o = object)
@@ -42,6 +43,11 @@ Since these are recognized by context, no prefix for:
 fmt.Printf() - standard library package
 a.v - struct member
 youNameIt() - package function
+
+In a multi-file package, package-level functions that 
+are meant for use beyond their file (i.e. don't start with _) 
+begin with a verb and end with the name of the file.
+   func flyBird() // defined in bird.go
 
 
 Organization
@@ -86,3 +92,21 @@ Since we can't write:
 we say:
    v = b; if t { v = a }
 
+We would like to write this, but the compiler interferes:
+   if t { a() }
+   else { b() }
+
+We would like to write this (allowed in Javascript):
+   func f() {
+      call(fCb)
+      func fCb() { ... }
+   }
+
+
+Consider the API
+
+All package-level functions, exported and private, belong to an API, 
+which must be coherent.
+
+Do not create single-caller package-level functions simply to make 
+the caller easier to read, as this typically pollutes the API.
