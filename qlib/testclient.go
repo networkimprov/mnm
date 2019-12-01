@@ -25,13 +25,13 @@ import (
 
 const kTestLoginWait time.Duration = 6 * time.Second
 
-var sTestNodeIds = make(map[int]string)
+var sTestNodeIds = make(map[int][]string)
 var sTestVerifyDone = make(chan int)
 var sTestVerifyWant struct { val string; sync.Mutex } // expected results of _verifyRead()
 var sTestVerifyGot [3]string // actual results of _verifyRead()
 var sTestVerifyFail int
 var sTestClientCount int32
-var sTestClientId chan int
+var sTestClientId chan [3]int
 var sTestLogins = make(map[int]*int)
 var sTestLoginTotal int32
 var sTestRecvCount, sTestRecvOhi int32
@@ -50,11 +50,10 @@ func LocalTest(i int) {
    UDb.TempAlias("u100003", "test2")
    UDb.TempGroup("blab", "u100002", "test1") // Status eStatInvited
 
-   NewLink(_newTestClient(eActVerifyRecv, 100003))
-   NewLink(_newTestClient(eActVerifySend, 100002))
+   NewLink(_newTestClient(eActVerifyRecv, [3]int{100003, 0, 0}))
+   NewLink(_newTestClient(eActVerifySend, [3]int{100002, 0, 0}))
    <-sTestVerifyDone
    time.Sleep(10 * time.Millisecond)
-   UDb.Erase() // assumes no userdb write ops during cycle
    fmt.Fprintf(os.Stderr, "%d verify pass failures, starting cycle\n\n", sTestVerifyFail)
 
    aSegment := []byte(`0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz.!`)
@@ -63,7 +62,7 @@ func LocalTest(i int) {
    }
 
    sTestClientCount = int32(i)
-   sTestClientId = make(chan int, i)
+   sTestClientId = make(chan [3]int, i)
    for a := 0; a <= i; a++ {
       aId := 111000 + a
       aS := fmt.Sprint(aId)
@@ -72,7 +71,7 @@ func LocalTest(i int) {
       UDb.TempGroup("g"+fmt.Sprint(a/100), "u"+aS, "a"+aS)
       if a < i {
          sTestLogins[aId] = new(int)
-         sTestClientId <- aId
+         sTestClientId <- [3]int{aId, 0, 0}
       }
    }
 
@@ -82,18 +81,19 @@ func LocalTest(i int) {
       select {
       case <-aIntWatch:
          aLoop = false
-      case aId := <-sTestClientId:
-         NewLink(_newTestClient(eActCycle, aId))
+      case aInfo := <-sTestClientId:
+         NewLink(_newTestClient(eActCycle, aInfo))
       }
    }
    fmt.Fprintf(os.Stderr, " shutting down\n")
    Suspend()
+   UDb.Erase()
    _ = os.RemoveAll(sStore.Root)
 }
 
 func _testMakeNode(id int) string {
    aNodeId := sBase32.EncodeToString([]byte(fmt.Sprint(id)))
-   sTestNodeIds[id] = aNodeId
+   sTestNodeIds[id] = []string{aNodeId, "", ""}
    aNodeSha, err := getNodeSha(&aNodeId)
    if err != nil { panic(err) }
    return aNodeSha
@@ -101,6 +101,7 @@ func _testMakeNode(id int) string {
 
 type tTestClient struct {
    id int // user id
+   nodeN, nodeMax int // index and max-index of sTestNodeIds
    count int // msg number
    toRead, toWrite int // data yet to read/write
    action tTestAction // test mode
@@ -117,13 +118,12 @@ type tTestWork struct { msg []byte; head tMsg; data, want string }
 
 type tTestForOhi struct { Id string }
 
-func _newTestClient(iAct tTestAction, iId int) *tTestClient {
-   aTc := &tTestClient{
-      id: iId,
-      action: iAct,
-      ack: make(chan string, 10),
-   }
+func _newTestClient(iAct tTestAction, iInfo [3]int) *tTestClient {
+   aTc := &tTestClient{action: iAct, id: iInfo[0], nodeN: iInfo[1], nodeMax: iInfo[2],
+                       ack: make(chan string, 10)}
    if iAct == eActVerifySend {
+      aUid   := fmt.Sprintf("u%d", aTc.id)
+      aForid := fmt.Sprintf("u%d", aTc.id + 1)
       aTmtpRev := tTestWork{
          head: tMsg{"Op":eOpTmtpRev, "Id":"1"} ,
          want: `{"id":"1","op":"tmtprev"}` ,
@@ -163,10 +163,10 @@ func _newTestClient(iAct tTestAction, iId int) *tTestClient {
         { head: tMsg{"Op":eOpRegister, "NewNode":"blue", "NewAlias":"short"} ,
           want: `{"error":"newalias must be 8+ characters","nodeid":"#nid#","op":"registered","uid":"#uid#"}`+"\n"+
                 `{"info":"login ok","op":"info"}` ,
-      },{ head: tMsg{"Op":eOpLogin, "Uid":"u"+fmt.Sprint(iId), "Node":sTestNodeIds[iId]} ,
+      },{ head: tMsg{"Op":eOpLogin, "Uid":aUid, "Node":sTestNodeIds[aTc.id][0]} ,
           want: `{"error":"disallowed op on connected link","op":"quit"}` ,
       },  aTmtpRev,
-        { head: tMsg{"Op":eOpLogin, "Uid":"u"+fmt.Sprint(iId), "Node":sTestNodeIds[iId], "Datalen":5} ,
+        { head: tMsg{"Op":eOpLogin, "Uid":aUid, "Node":sTestNodeIds[aTc.id][0], "Datalen":5} ,
           data: `extra` ,
           want: `{"error":"invalid header","op":"quit"}` ,
       },  aTmtpRev,
@@ -176,82 +176,82 @@ func _newTestClient(iAct tTestAction, iId int) *tTestClient {
         { head: tMsg{"Op":eOpLogin, "Uid":"noone", "Node":"LB27ML46"} ,
           want: `{"error":"login failed","op":"quit"}` ,
       },  aTmtpRev,
-        { head: tMsg{"Op":eOpLogin, "Uid":"u"+fmt.Sprint(iId+1), "Node":sTestNodeIds[iId+1]} ,
+        { head: tMsg{"Op":eOpLogin, "Uid":aForid, "Node":sTestNodeIds[aTc.id+1][0]} ,
           want: `{"error":"node already connected","op":"quit"}` ,
       },  aTmtpRev,
-        { head: tMsg{"Op":eOpLogin, "Uid":"u"+fmt.Sprint(iId), "Node":sTestNodeIds[iId]} ,
+        { head: tMsg{"Op":eOpLogin, "Uid":aUid, "Node":sTestNodeIds[aTc.id][0]} ,
           want: `{"info":"login ok","op":"info"}`+"\n"+
-                `{"datalen":0,"from":"u`+fmt.Sprint(iId)+`","headsum":#sck#,"id":"#sid#","node":"tbd","op":"login","posted":"#spdt#"}` ,
+                `{"datalen":0,"from":"`+aUid+`","headsum":#sck#,"id":"#sid#","node":"tbd","op":"login","posted":"#spdt#"}` ,
       },{ head: tMsg{"Op":eOpPost, "Id":"zyx", "Datalen":15, "Datahead":5, "Datasum":1, "For":[]tHeaderFor{
-                       {Id:"u"+fmt.Sprint(iId+1), Type:eForUser} }} ,
+                       {Id:aForid, Type:eForUser} }} ,
           data: `data for Id:zyx` ,
           want: `{"id":"zyx","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
-                `{"datahead":5,"datalen":15,"datasum":1,"from":"u`+fmt.Sprint(iId)+`","headsum":#ck#,"id":"#id#","op":"delivery","posted":"#pdt#"}data for Id:zyx` ,
+                `{"datahead":5,"datalen":15,"datasum":1,"from":"`+aUid+`","headsum":#ck#,"id":"#id#","op":"delivery","posted":"#pdt#"}data for Id:zyx` ,
       },{ head: tMsg{"Op":eOpPostNotify, "Id":"id", "Datalen":14, "Datahead":5, "Datasum":5,
-                     "For":[]tHeaderFor{{Id:"u"+fmt.Sprint(iId+1), Type:eForUser}}, "Fornotself":true,
+                     "For":[]tHeaderFor{{Id:aForid, Type:eForUser}}, "Fornotself":true,
                      "Notelen":5, "Notehead":1, "Notesum":1} , //todo add Notefor
           data: `note.post data` ,
           want: `{"id":"id","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
-                `{"datahead":5,"datalen":9,"datasum":5,"from":"u`+fmt.Sprint(iId)+`","headsum":#ck#,"id":"#id#","notify":1,"op":"delivery","posted":"#pdt#"}post data`+"\n"+
-                `{"datahead":1,"datalen":5,"datasum":1,"from":"u`+fmt.Sprint(iId)+`","headsum":#ck#,"id":"#id#","op":"notify","posted":"#pdt#","postid":"#pid#"}note.` ,
+                `{"datahead":5,"datalen":9,"datasum":5,"from":"`+aUid+`","headsum":#ck#,"id":"#id#","notify":1,"op":"delivery","posted":"#pdt#"}post data`+"\n"+
+                `{"datahead":1,"datalen":5,"datasum":1,"from":"`+aUid+`","headsum":#ck#,"id":"#id#","op":"notify","posted":"#pdt#","postid":"#pid#"}note.` ,
       },{ head: tMsg{"Op":eOpPing, "Id":"123", "Datalen":1, "To":"test2"} ,
           data: `1` ,
           want: `{"id":"123","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
-                `{"datalen":1,"from":"u`+fmt.Sprint(iId)+`","headsum":#ck#,"id":"#id#","op":"ping","posted":"#pdt#","to":"test2"}1` ,
+                `{"datalen":1,"from":"`+aUid+`","headsum":#ck#,"id":"#id#","op":"ping","posted":"#pdt#","to":"test2"}1` ,
       },{ head: tMsg{"Op":eOpUserEdit, "Id":"0", "Newalias":"sam walker"} ,
           want: `{"id":"0","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
-                `{"datalen":0,"from":"u`+fmt.Sprint(iId)+`","headsum":#sck#,"id":"#sid#","newalias":"sam walker","op":"user","posted":"#spdt#"}` ,
+                `{"datalen":0,"from":"`+aUid+`","headsum":#sck#,"id":"#sid#","newalias":"sam walker","op":"user","posted":"#spdt#"}` ,
       },{ head: tMsg{"Op":eOpUserEdit, "Id":"0", "Newnode":"ref"} ,
           want: `{"id":"0","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
-                `{"datalen":0,"from":"u`+fmt.Sprint(iId)+`","headsum":#sck#,"id":"#sid#","nodeid":"#nid#","op":"user","posted":"#spdt#"}` ,
+                `{"datalen":0,"from":"`+aUid+`","headsum":#sck#,"id":"#sid#","newnode":"ref","nodeid":"#nid#","op":"user","posted":"#spdt#"}` ,
       },{ head: tMsg{"Op":eOpGroupEdit, "Id":"0", "Gid":"blab", "Act":"join"} ,
           want: `{"id":"0","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
-                `{"act":"join","alias":"test1","datalen":0,"from":"u`+fmt.Sprint(iId)+`","gid":"blab","headsum":#sck#,"id":"#sid#","op":"member","posted":"#spdt#"}` ,
+                `{"act":"join","alias":"test1","datalen":0,"from":"`+aUid+`","gid":"blab","headsum":#sck#,"id":"#sid#","op":"member","posted":"#spdt#"}` ,
       },{ head: tMsg{"Op":eOpGroupEdit, "Id":"0", "Gid":"blab", "Act":"drop", "To":"test1"} ,
           want: `{"id":"0","msgid":"#mid#","op":"ack","posted":"#pst#"}` ,
       },{ head: tMsg{"Op":eOpGroupInvite, "Id":"0", "Gid":"talk", "Datalen":5, "From":"test1", "To":"test2"} ,
           data: `hello` ,
           want: `{"id":"0","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
-                `{"act":"invite","alias":"test2","datalen":0,"from":"u`+fmt.Sprint(iId)+`","gid":"talk","headsum":#sck#,"id":"#sid#","op":"member","posted":"#spdt#"}`+"\n"+
-                `{"datalen":5,"from":"u`+fmt.Sprint(iId)+`","gid":"talk","headsum":#ck#,"id":"#id#","op":"invite","posted":"#pdt#","to":"test2"}hello` ,
+                `{"act":"invite","alias":"test2","datalen":0,"from":"`+aUid+`","gid":"talk","headsum":#sck#,"id":"#sid#","op":"member","posted":"#spdt#"}`+"\n"+
+                `{"datalen":5,"from":"`+aUid+`","gid":"talk","headsum":#ck#,"id":"#id#","op":"invite","posted":"#pdt#","to":"test2"}hello` ,
       },{ head: tMsg{"Op":eOpGroupEdit, "Id":"0", "Gid":"talk", "Act":"alias", "Newalias":"test11"} ,
           want: `{"id":"0","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
-                `{"act":"alias","alias":"test1","datalen":0,"from":"u`+fmt.Sprint(iId)+`","gid":"talk","headsum":#sck#,"id":"#sid#","newalias":"test11","op":"member","posted":"#spdt#"}` ,
+                `{"act":"alias","alias":"test1","datalen":0,"from":"`+aUid+`","gid":"talk","headsum":#sck#,"id":"#sid#","newalias":"test11","op":"member","posted":"#spdt#"}` ,
       },{ head: tMsg{"Op":eOpPing, "Id":"123", "Datalen":144, "To":"test2"} ,
           data: `123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 1234` ,
           want: `{"error":"data too long for request type","op":"quit"}` ,
       },  aTmtpRev,
-        { head: tMsg{"Op":eOpLogin, "Uid":"u"+fmt.Sprint(iId), "Node":sTestNodeIds[iId]} ,
+        { head: tMsg{"Op":eOpLogin, "Uid":aUid, "Node":sTestNodeIds[aTc.id][0]} ,
           want: `{"info":"login ok","op":"info"}`+"\n"+
-                `{"datalen":0,"from":"u`+fmt.Sprint(iId)+`","headsum":#sck#,"id":"#sid#","node":"tbd","op":"login","posted":"#spdt#"}` ,
-      },{ head: tMsg{"Op":eOpOhiEdit, "Id":"0", "For":[]tTestForOhi{{Id:"u"+fmt.Sprint(iId+1)}}, "Type":"add"} ,
+                `{"datalen":0,"from":"`+aUid+`","headsum":#sck#,"id":"#sid#","node":"tbd","op":"login","posted":"#spdt#"}` ,
+      },{ head: tMsg{"Op":eOpOhiEdit, "Id":"0", "For":[]tTestForOhi{{Id:aForid}}, "Type":"add"} ,
           want: `{"id":"0","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
-                `{"from":"u`+fmt.Sprint(iId)+`","op":"ohi","status":1}` ,
-      },{ head: tMsg{"Op":eOpOhiEdit, "Id":"0", "For":[]tTestForOhi{{Id:"u"+fmt.Sprint(iId+1)}}, "Type":"drop"} ,
+                `{"from":"`+aUid+`","op":"ohi","status":1}` ,
+      },{ head: tMsg{"Op":eOpOhiEdit, "Id":"0", "For":[]tTestForOhi{{Id:aForid}}, "Type":"drop"} ,
           want: `{"id":"0","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
-                `{"datalen":0,"for":[{"Id":"u`+fmt.Sprint(iId+1)+`","Type":0}],"from":"u`+fmt.Sprint(iId)+`","headsum":#sck#,"id":"#sid#","op":"ohiedit","posted":"#spdt#","type":"drop"}`+"\n"+
-                `{"from":"u`+fmt.Sprint(iId)+`","op":"ohi","status":2}` ,
-      },{ head: tMsg{"Op":eOpOhiEdit, "Id":"0", "For":[]tTestForOhi{{Id:"u"+fmt.Sprint(iId+1)}}, "Type":"add"} ,
+                `{"datalen":0,"for":[{"Id":"`+aForid+`","Type":0}],"from":"`+aUid+`","headsum":#sck#,"id":"#sid#","op":"ohiedit","posted":"#spdt#","type":"drop"}`+"\n"+
+                `{"from":"`+aUid+`","op":"ohi","status":2}` ,
+      },{ head: tMsg{"Op":eOpOhiEdit, "Id":"0", "For":[]tTestForOhi{{Id:aForid}}, "Type":"add"} ,
           want: `{"id":"0","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
-                `{"datalen":0,"for":[{"Id":"u`+fmt.Sprint(iId+1)+`","Type":0}],"from":"u`+fmt.Sprint(iId)+`","headsum":#sck#,"id":"#sid#","op":"ohiedit","posted":"#spdt#","type":"add"}`+"\n"+
-                `{"from":"u`+fmt.Sprint(iId)+`","op":"ohi","status":1}` ,
+                `{"datalen":0,"for":[{"Id":"`+aForid+`","Type":0}],"from":"`+aUid+`","headsum":#sck#,"id":"#sid#","op":"ohiedit","posted":"#spdt#","type":"add"}`+"\n"+
+                `{"from":"`+aUid+`","op":"ohi","status":1}` ,
       },{ head: tMsg{"Op":eOpPulse} ,
       },{ head: tMsg{"Op":eOpQuit} ,
           want: `{"error":"logout ok","op":"quit"}`+"\n"+
-                `{"from":"u`+fmt.Sprint(iId)+`","op":"ohi","status":2}` ,
+                `{"from":"`+aUid+`","op":"ohi","status":2}` ,
       },  aTmtpRev,
-        { msg : []byte(`0034{"Op":2, "Uid":"u`+fmt.Sprint(iId)+`", "Node":"`+sTestNodeIds[iId]+`"}`+
+        { msg : []byte(`0034{"Op":2, "Uid":"`+aUid+`", "Node":"`+sTestNodeIds[aTc.id][0]+`"}`+
                        `002f{"Op":9, "Id":"123", "Datalen":1, "To":"test2"}1`) ,
           want: `{"info":"login ok","op":"info"}`+"\n"+
                 `{"id":"123","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
-                `{"datalen":0,"from":"u`+fmt.Sprint(iId)+`","headsum":#sck#,"id":"#sid#","node":"tbd","op":"login","posted":"#spdt#"}`+"\n"+
-                `{"datalen":1,"from":"u`+fmt.Sprint(iId)+`","headsum":#ck#,"id":"#id#","op":"ping","posted":"#pdt#","to":"test2"}1` ,
+                `{"datalen":0,"from":"`+aUid+`","headsum":#sck#,"id":"#sid#","node":"tbd","op":"login","posted":"#spdt#"}`+"\n"+
+                `{"datalen":1,"from":"`+aUid+`","headsum":#ck#,"id":"#id#","op":"ping","posted":"#pdt#","to":"test2"}1` ,
       },{ head: tMsg{"Op":eOpPost, "Id":"zyx", "Datalen":15, "For":[]tHeaderFor{
-                       {Id:"u"+fmt.Sprint(iId+1), Type:eForUser} }} ,
+                       {Id:aForid, Type:eForUser} }} ,
           data: `data for Id` ,
       },{ msg : []byte(`:zyx`) ,
           want: `{"id":"zyx","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
-                `{"datalen":15,"from":"u`+fmt.Sprint(iId)+`","headsum":#ck#,"id":"#id#","op":"delivery","posted":"#pdt#"}data for Id:zyx` ,
+                `{"datalen":15,"from":"`+aUid+`","headsum":#ck#,"id":"#id#","op":"delivery","posted":"#pdt#"}data for Id:zyx` ,
       },{ head: tMsg{"Op":eOpPing, "Id":"123", "Datalen":8, "To":"test2"} ,
       },{ msg : []byte(`1234567`) ,
       },{ msg : []byte{255,254,253} ,
@@ -270,7 +270,7 @@ func (o *tTestClient) _verifyRead(iBuf []byte) (int, error) {
 
    if o.action == eActVerifyRecv {
       if o.count == 1 {
-         aMsg = packMsg(tMsg{"Op":eOpLogin, "Uid":"u"+fmt.Sprint(o.id), "Node":sTestNodeIds[o.id]}, nil)
+         aMsg = packMsg(tMsg{"Op":eOpLogin, "Uid":"u"+fmt.Sprint(o.id), "Node":sTestNodeIds[o.id][0]}, nil)
          aMsg = packMsg(tMsg{"Op":eOpTmtpRev, "Id":"1"}, aMsg)
       } else {
          select {
@@ -368,7 +368,8 @@ func (o *tTestClient) _cycleRead(iBuf []byte) (int, error) {
       if o.count == 1 {
          aHead = tMsg{"Op":eOpTmtpRev, "Id":"1"}
       } else if o.count == 2 {
-         aHead = tMsg{"Op":eOpLogin, "Uid":"u"+fmt.Sprint(o.id), "Node":sTestNodeIds[o.id]}
+         aHead = tMsg{"Op":eOpLogin, "Uid":"u"+fmt.Sprint(o.id), "Node":sTestNodeIds[o.id][o.nodeN]}
+         o.nodeN++; if o.nodeN > o.nodeMax { o.nodeN = 0 }
          *sTestLogins[o.id]++
          _testLoginSummary()
       } else if o.count == 3 {
@@ -382,6 +383,10 @@ func (o *tTestClient) _cycleRead(iBuf []byte) (int, error) {
          aData = []byte("bing-bong!")
          aHead = tMsg{"Op":eOpPing, "Id":fmt.Sprint(o.count), "Datalen":len(aData),
                       "From":"a"+fmt.Sprint(o.id), "To":"a"+fmt.Sprint(o.id-1)}
+      } else if o.nodeMax < 2 && aNs % 100 == 0 {
+         o.count--
+         o.nodeMax++
+         aHead = tMsg{"Op":eOpUserEdit, "Id":fmt.Sprint(o.count), "Newnode":fmt.Sprint(o.nodeMax)}
       } else if o.count < 20 {
          var aFor []tHeaderFor
          if o.count < 18 {
@@ -478,6 +483,11 @@ func (o *tTestClient) Write(iBuf []byte) (int, error) {
       if o.action == eActCycle { _testRecvSummary(aDatalen) }
       o.toWrite = aDatalen - len(iBuf) + int(aHeadLen+4)
 
+      if o.action == eActCycle && aOp == "user" && aHead["newnode"] != nil {
+         aNodeN, _ := strconv.ParseInt(aHead["newnode"].(string), 0, 0)
+         sTestNodeIds[o.id][aNodeN] = aHead["nodeid"].(string)
+      }
+
       if !o.closed {
          aTmr := time.NewTimer(2 * time.Second)
          select {
@@ -508,13 +518,15 @@ func (o *tTestClient) Close() error {
       case <-sTestVerifyDone:
          return nil
       default:
-         aTc := _newTestClient(eActVerifySend, o.id)
+         aTc := _newTestClient(eActVerifySend, [3]int{o.id, 0, 0})
          aTc.count = o.count
          time.AfterFunc(10*time.Millisecond, func(){ NewLink(aTc) })
       }
    } else {
       aSec := time.Now().Nanosecond() % 30 + 1
-      time.AfterFunc(time.Duration(aSec) * time.Second, func(){ sTestClientId <- o.id })
+      time.AfterFunc(time.Duration(aSec) * time.Second, func(){
+         sTestClientId <- [3]int{o.id, o.nodeN, o.nodeMax}
+      })
    }
    return nil
 }

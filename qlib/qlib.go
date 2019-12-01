@@ -437,6 +437,7 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
             err = sStore.copyDir(o.node, aQid)
             if err != nil { panic(err) }
             aEtc["nodeid"] = aNodeId
+            aEtc["newnode"] = iHead.NewNode
          }
       }
       if err == nil {
@@ -995,7 +996,7 @@ func _runElasticChan(o *tQueue) {
       case aS, ok = <-o.in:
          if !ok { goto closed }
          o.buf = append(o.buf, aS)
-         if len(o.buf) % 100 == 0 {
+         if len(o.buf) % 700 == 0 {
             fmt.Fprintf(os.Stderr, "%.7s queue._runElasticChan buf len %d\n", o.node, len(o.buf))
          }
       case o.out <- o.buf[0]:
