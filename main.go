@@ -13,7 +13,7 @@ import (
    "encoding/json"
    "net"
    "os"
-   pNtp "github.com/beevik/ntp-0.2.0"
+   pNtp "github.com/beevik/ntp"
    pQ "github.com/networkimprov/mnm/qlib"
    "os/signal"
    "strconv"
