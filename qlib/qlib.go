@@ -724,8 +724,6 @@ func (o *tLink) _queueMsg(iMsgId string, iForA, iForB []tHeaderFor, iSelf bool) 
       aNd.RLock()
       err = sStore.putLink(iMsgId, aNodeId, iMsgId)
       if err != nil { panic(err) }
-      err = sStore.syncDirs(aNodeId)
-      if err != nil { panic(err) }
       if aNd.queue != nil {
          aNd.queue.in <- iMsgId
       }
@@ -1100,6 +1098,11 @@ func (o *tStore) putLink(iSrc, iNode, iId string) error {
    err := os.MkdirAll(aPath, 0700)
    if err != nil { return err }
    err = os.Link(o.temp+iSrc, aPath+"/"+iId)
+   if err != nil {
+      if !os.IsExist(err) { return err }
+      return nil
+   }
+   err = o._syncDirs(iNode)
    return err
 }
 
@@ -1117,7 +1120,7 @@ func (o *tStore) rmDir(iNode string) error {
    return err
 }
 
-func (o *tStore) syncDirs(iNode string) error {
+func (o *tStore) _syncDirs(iNode string) error {
    var aFd *os.File
    var err error
    fSync := func(aDir string) {
@@ -1156,17 +1159,19 @@ func (o *tStore) getDir(iNode string) (ret []string, err error) {
 }
 
 func (o *tStore) copyDir(iNode, iToNode string) error {
-   aDirs, err := o.getDir(iNode)
+   aDir, err := o.getDir(iNode)
    if err != nil { return err }
-   if len(aDirs) == 0 {
+   if len(aDir) == 0 {
       return nil
    }
-   os.MkdirAll(o._nodeSub(iToNode), 0700)
-   for _, aId := range aDirs {
+   err = os.MkdirAll(o._nodeSub(iToNode), 0700)
+   if err != nil { return err }
+   for _, aId := range aDir {
       err = os.Link(o._nodeSub(iNode)+"/"+aId, o._nodeSub(iToNode)+"/"+aId)
       if err != nil && !os.IsNotExist(err) && !os.IsExist(err) { return err }
    }
-   return nil
+   err = o._syncDirs(iToNode)
+   return err
 }
 
 func (o *tStore) _rootSub(iNode string) string {
