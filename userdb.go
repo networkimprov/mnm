@@ -202,7 +202,7 @@ func (o *tUserDb) AddNode(iUid, iNewNode string) (aQid string, err error) {
    defer aUser.Unlock()
 
    if aUser.Nodes[iNewNode].Num != 0 {
-      return qid(iUid, aUser.Nodes[iNewNode].Num), nil
+      return "", &tUdbError{id: eErrNodeInvalid, msg: fmt.Sprintf("AddNode: Node %s exists", iNewNode)}
    }
    if aUser.NonDefunctNodesCount == kUserNodeMax {
       return "", &tUdbError{id: eErrMaxNodes, msg: fmt.Sprintf("AddNode: Exceeds %d nodes", kUserNodeMax)}

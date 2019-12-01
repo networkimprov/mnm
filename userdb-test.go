@@ -88,7 +88,7 @@ func TestUserDb(iPath string) {
       fReport("add case failed")
    }
    _, err = aDb.AddNode(aUid1, aNode1)
-   if err != nil || aDb.user[aUid1].Nodes[aNode1].Num != 2 {
+   if err == nil || err.(*tUdbError).id != eErrNodeInvalid {
       fReport("re-add case failed")
    }
    _, err = aDb.AddNode("AddNodeUid0", aNode1)
