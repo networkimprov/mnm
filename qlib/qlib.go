@@ -33,6 +33,7 @@ const kPulseTimeout time.Duration = 2 * time.Minute
 const kQueueAckTimeout time.Duration = 30 * time.Second
 const kQueueIdleMax time.Duration = 28 * time.Hour
 const kStoreIdIncr = 1000
+const kPrioDefault byte = 'M'
 const kMsgHeaderMinLen = int64(len(`{"op":1}`))
 const kMsgHeaderMaxLen = int64(1 << 16)
 const kMsgPingDataMax = 140
@@ -642,7 +643,7 @@ func (o *tLink) _postNotify(iHead *tHeader, iData []byte) (aMsgId, aPosted strin
    iHead.DataLen += iHead.NoteLen
    if err != nil { return "", "", err }
 
-   err = o._queueMsg(aNoteId, iHead.NoteFor, iHead.For, true) // modifies .NoteFor
+   err = o._queueMsg(aNoteId, kPrioDefault, iHead.NoteFor, iHead.For, true) // modifies .NoteFor
    if err != nil { return "", "", err }
 
    return aMsgId, aPosted, nil
@@ -679,13 +680,15 @@ func (o *tLink) _postMsgId(iHead *tHeader, iEtc tMsg, iData []byte, iId string, 
    defer sStore.rmFile(iId)
    if err != nil { return "", "", err }
 
-   err = o._queueMsg(iId, iHead.For, nil, iHead.Op != eOpPostNotify || !iHead.ForNotSelf) // may chg .For
+   aPrio := kPrioDefault; if sMsgOps[iHead.Op] == "user" { aPrio = 'E' }
+   err = o._queueMsg(iId, aPrio, iHead.For, nil, iHead.Op != eOpPostNotify || !iHead.ForNotSelf)
+         // may change .For
    if err != nil { return "", "", err }
 
    return iId, aPosted, nil
 }
 
-func (o *tLink) _queueMsg(iMsgId string, iForA, iForB []tHeaderFor, iSelf bool) error {
+func (o *tLink) _queueMsg(iMsgId string, iPrio byte, iForA, iForB []tHeaderFor, iSelf bool) error {
    var err error
    if iSelf {
       iForA = append(iForA, tHeaderFor{Id:o.uid, Type:eForSelf})
@@ -717,16 +720,17 @@ func (o *tLink) _queueMsg(iMsgId string, iForA, iForB []tHeaderFor, iSelf bool) 
          aForMyUid = aForMyUid || aUid == o.uid && aTo.Type != eForSelf
       }
    }
+   aPrioId := string(iPrio) + iMsgId
    for aNodeId,_ := range aForNodes {
       if aNodeId == o.node && !aForMyUid {
          continue
       }
       aNd := getNode(aNodeId)
       aNd.RLock()
-      err = sStore.putLink(iMsgId, aNodeId, iMsgId)
+      err = sStore.putLink(iMsgId, aNodeId, aPrioId)
       if err != nil { panic(err) }
       if aNd.queue != nil {
-         aNd.queue.in <- iMsgId
+         aNd.queue.in <- aPrioId
       }
       aNd.RUnlock()
    }
@@ -963,7 +967,7 @@ func _runQueue(o *tQueue) {
          o._tryOhi(&aOhi)
          goto RecvAck
       case aAckId := <-o.ack:
-         if aAckId != aMsgId {
+         if aAckId != aMsgId[1:] { // drop priority byte
             fmt.Fprintf(os.Stderr, "%.7s queue._runQueue ack got %s, want %s\n", o.node, aAckId, aMsgId)
             goto RecvAck
          }
@@ -990,12 +994,14 @@ func _runElasticChan(o *tQueue) {
          aS, ok = <-o.in
          if !ok { goto closed }
          o.buf = append(o.buf, aS)
+         sort.Strings(o.buf)
       }
 
       select {
       case aS, ok = <-o.in:
          if !ok { goto closed }
          o.buf = append(o.buf, aS)
+         sort.Strings(o.buf)
          if len(o.buf) % 700 == 0 {
             fmt.Fprintf(os.Stderr, "%.7s queue._runElasticChan buf len %d\n", o.node, len(o.buf))
          }
@@ -1146,17 +1152,17 @@ func (o *tStore) sendFile(iNode, iId string, iConn net.Conn) error {
    return err
 }
 
-func (o *tStore) getDir(iNode string) (ret []string, err error) {
+func (o *tStore) getDir(iNode string) ([]string, error) {
    fmt.Printf("read dir %s\n", o._nodeSub(iNode))
    aFd, err := os.Open(o._nodeSub(iNode))
    if err != nil {
       if os.IsNotExist(err) { err = nil }
-      return
+      return nil, err
    }
-   ret, err = aFd.Readdirnames(0)
-   sort.Slice(ret, func(i, j int) bool { return ret[i] < ret[j] })
-   aFd.Close()
-   return
+   defer aFd.Close()
+   aList, err := aFd.Readdirnames(0)
+   sort.Strings(aList)
+   return aList, err
 }
 
 func (o *tStore) copyDir(iNode, iToNode string) error {

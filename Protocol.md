@@ -52,7 +52,8 @@ _todo: cork stops delivery to user's nodes, params date & for-list_
 `{"op":3, "id":string, <"newnode":string | "newalias":string>}`  
 .newnode is the user label for a client device  
 Response `{"op":"ack", (ack headers)}`  
-At nodes `{"op":"user", (message headers), "datalen":0, <"newnode":string, "nodeid":string | "newalias":string>}`
+At nodes `{"op":"user", (message headers), "datalen":0, <"newnode":string, "nodeid":string | "newalias":string>}`  
+"user" messages have higher priority than normal messages.
 
 0. OhiEdit notifies selected contacts of a user's presence. 
 On first request after login, no "ohiedit" message is sent to user's nodes.  
