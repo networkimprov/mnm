@@ -421,11 +421,10 @@ func _testVerifyWantEdit(iOld, iNew string) {
 }
 
 func (o *tTestClient) Write(iBuf []byte) (int, error) {
-   if o.closed {
-      return 0, &net.OpError{Op:"write", Err:tError("closed")}
-   }
-
    if o.toWrite > 0 {
+      if o.closed {
+         return 0, &net.OpError{Op:"write", Err:tError("closed")}
+      }
       o.toWrite -= len(iBuf)
       return len(iBuf), nil
    }
@@ -479,16 +478,21 @@ func (o *tTestClient) Write(iBuf []byte) (int, error) {
       if o.action == eActCycle { _testRecvSummary(aDatalen) }
       o.toWrite = aDatalen - len(iBuf) + int(aHeadLen+4)
 
-      aTmr := time.NewTimer(2 * time.Second)
-      select {
-      case o.ack <- aHead["id"].(string):
-         aTmr.Stop()
-      case <-aTmr.C:
-         fmt.Fprintf(os.Stderr, "%d testclient.write timed out on ack\n", o.id)
-         return 0, &net.OpError{Op:"write", Err:tError("noack")}
+      if !o.closed {
+         aTmr := time.NewTimer(2 * time.Second)
+         select {
+         case o.ack <- aHead["id"].(string):
+            aTmr.Stop()
+         case <-aTmr.C:
+            fmt.Fprintf(os.Stderr, "%d testclient.write timed out on ack\n", o.id)
+            return 0, &net.OpError{Op:"write", Err:tError("noack")}
+         }
       }
    }
 
+   if o.closed {
+      return 0, &net.OpError{Op:"write", Err:tError("closed")}
+   }
    return len(iBuf), nil
 }
 
