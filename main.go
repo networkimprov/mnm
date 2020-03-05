@@ -117,11 +117,13 @@ func (o *tConfig) load() error {
 
 func startServer(iConf *tConfig) error {
    var err error
+   aCfgTcp := net.ListenConfig{KeepAlive: -1}
+   aListener, err := aCfgTcp.Listen(nil, iConf.Listen.Net, iConf.Listen.Laddr)
+   if err != nil { return err }
    aCert, err := tls.LoadX509KeyPair(iConf.Listen.CertPath, iConf.Listen.KeyPath)
    if err != nil { return err }
    aCfgTls := tls.Config{Certificates: []tls.Certificate{aCert}}
-   aListener, err := tls.Listen(iConf.Listen.Net, iConf.Listen.Laddr, &aCfgTls)
-   if err != nil { return err }
+   aListener = tls.NewListener(aListener, &aCfgTls)
 
    aIntWatch := make(chan os.Signal, 1)
    signal.Notify(aIntWatch, os.Interrupt)
