@@ -56,8 +56,8 @@ At nodes `{"op":"user", (message headers), "datalen":0, <"newnode":string, "node
 "user" messages have higher priority than normal messages.
 
 0. OhiEdit notifies selected contacts of a user's presence. 
-On first request after login, no "ohiedit" message is sent to user's nodes.  
-`{"op":4, "id":string, "for":[{"id":string}, ...], "type":"add|drop"}`  
+For type "init", no "ohiedit" message is sent to user's nodes.  
+`{"op":4, "id":string, "for":[{"id":string}, ...], "type":"init|add|drop"}`  
 Response `{"op":"ack", (ack headers)}`  
 At nodes `{"op":"ohiedit", (message headers), datalen:0, "for":[{"id":string}, ...], "type":"add|drop"}`  
 At recipient `{"op":"ohi", "from":string, "status":uint}`

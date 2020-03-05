@@ -450,20 +450,19 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
       }
       o._ack(iHead.Id, aMid, aPosted, err)
    case eOpOhiEdit:
-      if iHead.Type != "add" && iHead.Type != "drop" { return sMsgHeaderBad }
+      aStat := eOhiOff; if iHead.Type == "init" || iHead.Type == "add" { aStat = eOhiOn }
+      if aStat != eOhiOn && iHead.Type != "drop" { return sMsgHeaderBad }
       for _, aTo := range iHead.For {
-         _,err = UDb.OpenNodes(aTo.Id)
+         _, err = UDb.OpenNodes(aTo.Id)
          if err != nil { break } //todo if err == defunct && Type == drop, continue
          _ = UDb.CloseNodes(aTo.Id)
       }
       if err == nil {
-         aInit := o.ohi == nil
-         if aInit {
+         if o.ohi == nil {
             o.ohi = sOhi.ref(o.uid)
          }
-         aStat := eOhiOff; if iHead.Type == "add" { aStat = eOhiOn }
          for _, aTo := range iHead.For {
-            if o.ohi.edit(aTo.Id, iHead.Type == "add") {
+            if o.ohi.edit(aTo.Id, aStat == eOhiOn) {
                aNodes, aErr := UDb.OpenNodes(aTo.Id)
                if aErr == nil {
                   o._sendOhi(aNodes, aStat)
@@ -471,7 +470,7 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
                }
             }
          }
-         if !aInit {
+         if iHead.Type != "init" {
             aHead := &tHeader{Op: eOpOhiEdit, For: []tHeaderFor{{Id:o.uid, Type:eForUser}}}
             aEtc := tMsg{"for":iHead.For, "type":iHead.Type}
             aMid, aPosted, err = o._postMsg(aHead, aEtc, nil)

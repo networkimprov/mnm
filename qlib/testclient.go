@@ -224,7 +224,7 @@ func _newTestClient(iAct tTestAction, iInfo [3]int) *tTestClient {
         { head: tMsg{"Op":eOpLogin, "Uid":aUid, "Node":sTestNodeIds[aTc.id][0]} ,
           want: `{"info":"login ok","op":"info"}`+"\n"+
                 `{"datalen":0,"from":"`+aUid+`","headsum":#sck#,"id":"#sid#","node":"tbd","op":"login","posted":"#spdt#"}` ,
-      },{ head: tMsg{"Op":eOpOhiEdit, "Id":"0", "For":[]tTestForOhi{{Id:aForid}}, "Type":"add"} ,
+      },{ head: tMsg{"Op":eOpOhiEdit, "Id":"0", "For":[]tTestForOhi{{Id:aForid}}, "Type":"init"} ,
           want: `{"id":"0","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
                 `{"from":"`+aUid+`","op":"ohi","status":1}` ,
       },{ head: tMsg{"Op":eOpOhiEdit, "Id":"0", "For":[]tTestForOhi{{Id:aForid}}, "Type":"drop"} ,
@@ -378,7 +378,7 @@ func (o *tTestClient) _cycleRead(iBuf []byte) (int, error) {
          for a := 0; a < aMax; a++ {
             aFor = append(aFor, tTestForOhi{Id:"u"+fmt.Sprint(o.id/aMax*aMax+a)})
          }
-         aHead = tMsg{"Op":eOpOhiEdit, "Id":fmt.Sprint(o.count), "For":aFor, "Type":"add"}
+         aHead = tMsg{"Op":eOpOhiEdit, "Id":fmt.Sprint(o.count), "For":aFor, "Type":"init"}
       } else if o.count == 4 && o.id % 2 == 1 {
          aData = []byte("bing-bong!")
          aHead = tMsg{"Op":eOpPing, "Id":fmt.Sprint(o.count), "Datalen":len(aData),
