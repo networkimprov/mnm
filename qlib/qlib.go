@@ -567,7 +567,7 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
 }
 
 func (o *tLink) _checkPing(iHead *tHeader, iData *[]byte) *tMsgQuit {
-   if iHead.DataLen > kMsgPingDataMax {
+   if iHead.DataLen - iHead.DataHead > kMsgPingDataMax { //todo drop .DataHead when alias in iHead
       return sMsgDatalenHigh
    }
    for len(*iData) < int(iHead.DataLen) {
