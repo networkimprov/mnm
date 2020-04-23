@@ -1,38 +1,59 @@
-_Mnm is Not Mail_
+### mnm is not mail
 
-mnm provides the benefits of email without the huge risks of allowing 
-anyone, anywhere, claiming any identity to send you any content, any number of times. 
+<img width="300" hspace="32" align="right" src="https://user-images.githubusercontent.com/458838/65545951-535f6980-decb-11e9-8f46-6122198097b0.png">  
 
-This codebase is the **TMTP message relay server.** 
-(See also the [mnm app](https://github.com/networkimprov/mnm-hammer), 
-which offers electronic correspondence features missing from traditional email.) 
-Written in Go, the relay server is reliable, fast, lightweight, dependency-free, and open source.
+The mnm project is building a legitimate replacement for email: 
+a server (see below), a [client](https://github.com/networkimprov/mnm-hammer), and 
+a [simple protocol](https://github.com/networkimprov/mnm/blob/master/Protocol.md) (TMTP) between them.
 
-TMTP is a new client/server protocol for person-to-person or machine-to-machine message delivery. 
-See [Why TMTP?](Rationale.md)
+For an introduction to the project, or to try it out, see 
+[the mnm app](https://github.com/networkimprov/mnm-hammer/blob/master/README.md).
 
-A TMTP server provides:
+TMTP is a new client/server protocol for reliable store-and-forward message delivery. 
+Unlike SMTP, it does not allow anyone, anywhere, claiming any identity to send you any content, 
+any number of times. 
+Further reading: [_Why TMTP?_](Rationale.md) 
+
+Written in Go, the mnm TMTP server is reliable, fast, lightweight, and open source. 
+
+### Server features
+
+A TMTP relay service must provide:
 - Members-only access
-- Member aliases (including single-use aliases) to limit first-contact content
-- Authorization for receive/send or receive-only
-- Distribution groups, with invitations and member blocking
-- Online presence notification
-- Multiple messaging clients/devices per member
-- Per-client strong (200 bit) passwords
-- Reliable message storage (via fsync) and delivery (via ack)
-- Message storage only until all recipients have ack'd receipt
+- Multiple aliases per member (including single-use aliases)
+- Invitations with limited content, addressed to an alias
+- Distribution groups, by invitation
+- Opt-in presence notification
 - In-order message delivery from any given sender
-- TCP + TLS connections
+- Delivery to multiple messaging devices per member
+- Per-device strong (200 bit) passwords
+- Reliable message storage (via fsync) and delivery (via ack)
+- Message storage only until all recipients' clients have ack'd receipt
+- Long-lived client connections over TCP+TLS
 
 It does not provide:
 - Message encryption; clients are responsible for encryption before/after transmission
 
 It may provide:
+- Per-member block lists
+- Member authorization for receive/send or receive-only
+- Distribution groups, by subscription
 - Gateways to whitelisted TMTP & SMTP sites
 - Alternate connection schemes
   * HTTP + Websockets
   * Unix domain sockets
-  * Your Go code calling qlib package
+  * Custom protocol via plugin
+
+### Protocol
+
+"Trusted Messaging Transfer Protocol" defines a simple client/server exchange scheme; 
+it needs no other protocol in the way that POP & IMAP need SMTP. 
+TMTP may be conveyed by any reliable transport protocol, e.g. TCP, 
+or tunneled through another protocol, e.g. HTTP. 
+A client may simultaneously contact multiple TMTP servers via separate connections. 
+After the client completes a login or register request, either side may contact the other.
+
+See the [TMTP Protocol docs](Protocol.md).
 
 ### Status
 
@@ -54,9 +75,7 @@ or for a group of 100 (2x) every 1-30s, then logout and idle for 1-30s.
 
 ### What's here
 
-- qlib/qlib.go: TMTP package with simple API
-- qlib/testclient.go: in-process test client, invoked from main()
-- vendor/: [NTP](https://github.com/beevik/ntp) package (kudos to Brett Vickers)
+- qlib/: TMTP package with simple API
 - userdb.go: user records management
 - main.go: main(), network frontend
 - mnm.conf: site-specific parameters; rename to mnm.config to enable TCP server
@@ -93,17 +112,6 @@ b) `kill -s INT <background_pid>` # send SIGINT signal, triggering graceful shut
 Continuous test sequence with simulated clients  
 a) `./mnm 10` # may be 2-1000  
 b) ctrl-C to stop
-
-### Protocol
-
-"Trusted Messaging Transfer Protocol" defines a simple client/server exchange scheme; 
-it needs no other protocol in the way that POP & IMAP need SMTP. 
-TMTP may be conveyed by any reliable transport protocol, e.g. TCP, 
-or tunneled through another protocol, e.g. HTTP. 
-A client may simultaneously contact multiple TMTP servers via separate connections. 
-After the client completes a login or register request, either side may contact the other.
-
-See the [TMTP Protocol docs](Protocol.md).
 
 ### License
 
