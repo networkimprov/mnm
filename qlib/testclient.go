@@ -36,7 +36,7 @@ var sTestLogins = make(map[int]*int)
 var sTestLoginTotal int32
 var sTestRecvCount, sTestRecvOhi int32
 var sTestRecvBytes int64
-var sTestReadSize = [...]int{50, 50, 50, 500, 500, 1500, 2000, 5000, 10000, 50000}
+var sTestReadSize = [...]int{80, 80, 80, 80, 400, 400, 2000, 2000, 10000, 50000, 250000}
 var sTestReadData = make([]byte, 16*1024)
 
 func LocalTest(i int) {
@@ -55,11 +55,6 @@ func LocalTest(i int) {
    <-sTestVerifyDone
    time.Sleep(10 * time.Millisecond)
    fmt.Fprintf(os.Stderr, "%d verify pass failures, starting cycle\n\n", sTestVerifyFail)
-
-   aSegment := []byte(`0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz.!`)
-   for a := 0; a < len(sTestReadData) / len(aSegment); a++ {
-      copy(sTestReadData[a*len(aSegment):], aSegment)
-   }
 
    sTestClientCount = int32(i)
    sTestClientId = make(chan [3]int, i)
@@ -380,7 +375,7 @@ func (o *tTestClient) _cycleRead(iBuf []byte) (int, error) {
          }
          aHead = tMsg{"Op":eOpOhiEdit, "Id":fmt.Sprint(o.count), "For":aFor, "Type":"init"}
       } else if o.count == 4 && o.id % 2 == 1 {
-         aData = []byte("bing-bong!")
+         aData = []byte{0,0,0}
          aHead = tMsg{"Op":eOpPing, "Id":fmt.Sprint(o.count), "Datalen":len(aData),
                       "From":"a"+fmt.Sprint(o.id), "To":"a"+fmt.Sprint(o.id-1)}
       } else if o.nodeMax < 2 && aNs % 100 == 0 {
@@ -426,10 +421,25 @@ func _testVerifyWantEdit(iOld, iNew string) {
 }
 
 func (o *tTestClient) Write(iBuf []byte) (int, error) {
+   fCheckBuf := func(cBuf []byte) {
+      if o.action != eActCycle {
+         return
+      }
+      var cBad []byte
+      for _, cB := range cBuf {
+         if cB == 0 { continue }
+         cBad = append(cBad, cB)
+      }
+      if len(cBad) > 0 {
+         fmt.Fprintf(os.Stderr, "%d testclient.write data corruption: %s\n", o.id, string(cBad))
+      }
+   }
+
    if o.toWrite > 0 {
       if o.closed {
          return 0, &net.OpError{Op:"write", Err:tError("closed")}
       }
+      fCheckBuf(iBuf)
       o.toWrite -= len(iBuf)
       return len(iBuf), nil
    }
@@ -479,9 +489,10 @@ func (o *tTestClient) Write(iBuf []byte) (int, error) {
          fmt.Fprintf(os.Stderr, "%d testclient.write headsum failed\n", o.id)
       }
 
+      fCheckBuf(iBuf[aHeadLen+4:])
       aDatalen := int(aHead["datalen"].(float64))
       if o.action == eActCycle { _testRecvSummary(aDatalen) }
-      o.toWrite = aDatalen - len(iBuf) + int(aHeadLen+4)
+      o.toWrite = int(aHeadLen+4) + aDatalen - len(iBuf)
 
       if o.action == eActCycle && aOp == "user" && aHead["newnode"] != nil {
          aNodeN, _ := strconv.ParseInt(aHead["newnode"].(string), 0, 0)
