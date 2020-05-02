@@ -556,7 +556,7 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
       case o.queue.ack <- iHead.Id:
          aTmr.Stop()
       case <-aTmr.C:
-         fmt.Fprintf(os.Stderr, "%s link._handleMsg timed out waiting on ack\n", o.uid)
+         fmt.Fprintf(os.Stderr, "%s link._handleMsg timed out delivering ack %s\n", o.uid, iHead.Id)
       }
    case eOpPulse:
       // no-op
@@ -984,7 +984,7 @@ func _runQueue(o *tQueue) {
       case <-o.off:
          aTimeout.Stop()
       case <-aTimeout.C:
-         fmt.Fprintf(os.Stderr, "%.7s queue._runQueue timed out awaiting ack\n", o.node)
+         fmt.Fprintf(os.Stderr, "%.7s queue._runQueue timed out awaiting ack %s\n", o.node, aMsgId)
       }
    }
 }
