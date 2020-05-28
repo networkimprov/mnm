@@ -36,7 +36,7 @@ const kStoreIdIncr = 1000
 const kPrioDefault byte = 'M'
 const kMsgHeaderMinLen = int64(len(`{"op":1}`))
 const kMsgHeaderMaxLen = int64(1 << 16)
-const kMsgPingDataMax = 140
+const kPingCharMax = 140
 const kNodeIdLen = 25
 const kAliasMinLen = 8
 const kPostDateFormat = "2006-01-02T15:04:05.000Z07:00"
@@ -569,7 +569,8 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
 }
 
 func (o *tLink) _checkPing(iHead *tHeader, iData *[]byte) *tMsgQuit {
-   if iHead.DataLen - iHead.DataHead > kMsgPingDataMax { //todo drop .DataHead when alias in iHead
+   const _kSizeMax = kPingCharMax * 3
+   if iHead.DataLen - iHead.DataHead > _kSizeMax { //todo drop .DataHead when alias in iHead
       return sMsgDatalenHigh
    }
    for len(*iData) < int(iHead.DataLen) {
@@ -584,8 +585,20 @@ func (o *tLink) _checkPing(iHead *tHeader, iData *[]byte) *tMsgQuit {
       }
       *iData = (*iData)[:len(*iData)+aLen]
    }
-   if !utf8.Valid(*iData) {
-      return sMsgDataNotUtf8
+   var aUtf16Len int64
+   for a, aStep := 0, 0; a < len(*iData); a += aStep {
+      var aR rune
+      aR, aStep = utf8.DecodeRune((*iData)[a:])
+      if aR == utf8.RuneError {
+         return sMsgDataNotUtf8
+      }
+      if aR >= 0x10000 {
+         aUtf16Len++
+      }
+      aUtf16Len++
+   }
+   if aUtf16Len - iHead.DataHead > kPingCharMax { //todo drop .DataHead
+      return sMsgDatalenHigh
    }
    return nil
 }

@@ -247,9 +247,17 @@ func _newTestClient(iAct tTestAction, iInfo [3]int) *tTestClient {
       },{ msg : []byte(`:zyx`) ,
           want: `{"id":"zyx","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
                 `{"datalen":15,"from":"`+aUid+`","headsum":#ck#,"id":"#id#","op":"delivery","posted":"#pdt#"}data for Id:zyx` ,
-      },{ head: tMsg{"Op":eOpPing, "Id":"123", "Datalen":8, "To":"test2"} ,
-      },{ msg : []byte(`1234567`) ,
-      },{ msg : []byte{255,254,253} ,
+      },{ head: tMsg{"Op":eOpPing, "Id":"123", "Datalen":141, "To":"test2"} ,
+          data: "\u00d7 123456789 123456789 123456789 123456789 123456789 " ,
+      },{ msg : []byte(`123456789 123456789 123456789 123456789 123456789 `) ,
+      },{ msg : []byte(`123456789 123456789 123456789 12345678`) ,
+          want: `{"id":"123","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
+                `{"datalen":141,"from":"`+aUid+`","headsum":#ck#,"id":"#id#","op":"ping","posted":"#pdt#","to":"test2"}`+
+                "\u00d7 123456789 123456789 123456789 123456789 123456789 "+
+                `123456789 123456789 123456789 123456789 123456789 `+
+                `123456789 123456789 123456789 12345678` ,
+      },{ head: tMsg{"Op":eOpPing, "Id":"123", "Datalen":3, "To":"test2"} ,
+          data: "a\xFFz" ,
           want: `{"error":"data not valid UTF8","op":"quit"}` ,
       },  aTmtpRev,
         { msg : []byte(`delay`) ,
