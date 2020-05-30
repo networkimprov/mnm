@@ -69,8 +69,10 @@ func mainResult() int {
 
    if aTcNum != 0 {
       fmt.Printf("Starting Test Pass\n")
-      TestUserDb("userdb-test-unit")
-      pQ.LocalTest(aTcNum)
+      if TestUserDb("userdb-test-unit") {
+         pQ.LocalTest(aTcNum)
+      }
+      pQ.UDb.Erase()
    } else {
       err = startServer(&sConfig)
       if err != nil {

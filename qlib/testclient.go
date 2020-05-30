@@ -82,7 +82,6 @@ func LocalTest(i int) {
    }
    fmt.Fprintf(os.Stderr, " shutting down\n")
    Suspend()
-   UDb.Erase()
    _ = os.RemoveAll(sStore.Root)
 }
 

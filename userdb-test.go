@@ -13,7 +13,7 @@ import (
    "os"
 )
 
-func TestUserDb(iPath string) {
+func TestUserDb(iPath string) bool {
    //: exercise the api, print diagnostics
    //: invoke from main() before tTestClient loop; stop program if tests fail
    _ = os.RemoveAll(iPath)
@@ -402,4 +402,5 @@ func TestUserDb(iPath string) {
    if aOk {
       fmt.Println("UserDb tests passed")
    }
+   return aOk
 }
