@@ -20,10 +20,13 @@ func TestUserDb(iPath string) bool {
 
    err := os.MkdirAll(iPath + "/temp", 0700)
    if err != nil { panic(err) }
-   aJson := `{"Aliases":[{"En":"test_alias","EnTouched":true}]}`
-   err = ioutil.WriteFile(iPath + "/temp/user_test_complete", []byte(aJson), 0600)
+   aJson := `{"Aliases":[{"En":"complete/a1","EnTouched":true}]}`
+   err = ioutil.WriteFile(iPath + "/temp/user_complete", []byte(aJson), 0600)
    if err != nil { panic(err) }
-   err = ioutil.WriteFile(iPath + "/temp/user_cleanup.tmp", []byte("{}"), 0600)
+   err = ioutil.WriteFile(iPath + "/temp/user_complete.tmp", []byte("{}"), 0600)
+   if err != nil { panic(err) }
+   aJson = `{"Uid":{"complete":{"Alias":"complete/a1","Status":2}}}`
+   err = ioutil.WriteFile(iPath + "/temp/group_complete%2Fg1", []byte(aJson), 0600)
    if err != nil { panic(err) }
 
    aDb, err := NewUserDb(iPath)
@@ -41,27 +44,35 @@ func TestUserDb(iPath string) bool {
    }
 
    // COMPLETE
-   _, err = os.Lstat(iPath + "/user/test_complete")
+   _, err = os.Lstat(iPath + "/user/complete")
    if err != nil {
-      fReport("complete failed")
+      fReport("complete user failed")
    }
-   _, err = os.Lstat(iPath + "/alias/test_alias")
+   _, err = os.Lstat(iPath + "/alias/complete%2Fa1")
    if err != nil {
       fReport("complete alias failed")
    }
-   _, err = os.Lstat(iPath + "/temp/user_test_complete")
-   if err == nil {
-      fReport("complete incomplete")
+   _, err = os.Lstat(iPath + "/group/complete%2Fg1")
+   if err != nil {
+      fReport("complete group failed")
    }
-   _, err = os.Lstat(iPath + "/temp/user_cleanup.tmp")
-   if err == nil {
+   _, err = os.Lstat(iPath + "/temp/user_complete")
+   if err == nil || !os.IsNotExist(err) {
+      fReport("complete user incomplete")
+   }
+   _, err = os.Lstat(iPath + "/temp/user_complete.tmp")
+   if err == nil || !os.IsNotExist(err) {
       fReport("complete cleanup failed")
+   }
+   _, err = os.Lstat(iPath + "/temp/group_complete%2Fg1")
+   if err == nil || !os.IsNotExist(err) {
+      fReport("complete group incomplete")
    }
 
    var aUid1, aUid2, aNode1, aNode2 string
    var aAlias1, aAlias2, aAlias3 string
    var aGid1, aGid2 string
-   aNat := "アリアス"
+   aNat := "\u30a2\u30ea\u30a2\u30b9"
 
    // ADDUSER
    aUid1 = "AddUserUid1"
@@ -77,6 +88,10 @@ func TestUserDb(iPath string) bool {
    _, err = aDb.AddUser(aUid1, "AddUserN0")
    if err == nil || err.(*tUdbError).id != eErrMissingNode {
       fReport("add existing case succeeded: AddUser")
+   }
+   _, err = aDb.AddUser("AddUserUid\x00", "AddUserN0")
+   if err == nil || err.(*tUdbError).id != eErrArgument {
+      fReport("non-printable uid case succeeded: AddUser")
    }
    delete(aDb.user, aUid1) // verify checksum next read
 
@@ -144,29 +159,53 @@ func TestUserDb(iPath string) bool {
    // ADDALIAS
    aUid1, aUid2 = "AddUserUid1", "AddAliasUid2"
    aNode1 = "AddAliasN2"
-   err = aDb.AddAlias(aUid1, aNat, "AddAliasA1")
-   if err != nil || aDb.alias[aNat] != aUid1 || aDb.alias["AddAliasA1"] != aUid1 {
+   err = aDb.AddAlias(aUid1, aNat, "AddAlias/A1")
+   if err != nil || aDb.alias[aNat] != aUid1 || aDb.alias["AddAlias/A1"] != aUid1 {
       fReport("add both case failed")
    }
-   err = aDb.AddAlias(aUid1, aNat, "AddAliasA1")
-   if err != nil || aDb.alias[aNat] != aUid1 || aDb.alias["AddAliasA1"] != aUid1 {
+   err = aDb.AddAlias(aUid1, aNat, "AddAlias/A1")
+   if err != nil || aDb.alias[aNat] != aUid1 || aDb.alias["AddAlias/A1"] != aUid1 {
       fReport("re-add both case failed")
    }
-   err = aDb.AddAlias(aUid1, "", "AddAliasA2")
-   if err != nil || aDb.alias["AddAliasA2"] != aUid1 {
+   err = aDb.AddAlias(aUid1, "", "AddAlias/A2")
+   if err != nil || aDb.alias["AddAlias/A2"] != aUid1 {
       fReport("add en case failed")
    }
    err = aDb.AddAlias(aUid1, aNat+"2", "")
    if err != nil || aDb.alias[aNat+"2"] != aUid1 {
       fReport("add nat case failed")
    }
-   err = aDb.AddAlias(aUid1, aNat+"2", "AddAliasA3")
-   if err != nil || aDb.alias[aNat+"2"] != aUid1 || aDb.alias["AddAliasA3"] != aUid1 {
+   err = aDb.AddAlias(aUid1, aNat+"3", "AddAlias/A2")
+   if err != nil || aDb.alias[aNat+"3"] != aUid1 || aDb.alias["AddAlias/A2"] != aUid1 {
+      fReport("re-add en case failed")
+   }
+   err = aDb.AddAlias(aUid1, aNat+"2", "AddAlias/A3")
+   if err != nil || aDb.alias[aNat+"2"] != aUid1 || aDb.alias["AddAlias/A3"] != aUid1 {
       fReport("re-add nat case failed")
+   }
+   err = aDb.AddAlias(aUid1, "AddAlias/A3", "AddAlias/A3")
+   if err != nil || aDb.alias["AddAlias/A3"] != aUid1 {
+      fReport("duplicate en case failed")
    }
    err = aDb.AddAlias(aUid1, aNat, aNat)
    if err == nil || err.(*tUdbError).id != eErrArgument {
-      fReport("iNat==iEn case succeeded: AddAlias")
+      fReport("duplicate nat case succeeded: AddAlias")
+   }
+   err = aDb.AddAlias(aUid1, "", "")
+   if err == nil || err.(*tUdbError).id != eErrArgument {
+      fReport("empty args case succeeded: AddAlias")
+   }
+   err = aDb.AddAlias(aUid1, "", "AddAlias/A\x00")
+   if err == nil || err.(*tUdbError).id != eErrArgument {
+      fReport("non-printable en case succeeded: AddAlias")
+   }
+   err = aDb.AddAlias(aUid1, aNat+"\x00", "")
+   if err == nil || err.(*tUdbError).id != eErrArgument {
+      fReport("non-printable nat case succeeded: AddAlias")
+   }
+   err = aDb.AddAlias(aUid1, aNat+"\xFF", "")
+   if err == nil || err.(*tUdbError).id != eErrArgument {
+      fReport("non-UTF8 nat case succeeded: AddAlias")
    }
    err = aDb.AddAlias("AddAliasUid0", aNat, "")
    if err == nil || err.(*tUdbError).id != eErrUserInvalid {
@@ -180,12 +219,12 @@ func TestUserDb(iPath string) bool {
 
    // DROPALIAS
    aUid1, aUid2 = "AddUserUid1", "AddAliasUid2"
-   err = aDb.DropAlias(aUid1, "AddAliasA1")
-   if err != nil || aDb.alias["AddAliasA1"] != kAliasDefunctUid {
+   err = aDb.DropAlias(aUid1, "AddAlias/A1")
+   if err != nil || aDb.alias["AddAlias/A1"] != kAliasDefunctUid {
       fReport("drop en case failed")
    }
-   err = aDb.DropAlias(aUid1, "AddAliasA1")
-   if err != nil || aDb.alias["AddAliasA1"] != kAliasDefunctUid {
+   err = aDb.DropAlias(aUid1, "AddAlias/A1")
+   if err != nil || aDb.alias["AddAlias/A1"] != kAliasDefunctUid {
       fReport("re-drop en case failed")
    }
    err = aDb.DropAlias(aUid1, aNat)
@@ -196,7 +235,7 @@ func TestUserDb(iPath string) bool {
    if err == nil || err.(*tUdbError).id != eErrUserInvalid {
       fReport("invalid user case succeeded: DropAlias")
    }
-   err = aDb.DropAlias(aUid2, "AddAliasA2")
+   err = aDb.DropAlias(aUid2, "AddAlias/A2")
    if err == nil || err.(*tUdbError).id != eErrAliasInvalid {
       fReport("invalid alias case succeeded: DropAlias")
    }
@@ -238,7 +277,7 @@ func TestUserDb(iPath string) bool {
    }
 
    // GROUPINVITE
-   aGid1, aGid2 = "GinviteGid1", "GinviteGid2"
+   aGid1, aGid2 = "Ginvite/Gid1", "Ginvite/Gid2"
    aUid1, aUid2 = "AddUserUid1", "GinviteUid2"
    aAlias1, aAlias2 = "GinviteA1", "GinviteA2"
    aDb.AddUser(aUid2, "GinviteN2")
@@ -267,13 +306,17 @@ func TestUserDb(iPath string) bool {
    if err == nil || err.(*tUdbError).id != eErrAliasInvalid {
       fReport("invalid invitee case succeeded: GroupInvite")
    }
-   _, err = aDb.GroupInvite("GinviteGid0", aAlias1, "GinviteA0", aUid2)
+   _, err = aDb.GroupInvite("Ginvite/Gid0", aAlias1, "GinviteA0", aUid2)
    if err == nil || err.(*tUdbError).id != eErrAliasInvalid {
       fReport("invalid invitor alias case succeeded: GroupInvite")
    }
-   _, err = aDb.GroupInvite("GinviteGid0", aAlias1, aAlias2, "GinviteUid0")
+   _, err = aDb.GroupInvite("Ginvite/Gid0", aAlias1, aAlias2, "GinviteUid0")
    if err == nil || err.(*tUdbError).id != eErrAliasInvalid {
       fReport("invalid invitor uid case succeeded: GroupInvite")
+   }
+   _, err = aDb.GroupInvite("Ginvite/Gid\x00", aAlias1, aAlias2, aUid2)
+   if err == nil || err.(*tUdbError).id != eErrArgument {
+      fReport("non-printable gid case succeeded: GroupInvite")
    }
    aDb.TempGroup(aGid2, aUid1, aAlias1)
    _, err = aDb.GroupInvite(aGid2, aAlias1, aAlias2, aUid2)

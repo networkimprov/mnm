@@ -15,6 +15,9 @@ import (
    "os"
    "strings"
    "sync"
+   "unicode"
+   "net/url"
+   "unicode/utf8"
 )
 
 const kUserNodeMax = 100
@@ -123,13 +126,13 @@ const (
 func NewUserDb(iPath string) (*tUserDb, error) {
    var err error
    for _, aDir := range [...]tType{ "temp", eTuser, eTalias, eTgroup } {
-      err = os.MkdirAll(iPath + "/" + string(aDir), 0700)
+      err = os.MkdirAll(iPath +"/"+ string(aDir), 0700)
       if err != nil { return nil, err }
    }
 
    aDb := new(tUserDb)
-   aDb.root = iPath+"/"
-   aDb.temp = aDb.root + "temp/"
+   aDb.root = iPath +"/"
+   aDb.temp = aDb.root +"temp/"
    aDb.user = make(map[string]*tUser)
    aDb.alias = make(map[string]string)
    aDb.group = make(map[string]*tGroup)
@@ -139,18 +142,21 @@ func NewUserDb(iPath string) (*tUserDb, error) {
    aTmps, err := aFd.Readdirnames(0)
    aFd.Close()
    if err != nil { return aDb, err }
-   for _, aTmp := range aTmps {
-      if strings.HasSuffix(aTmp, ".tmp") {
-         err = os.Remove(aDb.temp + aTmp)
-         if err != nil { return aDb, err }
+   for a := range aTmps {
+      if strings.HasSuffix(aTmps[a], ".tmp") {
+         err = os.Remove(aDb.temp + aTmps[a])
+         if err != nil && !os.IsNotExist(err) { return aDb, err }
       } else {
-         aPair := strings.SplitN(aTmp, "_", 2)
-         if len(aPair) != 2 {
-            fmt.Fprintf(os.Stderr, "NewUserDb: unexpected file %s%s\n", aDb.temp, aTmp)
-         } else {
-            err = aDb.complete(tType(aPair[0]), aPair[1], nil)
-            if err != nil { return aDb, err }
+         aPair := strings.SplitN(aTmps[a], "_", 2)
+         if len(aPair) == 2 && tType(aPair[0]) != eTuser {
+            aPair[1], err = url.QueryUnescape(aPair[1])
          }
+         if len(aPair) != 2 || err != nil {
+            fmt.Fprintf(os.Stderr, "NewUserDb: unexpected file %s%s\n", aDb.temp, aTmps[a])
+            continue
+         }
+         err = aDb.complete(tType(aPair[0]), aPair[1], nil)
+         if err != nil { return aDb, err }
       }
    }
 
@@ -245,7 +251,7 @@ func (o *tUserDb) DropNode(iUid, iNode string) (aQid string, err error) {
    aUser.NonDefunctNodesCount--
    aUser.clearTouched()
 
-   o.putRecord(eTuser, iUid, aUser)
+   err = o.putRecord(eTuser, iUid, aUser)
    if err != nil { panic(err) }
    return aQid, nil
 }
@@ -254,7 +260,16 @@ func (o *tUserDb) AddAlias(iUid, iNat, iEn string) error {
    //: add aliases to iUid and o.alias
    //: iNat != iEn, iNat or iEn != ""
    if iNat == iEn {
-      return &tUdbError{id: eErrArgument, msg: fmt.Sprintf("AddAlias: iNat & iEn both %s", iNat)}
+      if iNat == "" {
+         return &tUdbError{id: eErrArgument, msg: fmt.Sprintf("AddAlias: empty strings", iNat)}
+      }
+      iNat = ""
+   }
+   if invalidInput(iNat) {
+      return &tUdbError{id: eErrArgument, msg: fmt.Sprintf("AddAlias: invalid string '%s'", iNat)}
+   }
+   if invalidAscii(iEn) {
+      return &tUdbError{id: eErrArgument, msg: fmt.Sprintf("AddAlias: invalid string '%s'", iEn)}
    }
 
    aUser, err := o.fetchUser(iUid, eFetchCheck)
@@ -456,15 +471,17 @@ func (o *tUserDb) GroupInvite(iGid, iAlias, iByAlias, iByUid string) (aUid strin
 
    if len(aGroup.Uid) == 0 {
       aByUid, _ := o.Lookup(iByAlias)
-      if aByUid == "" || aByUid != iByUid {
+      if aByUid == "" || aByUid != iByUid || invalidInput(iGid) {
          o.groupDoor.Lock()
          delete(o.group, iGid)
          o.groupDoor.Unlock()
 
          if aByUid == "" {
             return "", &tUdbError{id: eErrAliasInvalid, msg: fmt.Sprintf("GroupInvite: iByAlias %s not found", iByAlias)}
-         } else {
+         } else if aByUid != iByUid {
             return "", &tUdbError{id: eErrAliasInvalid, msg: fmt.Sprintf("GroupInvite: iByAlias %s not for iByUid %s", iByAlias, iByUid)}
+         } else {
+            return "", &tUdbError{id: eErrArgument, msg: fmt.Sprintf("GroupInvite: invalid string '%s'", iGid)}
          }
       }
       aGroup.Uid[iByUid] = tMember{Alias: iByAlias, Status: eStatJoined}
@@ -650,11 +667,51 @@ func (o *tUserDb) Erase() {
 
 // non-public methods follow
 
+func invalidInput(i string) bool {
+   for a, aStep := 0, 0; a < len(i); a += aStep {
+      var aR rune
+      aR, aStep = utf8.DecodeRuneInString(i[a:])
+      if aR == utf8.RuneError || !unicode.IsPrint(aR) {
+         return true
+      }
+   }
+   return false
+}
+
+func invalidAscii(i string) bool {
+   for _, a := range i {
+      if !(a >= 0x20 && a <= 0x7E) {
+         return true
+      }
+   }
+   return false
+}
+
+func (o *tUserDb) fileName(iT tType, iN string) string {
+   if iT != eTuser {
+      iN = url.QueryEscape(iN)
+   }
+   return o.root + string(iT) +"/"+ iN
+}
+
+func (o *tUserDb) fileTemp(iT tType, iN string) string {
+   if iT != eTuser {
+      iN = url.QueryEscape(iN)
+   }
+   return o.temp + string(iT) +"_"+ iN
+}
+
 type tFetch bool
 const eFetchCheck, eFetchMake tFetch = false, true
 
 // retrieve user from cache or disk
 func (o *tUserDb) fetchUser(iUid string, iMake tFetch) (*tUser, error) {
+   for _, a := range iUid {
+      if !(a >= 'A' && a <= 'Z' || a >= '0' && a <= '9' || a == '+' || a == '%' ||
+           a >= 'a' && a <= 'z') { // lowercase used in testing
+         return nil, &tUdbError{id: eErrArgument, msg: fmt.Sprintf("fetchUser: invalid string '%s'", iUid)}
+      }
+   }
    o.userDoor.RLock() // read-lock user map
    aUser := o.user[iUid] // lookup user in map
    o.userDoor.RUnlock()
@@ -712,29 +769,27 @@ func (o *tUserDb) fetchGroup(iGid string, iMake tFetch) (*tGroup, error) {
 
 // pull a file into a cache object
 func (o *tUserDb) getRecord(iType tType, iId string) (interface{}, error) {
-   var err error
+   if iType == eTalias {
+      aLn, err := os.Readlink(o.fileName(iType, iId))
+      if err != nil {
+         if !os.IsNotExist(err) { panic(err) }
+         return nil, nil
+      }
+      return aLn, nil
+   }
    var aObj interface{}
-   aPath := o.root + string(iType) + "/" + iId
    var aSum *uint32
 
    switch iType {
-   default:
-      panic("getRecord: unexpected type "+iType)
-   case eTalias:
-      aLn, err := os.Readlink(aPath)
-      if err != nil {
-         if os.IsNotExist(err) { return nil, nil }
-         panic(err)
-      }
-      return aLn, nil
    case eTuser:  aObj = &tUser{};  aSum = & aObj.(*tUser).CheckSum
    case eTgroup: aObj = &tGroup{}; aSum = & aObj.(*tGroup).CheckSum
+   default:      panic("getRecord: unexpected type "+iType)
    }
 
-   aBuf, err := ioutil.ReadFile(aPath)
+   aBuf, err := ioutil.ReadFile(o.fileName(iType, iId))
    if err != nil {
-      if os.IsNotExist(err) { return aObj, nil }
-      panic(err)
+      if !os.IsNotExist(err) { panic(err) }
+      return aObj, nil
    }
 
    err = json.Unmarshal(aBuf, aObj)
@@ -752,23 +807,21 @@ func (o *tUserDb) getRecord(iType tType, iId string) (interface{}, error) {
 
 // save cache object to disk
 func (o *tUserDb) putRecord(iType tType, iId string, iObj interface{}) error {
-   var err error
-   aTemp := o.temp + string(iType) + "_" + iId
    var aSum *uint32
 
    switch iType {
-   default:
-      panic("putRecord: unexpected type "+iType)
    case eTuser:  aSum = & iObj.(*tUser).CheckSum
    case eTgroup: aSum = & iObj.(*tGroup).CheckSum
+   default:      panic("putRecord: unexpected type "+iType)
    }
-
    *aSum = 0
    aBuf, err := json.Marshal(iObj)
    if err != nil { return err }
    *aSum = checkSum(aBuf)
 
-   aFd, err := os.OpenFile(aTemp + ".tmp", os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+   aTemp := o.fileTemp(iType, iId)
+
+   aFd, err := os.OpenFile(aTemp +".tmp", os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
    if err != nil { return err }
    defer aFd.Close()
    err = json.NewEncoder(aFd).Encode(iObj)
@@ -776,7 +829,7 @@ func (o *tUserDb) putRecord(iType tType, iId string, iObj interface{}) error {
    err = aFd.Sync()
    if err != nil { return err }
 
-   err = os.Link(aTemp + ".tmp", aTemp)
+   err = os.Link(aTemp +".tmp", aTemp)
    if err != nil { return err }
    err = syncDir(o.temp) // transaction completes at startup if we crash after this
    if err != nil { return err }
@@ -794,11 +847,10 @@ func syncDir(iPath string) error {
 
 // move valid temp/file to data dir
 func (o *tUserDb) complete(iType tType, iId string, iObj interface{}) error {
-   var err error
-   aPath := o.root + string(iType) + "/" + iId
-   aTemp := o.temp + string(iType) + "_" + iId
+   aPath := o.fileName(iType, iId)
+   aTemp := o.fileTemp(iType, iId)
 
-   err = os.Remove(aPath)
+   err := os.Remove(aPath)
    if err != nil && !os.IsNotExist(err) { return err }
    err = os.Link(aTemp, aPath)
    if err != nil { return err }
@@ -813,13 +865,13 @@ func (o *tUserDb) complete(iType tType, iId string, iObj interface{}) error {
          err = json.Unmarshal(aBuf, iObj)
          if err != nil { return err }
       }
-      aDir := o.root + string(eTalias) + "/"
       aSync := false
       fLink := func(cFile string, cDfn bool) {
+         cPath := o.fileName(eTalias, cFile)
          cUid := iId; if cDfn { cUid = kAliasDefunctUid }
-         err = os.Remove(aDir + cFile)
+         err = os.Remove(cPath)
          if err != nil && !os.IsNotExist(err) { return }
-         err = os.Symlink(cUid, aDir + cFile)
+         err = os.Symlink(cUid, cPath)
          aSync = true
       }
       for _, aAlias := range iObj.(*tUser).Aliases {
@@ -827,13 +879,14 @@ func (o *tUserDb) complete(iType tType, iId string, iObj interface{}) error {
          if aAlias.NatTouched { fLink(aAlias.Nat, aAlias.NatDefunct); if err != nil { return err } }
       }
       if aSync {
-         syncDir(aDir)
+         err = syncDir(o.root + string(eTalias))
+         if err != nil { return err }
       }
    }
 
    err = os.Remove(aTemp)
    if err != nil { return err }
-   err = os.Remove(aTemp + ".tmp")
+   err = os.Remove(aTemp +".tmp")
    if err != nil && !os.IsNotExist(err) { return err }
    return nil
 }

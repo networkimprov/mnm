@@ -389,7 +389,7 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
          if len(iHead.NewAlias) < kAliasMinLen { //todo enforce in userdb
             aAck["error"] = fmt.Sprintf("newalias must be %d+ characters", kAliasMinLen)
          } else {
-            err = UDb.AddAlias(aUid, "", iHead.NewAlias)
+            err = UDb.AddAlias(aUid, iHead.NewAlias, "")
             if err != nil {
                aAck["error"] = err.Error()
             }
@@ -428,7 +428,7 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
       if iHead.NewNode != "" && iHead.NewAlias != "" { return sMsgHeaderBad }
       aEtc := tMsg{}
       if iHead.NewAlias != "" {
-         err = UDb.AddAlias(o.uid, "", iHead.NewAlias)
+         err = UDb.AddAlias(o.uid, iHead.NewAlias, "")
          if err == nil {
             aEtc["newalias"] = iHead.NewAlias
          }
