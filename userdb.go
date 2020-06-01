@@ -173,8 +173,7 @@ func (o *tUserDb) AddUser(iUid, iNewNode string) (aQid string, err error) {
    aUser, err := o.fetchUser(iUid, eFetchMake)
    if err != nil { return "", err }
 
-   aUser.Lock()
-   defer aUser.Unlock()
+   aUser.Lock(); defer aUser.Unlock()
 
    aQid = qid(iUid, 1)
 
@@ -190,7 +189,7 @@ func (o *tUserDb) AddUser(iUid, iNewNode string) (aQid string, err error) {
    aUser.NonDefunctNodesCount++
 
    err = o.putRecord(eTuser, iUid, aUser)
-   if err != nil { panic(err) }
+   if err != nil { return "", err }
    return aQid, nil
 }
 
@@ -204,8 +203,7 @@ func (o *tUserDb) AddNode(iUid, iNewNode string) (aQid string, err error) {
       return "", &tUdbError{id: eErrUserInvalid, msg: fmt.Sprintf("AddNode: iUid %s not found", iUid)}
    }
 
-   aUser.Lock()
-   defer aUser.Unlock()
+   aUser.Lock(); defer aUser.Unlock()
 
    if aUser.Nodes[iNewNode].Num != 0 {
       return "", &tUdbError{id: eErrNodeInvalid, msg: fmt.Sprintf("AddNode: Node %s exists", iNewNode)}
@@ -219,7 +217,7 @@ func (o *tUserDb) AddNode(iUid, iNewNode string) (aQid string, err error) {
    aUser.clearTouched()
 
    err = o.putRecord(eTuser, iUid, aUser)
-   if err != nil { panic(err) }
+   if err != nil { return "", err }
    return qid(iUid, aUser.Nodes[iNewNode].Num), nil
 }
 
@@ -233,8 +231,7 @@ func (o *tUserDb) DropNode(iUid, iNode string) (aQid string, err error) {
       return "", &tUdbError{id: eErrUserInvalid, msg: fmt.Sprintf("DropNode: iUid %s not found", iUid)}
    }
 
-   aUser.Lock()
-   defer aUser.Unlock()
+   aUser.Lock(); defer aUser.Unlock()
 
    if aUser.Nodes[iNode].Num == 0 {
       return "", &tUdbError{id: eErrNodeInvalid, msg: fmt.Sprintf("DropNode: iNode %s invalid", iNode)}
@@ -252,7 +249,7 @@ func (o *tUserDb) DropNode(iUid, iNode string) (aQid string, err error) {
    aUser.clearTouched()
 
    err = o.putRecord(eTuser, iUid, aUser)
-   if err != nil { panic(err) }
+   if err != nil { return "", err }
    return aQid, nil
 }
 
@@ -295,11 +292,9 @@ func (o *tUserDb) AddAlias(iUid, iNat, iEn string) error {
       return nil
    }
 
-   aUser.Lock()
-   defer aUser.Unlock()
+   aUser.Lock(); defer aUser.Unlock()
 
-   o.aliasDoor.Lock()
-   defer o.aliasDoor.Unlock()
+   o.aliasDoor.Lock(); defer o.aliasDoor.Unlock()
 
    for _, aAlias := range aAliases {
       if aAlias != "" && o.alias[aAlias] != "" && o.alias[aAlias] != iUid {
@@ -313,8 +308,7 @@ func (o *tUserDb) AddAlias(iUid, iNat, iEn string) error {
    aUser.Aliases = append(aUser.Aliases, tAlias{En:  iEn,  EnTouched:  iEn  != "",
                                                 Nat: iNat, NatTouched: iNat != ""})
    err = o.putRecord(eTuser, iUid, aUser)
-   if err != nil { panic(err) }
-
+   if err != nil { return err }
    return nil
 }
 
@@ -328,8 +322,7 @@ func (o *tUserDb) DropAlias(iUid, iAlias string) error {
       return &tUdbError{id: eErrUserInvalid, msg: fmt.Sprintf("DropAlias: iUid %s not found", iUid)}
    }
 
-   aUser.Lock()
-   defer aUser.Unlock()
+   aUser.Lock(); defer aUser.Unlock()
 
    // check for retry
    for _, aAlias := range aUser.Aliases {
@@ -362,7 +355,7 @@ func (o *tUserDb) DropAlias(iUid, iAlias string) error {
       }
    }
    err = o.putRecord(eTuser, iUid, aUser)
-   if err != nil { panic(err) }
+   if err != nil { return err }
    return nil
 }
 
@@ -378,8 +371,7 @@ func (o *tUserDb) Verify(iUid, iNode string) (aQid string, err error) {
       return "", &tUdbError{id: eErrUserInvalid, msg: fmt.Sprintf("Verify: iUid %s not found", iUid)}
    }
 
-   aUser.RLock()
-   defer aUser.RUnlock()
+   aUser.RLock(); defer aUser.RUnlock()
 
    if aUser.Nodes[iNode].Defunct {
       return "", &tUdbError{id: eErrNodeInvalid, msg: fmt.Sprintf("Verify: iNode %s defunct", iNode)}
@@ -434,7 +426,7 @@ func (o *tUserDb) Lookup(iAlias string) (aUid string, err error) {
 
    if aUid == "" { // iAlias not in cache
       aObj, err := o.getRecord(eTalias, iAlias)
-      if err != nil { panic(err) }
+      if err != nil { return "", err }
 
       if aObj == nil {
          return "", &tUdbError{id: eErrUnknownAlias, msg: fmt.Sprintf("Lookup: iAlias %s not found", iAlias)}
@@ -466,8 +458,7 @@ func (o *tUserDb) GroupInvite(iGid, iAlias, iByAlias, iByUid string) (aUid strin
    aGroup, err := o.fetchGroup(iGid, eFetchMake)
    if err != nil { return "", err }
 
-   aGroup.Lock()
-   defer aGroup.Unlock()
+   aGroup.Lock(); defer aGroup.Unlock()
 
    if len(aGroup.Uid) == 0 {
       aByUid, _ := o.Lookup(iByAlias)
@@ -499,7 +490,7 @@ func (o *tUserDb) GroupInvite(iGid, iAlias, iByAlias, iByUid string) (aUid strin
    aGroup.Uid[aUid] = tMember{Alias: iAlias, Status: eStatInvited}
 
    err = o.putRecord(eTgroup, iGid, aGroup)
-   if err != nil { panic(err) }
+   if err != nil { return "", err }
    return aUid, nil
 }
 
@@ -515,8 +506,7 @@ func (o *tUserDb) GroupJoin(iGid, iUid, iNewAlias string) (aAlias string, err er
       return "", &tUdbError{id: eErrGroupInvalid, msg: fmt.Sprintf("GroupJoin: iGid %s not found", iGid)}
    }
 
-   aGroup.Lock()
-   defer aGroup.Unlock()
+   aGroup.Lock(); defer aGroup.Unlock()
 
    if aGroup.Uid[iUid].Status == eStatJoined &&
       (iNewAlias == "" || iNewAlias == aGroup.Uid[iUid].Alias) {
@@ -538,7 +528,7 @@ func (o *tUserDb) GroupJoin(iGid, iUid, iNewAlias string) (aAlias string, err er
    aGroup.Uid[iUid] = tMember{Alias: aAlias, Status: eStatJoined}
 
    err = o.putRecord(eTgroup, iGid, aGroup)
-   if err != nil { panic(err) }
+   if err != nil { return "", err }
    return aAlias, nil
 }
 
@@ -553,8 +543,7 @@ func (o *tUserDb) GroupAlias(iGid, iUid, iNewAlias string) (aAlias string, err e
       return "", &tUdbError{id: eErrGroupInvalid, msg: fmt.Sprintf("GroupAlias: iGid %s not found", iGid)}
    }
 
-   aGroup.Lock()
-   defer aGroup.Unlock()
+   aGroup.Lock(); defer aGroup.Unlock()
 
    if aGroup.Uid[iUid].Status != eStatJoined {
       return "", &tUdbError{id: eErrUserInvalid, msg: fmt.Sprintf("GroupAlias: iUid %s not a member", iUid)}
@@ -570,7 +559,7 @@ func (o *tUserDb) GroupAlias(iGid, iUid, iNewAlias string) (aAlias string, err e
    aGroup.Uid[iUid] = tMember{Alias: iNewAlias, Status: aGroup.Uid[iUid].Status}
 
    err = o.putRecord(eTgroup, iGid, aGroup)
-   if err != nil { panic(err) }
+   if err != nil { return "", err }
    return aAlias, nil
 }
 
@@ -586,8 +575,7 @@ func (o *tUserDb) GroupQuit(iGid, iAlias, iByUid string) (aUid string, err error
       return "", &tUdbError{id: eErrGroupInvalid, msg: fmt.Sprintf("GroupQuit: iGid %s not found", iGid)}
    }
 
-   aGroup.Lock()
-   defer aGroup.Unlock()
+   aGroup.Lock(); defer aGroup.Unlock()
 
    aUid, _ = o.Lookup(iAlias)
    if aUid == "" || iAlias != aGroup.Uid[aUid].Alias {
@@ -610,7 +598,7 @@ func (o *tUserDb) GroupQuit(iGid, iAlias, iByUid string) (aUid string, err error
    }
 
    err = o.putRecord(eTgroup, iGid, aGroup)
-   if err != nil { panic(err) }
+   if err != nil { return "", err }
    return aUid, nil
 }
 
@@ -624,8 +612,7 @@ func (o *tUserDb) GroupGetUsers(iGid, iByUid string) (aUids []string, err error)
       return nil, &tUdbError{id: eErrGroupInvalid, msg: fmt.Sprintf("GroupGetUsers: iGid %s not found", iGid)}
    }
 
-   aGroup.RLock()
-   defer aGroup.RUnlock()
+   aGroup.RLock(); defer aGroup.RUnlock()
 
    if aGroup.Uid[iByUid].Status != eStatJoined &&
       aGroup.Uid[iByUid].Status != eStatInvited {
@@ -791,14 +778,15 @@ func (o *tUserDb) getRecord(iType tType, iId string) (interface{}, error) {
       if !os.IsNotExist(err) { panic(err) }
       return aObj, nil
    }
-
    err = json.Unmarshal(aBuf, aObj)
    if err != nil {
       return nil, &tUdbError{id: eErrChecksum, msg: fmt.Sprintf("unmarshal failed for %s/%s: %s", string(iType), iId, err.Error())}
    }
    aSumPrev := *aSum
    *aSum = 0
-   aBuf, _ = json.Marshal(aObj)
+   aBuf, err = json.Marshal(aObj)
+   if err != nil { panic(err) }
+
    if checkSum(aBuf) != aSumPrev {
       return nil, &tUdbError{id: eErrChecksum, msg: fmt.Sprintf("checksum failed for %s/%s", string(iType), iId)}
    }
@@ -816,23 +804,23 @@ func (o *tUserDb) putRecord(iType tType, iId string, iObj interface{}) error {
    }
    *aSum = 0
    aBuf, err := json.Marshal(iObj)
-   if err != nil { return err }
+   if err != nil { panic(err) }
    *aSum = checkSum(aBuf)
 
    aTemp := o.fileTemp(iType, iId)
 
    aFd, err := os.OpenFile(aTemp +".tmp", os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-   if err != nil { return err }
-   defer aFd.Close()
+   if err != nil { panic(err) }
    err = json.NewEncoder(aFd).Encode(iObj)
-   if err != nil { return err }
+   if err != nil { panic(err) }
    err = aFd.Sync()
-   if err != nil { return err }
+   if err != nil { panic(err) }
+   aFd.Close()
 
    err = os.Link(aTemp +".tmp", aTemp)
-   if err != nil { return err }
+   if err != nil { panic(err) }
    err = syncDir(o.temp) // transaction completes at startup if we crash after this
-   if err != nil { return err }
+   if err != nil { panic(err) }
    err = o.complete(iType, iId, iObj)
    return err
 }
@@ -851,42 +839,44 @@ func (o *tUserDb) complete(iType tType, iId string, iObj interface{}) error {
    aTemp := o.fileTemp(iType, iId)
 
    err := os.Remove(aPath)
-   if err != nil && !os.IsNotExist(err) { return err }
+   if err != nil && !os.IsNotExist(err) { panic(err) }
    err = os.Link(aTemp, aPath)
-   if err != nil { return err }
+   if err != nil { panic(err) }
    err = syncDir(o.root + string(iType))
-   if err != nil { return err }
+   if err != nil { panic(err) }
 
    if iType == eTuser {
       if iObj == nil {
          iObj = &tUser{}
-         aBuf, err := ioutil.ReadFile(aPath)
-         if err != nil { return err }
+         var aBuf []byte
+         aBuf, err = ioutil.ReadFile(aPath)
+         if err != nil { panic(err) }
          err = json.Unmarshal(aBuf, iObj)
-         if err != nil { return err }
+         if err != nil { panic(err) }
       }
       aSync := false
       fLink := func(cFile string, cDfn bool) {
          cPath := o.fileName(eTalias, cFile)
          cUid := iId; if cDfn { cUid = kAliasDefunctUid }
          err = os.Remove(cPath)
-         if err != nil && !os.IsNotExist(err) { return }
+         if err != nil && !os.IsNotExist(err) { panic(err) }
          err = os.Symlink(cUid, cPath)
+         if err != nil { panic(err) }
          aSync = true
       }
       for _, aAlias := range iObj.(*tUser).Aliases {
-         if aAlias.EnTouched  { fLink(aAlias.En,  aAlias.EnDefunct ); if err != nil { return err } }
-         if aAlias.NatTouched { fLink(aAlias.Nat, aAlias.NatDefunct); if err != nil { return err } }
+         if aAlias.EnTouched  { fLink(aAlias.En,  aAlias.EnDefunct ) }
+         if aAlias.NatTouched { fLink(aAlias.Nat, aAlias.NatDefunct) }
       }
       if aSync {
          err = syncDir(o.root + string(eTalias))
-         if err != nil { return err }
+         if err != nil { panic(err) }
       }
    }
 
    err = os.Remove(aTemp)
-   if err != nil { return err }
+   if err != nil { panic(err) }
    err = os.Remove(aTemp +".tmp")
-   if err != nil && !os.IsNotExist(err) { return err }
+   if err != nil && !os.IsNotExist(err) { panic(err) }
    return nil
 }
