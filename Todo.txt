@@ -1,29 +1,55 @@
 
 check use of ack msgid; not valid when msg originates on server
 
-testclient cycle addnode every 100 logins
+add --version option
+
 testclient trigger ack & register errors
+
+on register, submit credentials to authentication service
 
 userdb
   node labels
   groupalias: if crash after putrecord, retry won't send orig alias in update to group
   testuserdb: fReport use aFuncName to print name when needed
+  single RWMutex for all caches (alias, user, group)?
+  move password generation to userdb
+    get & store random salt per-site
 
 check/fix pending transactions on qlib start
 
+log entries give datetime, short uid, node, msg type, details
+
 systemd script
 
-tmtp "via" header on msgs to a group
-tmtp send online-nodes on login
-tmtp include alias in from/for
-tmtp ping add from:alias
-tmtp register return service name
+tmtp
+  group invite include aliases of current group members
+  re-send on missed ack may cause dup with unique msgid at receiver
+    request msgid from service prior to send?
+  bug: groupEdit join response missing newalias field
+  "login" messages include noderef and client IP address
+  newnode return number
+    add status "allowed", update on first login, provide status on login
+  "via" header on msgs to a group?
+  track node logins on ohi channel
+  include alias in from/for
+  ping add from:alias
+  register return service metadata
+
+clean
+  check o.*Head < 0 || o.*Len < o.*Head
+  spacing of +"/"+ and _,err
 
 0.2+
 
 replace json lib with faster third-party one
 
+common address book for accounts & groups accessible to all members
+  cabEdit request, cabUpdate response
+
 discards pings from blocked address
+
+disallow new group if an alias by same name exists, and vice versa
+convert alias to group?
 
 decrypt For[].Id with sender's key; encrypt From with recipient's key
 
@@ -47,6 +73,9 @@ server-to-server proxy
     relay ack to client
   foreign service ping local service when msg queued
   client proxy-request to receive msgs
+
+config min-length of alias & group
+  flag to let admin break min-len policy for group
 
 user mgmt policy config
   disk quota
@@ -78,6 +107,8 @@ limit number of pings per 24h period
 let service charge for ping credits, on ping user.credits-=1
 
 make client reauthenticate
+  on login from unknown IP addr; record last N IP addrs
+  on request from any client
   for certain requests
   after inactive period
 
