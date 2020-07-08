@@ -7,6 +7,19 @@ testclient trigger ack & register errors
 
 on register, submit credentials to authentication service
 
+PostNotify synchronization
+  SetFlag request, with postnotify param
+    ack error if already set
+    set sender postnotify flag, record last queued item
+    dropped link clears flag
+    ack when last item delivered
+  client defers postnotify until SetFlag ack
+  PostNotify request
+    ack error if flag unset
+    check for flag on .notefor list members
+      if found, ack error and clear flag; client retries after variable timeout
+    complete request, clear flag
+
 userdb
   node labels
   groupalias: if crash after putrecord, retry won't send orig alias in update to group

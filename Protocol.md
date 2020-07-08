@@ -26,9 +26,10 @@ __Conventions:__ Header definitions herein use these conventions:
 ### Definitions
 
 Each message starts with a header, wherein four hex digits give the size of a JSON metadata object, 
-which may be followed by arbitrary 8-bit data if `.datalen` is non-zero:
+which may be followed by arbitrary 8-bit data if `.datalen` is non-zero.
+The data may begin with a secondary JSON metadata object if `.datahead` is non-zero.
 ```
-hhhh{ ... <"datalen":uint> }datalen octets
+hhhh{ ... <"datalen":uint, <"datahead":uint>> }datahead octets, datalen - datahead octets
 ```
 
 Messages are not interleaved/multiplexed within a link; that should be considered for a later revision.
@@ -58,7 +59,7 @@ Messages from the server typically have the following required headers `(std)`:
   "headsum": uint    // checksum for the message header
 ```
 
-Messages carrying arbitrary data have the following required headers `(data)`:
+Messages carrying arbitrary data have the following headers `(data)`:
 ```
   "datalen":  uint,  // count of octets following the header
  <"datahead": uint>, // count <= datalen of octets which comprise a secondary header
@@ -92,7 +93,7 @@ _todo: accept credentials for third party authentication services_
    ```
    { "op":       1,
      "newnode":  string,     // user label for a client device
-    <"newalias": string>}    // user alias, must be 8+ characters
+    <"newalias": string>}    // user alias, must be 8+ printable characters
    ```
    Response: same as _Login_  
    To sender's node:
@@ -132,7 +133,7 @@ _todo: cork pauses delivery to user's nodes, params date & for-list_
    { "op":       3,
      "id":       string,  // referenced by (ack) response
     ["newnode":  string   // user label for a client device
-    |"newalias": string]} // user alias, must be 8+ characters
+    |"newalias": string]} // user alias, must be 8+ printable characters
    ```
    Response: `(ack)`  
    To sender's nodes:
@@ -173,10 +174,10 @@ _todo: closed groups; invitations by moderators_
    ```
    { "op":   5,
      "id":   string,       // referenced by (ack) response
-     "gid":  string,       // group name
+     "gid":  string,       // group name, must be 8+ printable characters
      "from": string,       // sender alias
      "to":   string,       // invitee alias
-     (data)}
+     (data)}               // .datalen max is limited by server; data must be valid UTF-8
    ```
    Response: `(ack)`  
    To recipient:
@@ -229,6 +230,30 @@ or a member to update their recorded alias.
              ... ]
           | [],                   // only sender's nodes
      (data)}
+                                  // .datahead segment
+   { "threadid":      string,     // empty for new thread
+     "alias":         string,     // user alias
+     "subject":       string,     // optional if .threadid set
+    <"confirmid":     string,     // id of confirmed forwarded message, see PostNotify
+     "confirmposted": string>,    // posted date of confirmed forwarded message
+    <"cc":                        // subscribers, omit unless .threadid empty
+      [{ "who":       string,     // user alias
+         "whouid":    string,     // uid
+         "by":        string,     // user alias that included .who
+         "byuid":     string,     // uid
+         "date":      string,     // datetime when .who was included
+         "note":      string,     // comment from .by
+         "subscribe": bool},      // .who receives new thread messages
+       ... ]>,
+    <"attach":                    // file contents appear in the data segment following the message body
+      [{ "name":      string,     // unique in .attach, prefix u:/f:/r:
+         "size":      uint,       // count of octets
+        <"ffn":       string>},   // filled-form name, omit for .name u:*
+       ... ]> }
+                                  // todo: filled-form attachment
+
+   { "nodesync": true}            // .datahead segment for node sync
+                                  // todo: data segment for node sync
    ```
    Response: `(ack)`  
    To recipients:
@@ -239,17 +264,33 @@ or a member to update their recorded alias.
    ```
 
 0. __PostNotify__ sends a message to the `.for` list and a separate notification 
-to the `.for` and `.notefor` lists.
+to the `.for` and `.notefor` lists.  
+_todo: PostNotify synchronization; see Todo.txt_
+
+   This enables a decentralized subscriber list per-thread, and forwarding a thread to new subscribers. 
+The `(data)` message delivers a copy of the thread, without attachments, to new subscribers.
+Recipients flag its messages as unconfirmed.
+The notification delivers the list of new subscribers to current & new subscribers.
+The current subscribers then Post a copy of each thread message authored by them, with attachments, 
+to the new subscribers, including the `.confirmid` & `.confirmposted` fields of `.datahead`.
    ```
    { "op":         8,
      "id":         string,  // referenced by (ack) response
      "for":        [ ... ], // list of uids and/or group names, see Post
     <"fornotself": true>,   // exclude sender's nodes (normally implicit in .for list)
-    <"notefor":    [ ... ], // list of uids and/or group names, see Post
+     "notefor":    [ ... ], // list of uids and/or group names, see Post
      "notelen":    uint,    // count of octets following the header for notification
     <"notehead":   uint>,   // analagous to .datahead for notification
     <"notesum":    uint>,   // analagous to .datasum for notification
      (data)}                // .datahead & .datasum pertain to octets following notification
+
+                            // .notehead segment
+   { "threadid": string,    // id of forwarded thread
+     "cc":       [ ... ]}   // new subscribers, see Post
+
+                            // .datahead segment
+   { "threadid": string}    // id of forwarded thread
+                            // todo: data segment for forwarded thread
    ```
    Response: `(ack)`  
    To recipients:
@@ -274,7 +315,7 @@ A server may limit the number of pings and consecutive failed pings per 24h.
    { "op": 9,
      "id": string, // referenced by (ack) response
      "to": string, // user alias
-     (data)}       // .datalen max is limited by server
+     (data)}       // .datalen max is limited by server; data must be valid UTF-8
    ```
    Response: `(ack)`  
    To recipient:
