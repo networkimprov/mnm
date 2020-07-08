@@ -426,11 +426,15 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
    case eOpUserEdit:
       if iHead.NewNode == "" && iHead.NewAlias == "" { return sMsgHeaderBad }
       if iHead.NewNode != "" && iHead.NewAlias != "" { return sMsgHeaderBad }
-      aEtc := tMsg{}
+      var aEtc tMsg
       if iHead.NewAlias != "" {
-         err = UDb.AddAlias(o.uid, iHead.NewAlias, "")
-         if err == nil {
-            aEtc["newalias"] = iHead.NewAlias
+         if len(iHead.NewAlias) < kAliasMinLen {
+            err = tError(fmt.Sprintf("newalias must be %d+ characters", kAliasMinLen))
+         } else {
+            err = UDb.AddAlias(o.uid, iHead.NewAlias, "")
+            if err == nil {
+               aEtc = tMsg{"newalias": iHead.NewAlias}
+            }
          }
       } else {
          aNodeId, aNodeSha := makeNodeId()
@@ -439,8 +443,7 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
          if err == nil {
             err = sStore.copyDir(o.node, aQid)
             if err != nil { panic(err) }
-            aEtc["nodeid"] = aNodeId
-            aEtc["newnode"] = iHead.NewNode
+            aEtc = tMsg{"nodeid": aNodeId, "newnode": iHead.NewNode}
          }
       }
       if err == nil {
@@ -488,12 +491,15 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
       case "invite":
          aQuitMsg := o._checkPing(iHead, &iData)
          if aQuitMsg != nil { return aQuitMsg }
-         aUid, err = UDb.GroupInvite(iHead.Gid, iHead.To, iHead.From, o.uid)
-         if err == nil {
-            iHead.For = []tHeaderFor{{Id:aUid, Type:eForUser}}
-            _, _, err = o._postMsg(iHead, tMsg{"gid":iHead.Gid, "to":iHead.To}, iData)
-            aAlias = iHead.To
+         if len(iHead.Gid) < kAliasMinLen {
+            err = tError(fmt.Sprintf("gid must be %d+ characters", kAliasMinLen))
+            break
          }
+         aUid, err = UDb.GroupInvite(iHead.Gid, iHead.To, iHead.From, o.uid)
+         if err != nil { break }
+         iHead.For = []tHeaderFor{{Id:aUid, Type:eForUser}}
+         _, _, err = o._postMsg(iHead, tMsg{"gid":iHead.Gid, "to":iHead.To}, iData)
+         aAlias = iHead.To
       case "join":
          aAlias, err = UDb.GroupJoin(iHead.Gid, o.uid, iHead.NewAlias)
       case "alias":
