@@ -88,11 +88,11 @@ var sHeaderDefs = [...]tHeader{
    eOpLogin      : { Uid:"1", Node:"1" },
    eOpUserEdit   : { Id:"1" },
    eOpOhiEdit    : { Id:"1", For:[]tHeaderFor{{}}, Type:"1" },
-   eOpGroupInvite: { Id:"1", DataLen:1, Gid:"1", From:"1", To:"1" },
+   eOpGroupInvite: { Id:"1", DataLen:2, Gid:"1", From:"1", To:"1" },
    eOpGroupEdit  : { Id:"1", Act:"1", Gid:"1" },
    eOpPost       : { Id:"1", DataLen:1, For:[]tHeaderFor{} },
    eOpPostNotify : { Id:"1", DataLen:1, For:[]tHeaderFor{}, NoteLen:1 },
-   eOpPing       : { Id:"1", DataLen:1, To:"1" },
+   eOpPing       : { Id:"1", DataLen:2, To:"1" },
    eOpAck        : { Id:"1", Type:"1" },
    eOpPulse      : {  },
    eOpQuit       : {  },
@@ -102,10 +102,9 @@ func (o *tHeader) check() bool {
    if o.Op >= eOpEnd { return false }
    aDef := &sHeaderDefs[o.Op]
    aFail :=
-      o.DataLen | o.DataHead < 0                     ||
-      o.NoteLen | o.NoteHead < 0                     ||
-      o.DataLen < o.DataHead                         ||
-      o.NoteLen < o.NoteHead                         ||
+      o.DataLen < o.DataHead || o.DataHead < 0       ||
+      o.NoteLen < o.NoteHead || o.NoteHead < 0       ||
+      aDef.DataLen < 2 &&
       (aDef.DataLen == 0)    != (o.DataLen == 0)     ||
       (aDef.NoteLen == 0)    != (o.NoteLen == 0)     ||
       len(aDef.Uid)      > 0 && len(o.Uid)      == 0 ||
