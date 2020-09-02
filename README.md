@@ -1,6 +1,6 @@
 ### mnm is not mail
 
-<img width="300" hspace="32" align="right" src="https://user-images.githubusercontent.com/458838/65545951-535f6980-decb-11e9-8f46-6122198097b0.png">  
+<img width="300" hspace="0" align="right" src="https://user-images.githubusercontent.com/458838/65545951-535f6980-decb-11e9-8f46-6122198097b0.png">  
 
 The mnm project is building a legitimate replacement for email: 
 a server (see below), a [client](https://github.com/networkimprov/mnm-hammer), and 
