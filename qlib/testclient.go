@@ -188,9 +188,9 @@ func _newTestClient(iAct tTestAction, iInfo [3]int) *tTestClient {
           want: `{"id":"id","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
                 `{"datahead":5,"datalen":9,"datasum":5,"from":"`+aUid+`","headsum":#ck#,"id":"#id#","notify":1,"op":"delivery","posted":"#pdt#"}post data`+"\n"+
                 `{"datahead":1,"datalen":5,"datasum":1,"from":"`+aUid+`","headsum":#ck#,"id":"#id#","op":"notify","posted":"#pdt#","postid":"#pid#"}note.` ,
-      },{ head: tMsg{"Op":eOpPing, "Id":"123", "Datalen":0, "To":"test2"} ,
+      },{ head: tMsg{"Op":eOpPing, "Id":"123", "Datalen":0, "From":"test1", "To":"test2"} ,
           want: `{"id":"123","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
-                `{"datalen":0,"from":"`+aUid+`","headsum":#ck#,"id":"#id#","op":"ping","posted":"#pdt#","to":"test2"}` ,
+                `{"alias":"test1","datalen":0,"from":"`+aUid+`","headsum":#ck#,"id":"#id#","op":"ping","posted":"#pdt#","to":"test2"}` ,
       },{ head: tMsg{"Op":eOpUserEdit, "Id":"0", "Newalias":"short"} ,
           want: `{"error":"newalias must be 8+ characters","id":"0","msgid":"#mid#","op":"ack","posted":"#pst#"}` ,
       },{ head: tMsg{"Op":eOpUserEdit, "Id":"0", "Newalias":"sam walker"} ,
@@ -210,11 +210,11 @@ func _newTestClient(iAct tTestAction, iInfo [3]int) *tTestClient {
           data: `hello` ,
           want: `{"id":"0","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
                 `{"act":"invite","alias":"test2","datalen":0,"from":"`+aUid+`","gid":"talktalk","headsum":#sck#,"id":"#sid#","op":"member","posted":"#spdt#"}`+"\n"+
-                `{"datalen":5,"from":"`+aUid+`","gid":"talktalk","headsum":#ck#,"id":"#id#","op":"invite","posted":"#pdt#","to":"test2"}hello` ,
+                `{"alias":"test1","datalen":5,"from":"`+aUid+`","gid":"talktalk","headsum":#ck#,"id":"#id#","op":"invite","posted":"#pdt#","to":"test2"}hello` ,
       },{ head: tMsg{"Op":eOpGroupEdit, "Id":"0", "Gid":"talktalk", "Act":"alias", "Newalias":"test11"} ,
           want: `{"id":"0","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
                 `{"act":"alias","alias":"test1","datalen":0,"from":"`+aUid+`","gid":"talktalk","headsum":#sck#,"id":"#sid#","newalias":"test11","op":"member","posted":"#spdt#"}` ,
-      },{ head: tMsg{"Op":eOpPing, "Id":"123", "Datalen":144, "To":"test2"} ,
+      },{ head: tMsg{"Op":eOpPing, "Id":"123", "Datalen":144, "From":"test1", "To":"test2"} ,
           data: `123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 1234` ,
           want: `{"error":"data too long for request type","op":"quit"}` ,
       },  aTmtpRev,
@@ -238,27 +238,27 @@ func _newTestClient(iAct tTestAction, iInfo [3]int) *tTestClient {
                 `{"from":"`+aUid+`","op":"ohi","status":2}` ,
       },  aTmtpRev,
         { msg : []byte(`0034{"Op":2, "Uid":"`+aUid+`", "Node":"`+sTestNodeIds[aTc.id][0]+`"}`+
-                       `002f{"Op":9, "Id":"123", "Datalen":1, "To":"test2"}1`) ,
+                       `003f{"Op":9, "Id":"123", "Datalen":1, "From":"test1", "To":"test2"}1`) ,
           want: `{"info":"login ok","op":"info"}`+"\n"+
                 `{"id":"123","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
                 `{"datalen":0,"from":"`+aUid+`","headsum":#sck#,"id":"#sid#","node":"tbd","op":"login","posted":"#spdt#"}`+"\n"+
-                `{"datalen":1,"from":"`+aUid+`","headsum":#ck#,"id":"#id#","op":"ping","posted":"#pdt#","to":"test2"}1` ,
+                `{"alias":"test1","datalen":1,"from":"`+aUid+`","headsum":#ck#,"id":"#id#","op":"ping","posted":"#pdt#","to":"test2"}1` ,
       },{ head: tMsg{"Op":eOpPost, "Id":"zyx", "Datalen":15, "For":[]tHeaderFor{
                        {Id:aForid, Type:eForUser} }} ,
           data: `data for Id` ,
       },{ msg : []byte(`:zyx`) ,
           want: `{"id":"zyx","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
                 `{"datalen":15,"from":"`+aUid+`","headsum":#ck#,"id":"#id#","op":"delivery","posted":"#pdt#"}data for Id:zyx` ,
-      },{ head: tMsg{"Op":eOpPing, "Id":"123", "Datalen":141, "To":"test2"} ,
+      },{ head: tMsg{"Op":eOpPing, "Id":"123", "Datalen":141, "From":"test1", "To":"test2"} ,
           data: "\u00d7 123456789 123456789 123456789 123456789 123456789 " ,
       },{ msg : []byte(`123456789 123456789 123456789 123456789 123456789 `) ,
       },{ msg : []byte(`123456789 123456789 123456789 12345678`) ,
           want: `{"id":"123","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
-                `{"datalen":141,"from":"`+aUid+`","headsum":#ck#,"id":"#id#","op":"ping","posted":"#pdt#","to":"test2"}`+
+                `{"alias":"test1","datalen":141,"from":"`+aUid+`","headsum":#ck#,"id":"#id#","op":"ping","posted":"#pdt#","to":"test2"}`+
                 "\u00d7 123456789 123456789 123456789 123456789 123456789 "+
                 `123456789 123456789 123456789 123456789 123456789 `+
                 `123456789 123456789 123456789 12345678` ,
-      },{ head: tMsg{"Op":eOpPing, "Id":"123", "Datalen":3, "To":"test2"} ,
+      },{ head: tMsg{"Op":eOpPing, "Id":"123", "Datalen":3, "From":"test1", "To":"test2"} ,
           data: "a\xFFz" ,
           want: `{"error":"data not valid UTF8","op":"quit"}` ,
       },  aTmtpRev,

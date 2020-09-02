@@ -92,7 +92,7 @@ var sHeaderDefs = [...]tHeader{
    eOpGroupEdit  : { Id:"1", Act:"1", Gid:"1" },
    eOpPost       : { Id:"1", DataLen:1, For:[]tHeaderFor{} },
    eOpPostNotify : { Id:"1", DataLen:1, For:[]tHeaderFor{}, NoteLen:1 },
-   eOpPing       : { Id:"1", DataLen:2, To:"1" },
+   eOpPing       : { Id:"1", DataLen:2, From:"1", To:"1" },
    eOpAck        : { Id:"1", Type:"1" },
    eOpPulse      : {  },
    eOpQuit       : {  },
@@ -497,7 +497,7 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
          aUid, err = UDb.GroupInvite(iHead.Gid, iHead.To, iHead.From, o.uid)
          if err != nil { break }
          iHead.For = []tHeaderFor{{Id:aUid, Type:eForUser}}
-         _, _, err = o._postMsg(iHead, tMsg{"gid":iHead.Gid, "to":iHead.To}, iData)
+         _, _, err = o._postMsg(iHead, tMsg{"gid":iHead.Gid, "alias":iHead.From, "to":iHead.To}, iData)
          aAlias = iHead.To
       case "join":
          aAlias, err = UDb.GroupJoin(iHead.Gid, o.uid, iHead.NewAlias)
@@ -546,10 +546,15 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
       aQuitMsg := o._checkPing(iHead, &iData)
       if aQuitMsg != nil { return aQuitMsg }
       var aUid string
-      aUid, err = UDb.Lookup(iHead.To)
-      if err == nil {
-         iHead.For = []tHeaderFor{{Id:aUid, Type:eForUser}}
-         aMid, aPosted, err = o._postMsg(iHead, tMsg{"to":iHead.To}, iData)
+      aUid, _ = UDb.Lookup(iHead.From)
+      if aUid != o.uid {
+         err = tError("from must identify sender")
+      } else {
+         aUid, err = UDb.Lookup(iHead.To)
+         if err == nil {
+            iHead.For = []tHeaderFor{{Id:aUid, Type:eForUser}}
+            aMid, aPosted, err = o._postMsg(iHead, tMsg{"alias":iHead.From, "to":iHead.To}, iData)
+         }
       }
       if err != nil {
          fmt.Fprintf(os.Stderr, "%s link._handleMsg ping %s\n", o.uid, err.Error())
@@ -575,7 +580,7 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
 
 func (o *tLink) _checkPing(iHead *tHeader, iData *[]byte) *tMsgQuit {
    const _kSizeMax = kPingCharMax * 3
-   if iHead.DataLen - iHead.DataHead > _kSizeMax { //todo drop .DataHead when alias in iHead
+   if iHead.DataLen > _kSizeMax {
       return sMsgDatalenHigh
    }
    for len(*iData) < int(iHead.DataLen) {
@@ -602,7 +607,7 @@ func (o *tLink) _checkPing(iHead *tHeader, iData *[]byte) *tMsgQuit {
       }
       aUtf16Len++
    }
-   if aUtf16Len - iHead.DataHead > kPingCharMax { //todo drop .DataHead
+   if aUtf16Len > kPingCharMax {
       return sMsgDatalenHigh
    }
    return nil

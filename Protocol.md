@@ -182,10 +182,11 @@ _todo: closed groups; invitations by moderators_
    Response: `(ack)`  
    To recipient:
    ```
-   { "op":  "invite",
+   { "op":    "invite",
      (std),
-     "gid": string,        // from client request
-     "to":  string,        // from client request
+     "gid":   string,      // from client request
+     "alias": string,      // from client request .from
+     "to":    string,      // from client request
      (data)}               // from client request
    ```
    To group members:
@@ -312,18 +313,20 @@ to the new subscribers, including the `.confirmid` & `.confirmposted` fields of 
 On receipt, the recipient may thereafter contact the sender by uid, given in `(std) .from`.
 A server may limit the number of pings and consecutive failed pings per 24h.
    ```
-   { "op": 9,
-     "id": string, // referenced by (ack) response
-     "to": string, // user alias
-     (data)}       // .datalen max is limited by server; data must be valid UTF-8
+   { "op":   9,
+     "id":   string,  // referenced by (ack) response
+     "from": string,  // sender alias
+     "to":   string,  // invitee alias
+     (data)}          // .datalen max is limited by server; data must be valid UTF-8
    ```
    Response: `(ack)`  
    To recipient:
    ```
-   { "op": "ping",
+   { "op":    "ping",
      (std),
-     "to": string, // from client request
-     (data)}       // from client request
+     "alias": string, // from client request .from
+     "to":    string, // from client request
+     (data)}          // from client request
    ```
 
 0. __Ack__ acknowledges receipt of a message.

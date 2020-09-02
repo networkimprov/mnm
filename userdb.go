@@ -450,6 +450,10 @@ func (o *tUserDb) GroupInvite(iGid, iAlias, iByAlias, iByUid string) (aUid strin
    //: iGid exists, iByUid in group, iByAlias ignored
    //: iGid !exists, make iGid and add iByUid with iByAlias
    //: iByAlias for iByUid
+   aByUid, _ := o.Lookup(iByAlias)
+   if aByUid == "" || aByUid != iByUid {
+      return "", &tUdbError{id: eErrAliasInvalid, msg: fmt.Sprintf("GroupInvite: iByAlias %s not for iByUid %s", iByAlias, iByUid)}
+   }
    aUid, _ = o.Lookup(iAlias)
    if aUid == "" {
       return "", &tUdbError{id: eErrAliasInvalid, msg: fmt.Sprintf("GroupInvite: iAlias %s not found", iAlias)}
@@ -461,19 +465,11 @@ func (o *tUserDb) GroupInvite(iGid, iAlias, iByAlias, iByUid string) (aUid strin
    aGroup.Lock(); defer aGroup.Unlock()
 
    if len(aGroup.Uid) == 0 {
-      aByUid, _ := o.Lookup(iByAlias)
-      if aByUid == "" || aByUid != iByUid || invalidInput(iGid) {
+      if invalidInput(iGid) {
          o.groupDoor.Lock()
          delete(o.group, iGid)
          o.groupDoor.Unlock()
-
-         if aByUid == "" {
-            return "", &tUdbError{id: eErrAliasInvalid, msg: fmt.Sprintf("GroupInvite: iByAlias %s not found", iByAlias)}
-         } else if aByUid != iByUid {
-            return "", &tUdbError{id: eErrAliasInvalid, msg: fmt.Sprintf("GroupInvite: iByAlias %s not for iByUid %s", iByAlias, iByUid)}
-         } else {
-            return "", &tUdbError{id: eErrArgument, msg: fmt.Sprintf("GroupInvite: invalid string '%s'", iGid)}
-         }
+         return "", &tUdbError{id: eErrArgument, msg: fmt.Sprintf("GroupInvite: invalid string '%s'", iGid)}
       }
       aGroup.Uid[iByUid] = tMember{Alias: iByAlias, Status: eStatJoined}
    } else {
