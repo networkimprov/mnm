@@ -8,6 +8,7 @@
 package main
 
 import (
+   "flag"
    "fmt"
    "io/ioutil"
    "encoding/json"
@@ -29,7 +30,15 @@ const kConfigFile = "mnm.config"
 var sConfig tConfig
 
 
-func main() { os.Exit(mainResult()) }
+func main() {
+   aVersionQuit := flag.Bool("version", false, "print version and quit")
+   flag.Parse() // may os.Exit(2)
+   if *aVersionQuit {
+      fmt.Printf("mnm tmtp server v%d.%d.%d %s\n", kVersionA, kVersionB, kVersionC, kVersionDate)
+      os.Exit(0)
+   }
+   os.Exit(mainResult())
+}
 
 func mainResult() int {
    // return 2 reserved for use by Go internals
