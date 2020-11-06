@@ -23,7 +23,7 @@ import (
    "crypto/tls"
 )
 
-const kVersionA, kVersionB, kVersionC = 0, 0, 0
+const kVersionA, kVersionB, kVersionC = 0, 1, 0
 const kVersionDate = "(unreleased)"
 const kConfigFile = "mnm.config"
 
