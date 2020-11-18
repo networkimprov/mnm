@@ -260,6 +260,13 @@ func (o *tLink) Read(iBuf []byte) (int, error) {
    return o.conn.Read(iBuf)
 }
 
+func (o *tLink) _logNode() string {
+   if o.uid == "" {
+      return _logTime() + o.conn.RemoteAddr().String()
+   }
+   return _logNode(o.node)
+}
+
 func _runLink(o *tLink) {
    aBuf := make([]byte, kMsgHeaderMaxLen+4) //todo start smaller, realloc as needed
    var aLen int
@@ -322,11 +329,10 @@ func _runLink(o *tLink) {
       aPos, aHeadEnd = 0,0
    }
 
-   aSrc := o.uid; if aSrc == "" { aSrc = o.conn.RemoteAddr().String() }
    if aQuitMsg.Op == "eof" {
-      fmt.Printf("%s link._runLink eof\n", aSrc)
+      fmt.Printf("%s - eof\n", o._logNode())
    } else {
-      fmt.Fprintf(os.Stderr, "%s link._runLink %s %s\n", aSrc, aQuitMsg.Op, aQuitMsg.Error)
+      fmt.Fprintf(os.Stderr, "%s + %s %s\n", o._logNode(), aQuitMsg.Op, aQuitMsg.Error)
    }
    if o.queue != nil {
       o.queue.unlink()
@@ -334,7 +340,7 @@ func _runLink(o *tLink) {
    if aQuitMsg.Op == "quit" && o.tmtprev != "" {
       _, err = o.conn.Write(packMsg(aQuitMsg, nil))
       if err != nil {
-         fmt.Fprintf(os.Stderr, "%s link._runLink quit %s\n", o.uid, err)
+         fmt.Fprintf(os.Stderr, "%s link._runLink quit %s\n", o._logNode(), err)
       }
    }
    o.conn.Close()
@@ -342,7 +348,7 @@ func _runLink(o *tLink) {
       for _, aUid := range sOhi.unref(o.uid) {
          aNodes, err := UDb.OpenNodes(aUid)
          if err != nil {
-            fmt.Fprintf(os.Stderr, "%s link._runLink opennodes %s\n", o.uid, err.Error())
+            fmt.Fprintf(os.Stderr, "%s link._runLink opennodes %s\n", o._logNode(), err)
             continue
          }
          o._sendOhi(aNodes, eOhiOff)
@@ -380,7 +386,7 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
       aNodeId, aNodeSha := makeNodeId()
       _, err = UDb.AddUser(aUid, aNodeSha) //todo iHead.NewNode
       if err != nil {
-         fmt.Fprintf(os.Stderr, "%s link._handleMsg register %s\n", o.uid, err.Error())
+         fmt.Fprintf(os.Stderr, "%s link._handleMsg register %s\n", o._logNode(), err)
          return sMsgRegisterFailure
       }
       aAck := tMsg{"op":sMsgOps[iHead.Op], "uid":aUid, "nodeid":aNodeId}
@@ -421,7 +427,7 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
          _, _, err = o._postMsg(iHead, tMsg{"node":"tbd"}, nil) //todo tbd=noderef
          if err != nil { panic(err) }
       }
-      fmt.Printf("%s link._handleMsg login user %.7s\n", o.uid, aQ.node)
+      fmt.Printf("%s - login %s\n", o._logNode(), o.conn.RemoteAddr().String())
    case eOpUserEdit:
       if iHead.NewNode == "" && iHead.NewAlias == "" { return sMsgHeaderBad }
       if iHead.NewNode != "" && iHead.NewAlias != "" { return sMsgHeaderBad }
@@ -450,7 +456,7 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
          aMid, aPosted, err = o._postMsg(iHead, aEtc, nil)
       }
       if err != nil {
-         fmt.Fprintf(os.Stderr, "%s link._handleMsg useredit %s\n", o.uid, err.Error())
+         fmt.Fprintf(os.Stderr, "%s link._handleMsg useredit %s\n", o._logNode(), err)
       }
       o.queue.ackAsap(iHead.Id, aMid, aPosted, err)
    case eOpOhiEdit:
@@ -521,7 +527,7 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
          aMid, aPosted, err = o._postMsg(aHead, aEtc, nil)
       }
       if err != nil {
-         fmt.Fprintf(os.Stderr, "%s link._handleMsg group %s\n", o.uid, err.Error())
+         fmt.Fprintf(os.Stderr, "%s link._handleMsg group %s\n", o._logNode(), err)
       }
       o.queue.ackAsap(iHead.Id, aMid, aPosted, err)
    case eOpPost:
@@ -529,7 +535,7 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
       if err != nil {
          if err == io.EOF { return sMsgEof }
          if aErr, _ := err.(net.Error); aErr != nil { return msgConn(aErr) }
-         fmt.Fprintf(os.Stderr, "%s link._handleMsg post %s\n", o.uid, err.Error())
+         fmt.Fprintf(os.Stderr, "%s link._handleMsg post %s\n", o._logNode(), err)
       }
       o.queue.ackAsap(iHead.Id, aMid, aPosted, err)
    case eOpPostNotify:
@@ -539,7 +545,7 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
       if err != nil {
          if err == io.EOF { return sMsgEof }
          if aErr, _ := err.(net.Error); aErr != nil { return msgConn(aErr) }
-         fmt.Fprintf(os.Stderr, "%s link._handleMsg postNotify %s\n", o.uid, err.Error())
+         fmt.Fprintf(os.Stderr, "%s link._handleMsg postNotify %s\n", o._logNode(), err)
       }
       o.queue.ackAsap(iHead.Id, aMid, aPosted, err)
    case eOpPing:
@@ -557,7 +563,7 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
          }
       }
       if err != nil {
-         fmt.Fprintf(os.Stderr, "%s link._handleMsg ping %s\n", o.uid, err.Error())
+         fmt.Fprintf(os.Stderr, "%s link._handleMsg ping %s\n", o._logNode(), err)
       }
       o.queue.ackAsap(iHead.Id, aMid, aPosted, err)
    case eOpAck:
@@ -566,7 +572,7 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
       case o.queue.ack <- iHead.Id:
          aTmr.Stop()
       case <-aTmr.C:
-         fmt.Fprintf(os.Stderr, "%s link._handleMsg timed out delivering ack %s\n", o.uid, iHead.Id)
+         fmt.Fprintf(os.Stderr, "%s link._handleMsg timed out delivering ack %s\n", o._logNode(), iHead.Id)
       }
    case eOpPulse:
       // no-op
@@ -623,7 +629,7 @@ func (o *tLink) _sendOhi(iNodes []string, iStat int8) {
          case aNd.queue.ohi <- tOhiMsg{from:o.uid, status:iStat}:
             aTmr.Stop()
          case <-aTmr.C:
-            fmt.Fprintf(os.Stderr, "%s link._sendOhi timeout node %s\n", o.uid, aNid)
+            fmt.Fprintf(os.Stderr, "%s link._sendOhi timeout node %s\n", o._logNode(), aNid)
          }
       }
       aNd.RUnlock()
@@ -861,7 +867,7 @@ func getNode(iNode string) *tNode {
    sNode.Lock()
    aNd = sNode.list[iNode]
    if aNd == nil {
-      fmt.Printf("%.7s getnode make node\n", iNode)
+      fmt.Printf("%s - make node\n", _logNode(iNode))
       aNd = new(tNode)
       sNode.list[iNode] = aNd
    }
@@ -889,7 +895,7 @@ func queueLink(iNode string, iConn net.Conn, iMsg tMsg, iUid string) *tQueue {
       aNd.Lock()
       if aNd.queue != nil {
          aNd.Unlock()
-         fmt.Fprintf(os.Stderr, "%.7s newqueue attempt to recreate queue\n", iNode)
+         fmt.Fprintf(os.Stderr, "%s queueLink attempt to recreate queue\n", _logNode(iNode))
       } else {
          aNd.queue = new(tQueue)
          aQ := aNd.queue
@@ -903,7 +909,7 @@ func queueLink(iNode string, iConn net.Conn, iMsg tMsg, iUid string) *tQueue {
          aQ.buf, err = sStore.getDir(iNode)
          if err != nil { panic(err) }
          aNd.Unlock()
-         fmt.Printf("%.7s newqueue create queue\n", iNode)
+         fmt.Printf("%s - create queue\n", aNd.queue._logNode())
          go _runElasticChan(aQ)
          go _runQueue(aQ)
       }
@@ -919,11 +925,13 @@ func queueLink(iNode string, iConn net.Conn, iMsg tMsg, iUid string) *tQueue {
    }
    _, err = iConn.Write(packMsg(iMsg, nil))
    if err != nil {
-      fmt.Fprintf(os.Stderr, "%.7s newqueue msg %s\n", iNode, err)
+      fmt.Fprintf(os.Stderr, "%s queueLink msg %s\n", aNd.queue._logNode(), err)
    }
    aNd.queue.connChan <- iConn
    return aNd.queue
 }
+
+func (o *tQueue) _logNode() string { return _logNode(o.node) }
 
 func (o *tQueue) unlink() {
    <-o.connChan
@@ -943,7 +951,7 @@ func (o *tQueue) ackAsap(iId, iMsgId, iPosted string, iErr error) {
    _, err := aConn.Write(packMsg(aMsg, nil))
    o.connChan <- aConn
    if err != nil {
-      fmt.Fprintf(os.Stderr, "%.7s queue.ackAsap %s\n", o.node, err)
+      fmt.Fprintf(os.Stderr, "%s queue.ackAsap %s\n", o._logNode(), err)
    }
 }
 
@@ -965,7 +973,7 @@ func (o *tQueue) _tryOhi(iOhi *tOhiMsg) {
       _, err := aConn.Write(packMsg(aMsg, nil))
       o.connChan <- aConn
       if err != nil {
-         fmt.Fprintf(os.Stderr, "%.7s queue._tryOhi write error %s\n", o.node, err.Error())
+         fmt.Fprintf(os.Stderr, "%s queue._tryOhi write error %s\n", o._logNode(), err)
       }
    default: // drop msg
    }
@@ -987,7 +995,7 @@ func _runQueue(o *tQueue) {
       if err != nil {
          if _, ok := err.(*os.PathError); ok { panic(err) } //todo move to sStore?
          //todo recoverable?
-         fmt.Fprintf(os.Stderr, "%.7s queue._runQueue sendfile error %s\n", o.node, err.Error())
+         fmt.Fprintf(os.Stderr, "%s queue._runQueue sendfile error %s\n", o._logNode(), err)
          continue
       }
       aTimeout := time.NewTimer(kQueueAckTimeout)
@@ -998,7 +1006,7 @@ func _runQueue(o *tQueue) {
          goto RecvAck
       case aAckId := <-o.ack:
          if aAckId != aMsgId[1:] { // drop priority byte
-            fmt.Fprintf(os.Stderr, "%.7s queue._runQueue ack got %s, want %s\n", o.node, aAckId, aMsgId)
+            fmt.Fprintf(os.Stderr, "%s queue._runQueue ack got %s, want %s\n", o._logNode(), aAckId, aMsgId)
             goto RecvAck
          }
          aTimeout.Stop()
@@ -1007,7 +1015,7 @@ func _runQueue(o *tQueue) {
       case <-o.off:
          aTimeout.Stop()
       case <-aTimeout.C:
-         fmt.Fprintf(os.Stderr, "%.7s queue._runQueue timed out awaiting ack %s\n", o.node, aMsgId)
+         fmt.Fprintf(os.Stderr, "%s queue._runQueue timed out awaiting ack %s\n", o._logNode(), aMsgId)
       }
    }
 }
@@ -1030,7 +1038,7 @@ func _runElasticChan(o *tQueue) {
          o.buf = append(o.buf, aS)
          sort.Strings(o.buf)
          if len(o.buf) % 700 == 0 {
-            fmt.Fprintf(os.Stderr, "%.7s queue._runElasticChan buf len %d\n", o.node, len(o.buf))
+            fmt.Fprintf(os.Stderr, "%s queue._runElasticChan buf len %d\n", o._logNode(), len(o.buf))
          }
       case o.out <- o.buf[0]:
          o.buf = o.buf[1:]
@@ -1078,6 +1086,10 @@ func _node2sha(iNode []byte) string {
    if aText[len(aText)-4] != '=' { panic("padding less than 4") } //todo temp
    return aText[:len(aText)-4] // omit padding
 }
+
+func _logNode(i string) string { return _logTime() + i[:7] + i[len(i)-3:] }
+
+func _logTime() string { return time.Now().Format("06-01-02 15:04 ") }
 
 
 type tStore struct { // queue and msg storage
@@ -1180,7 +1192,7 @@ func (o *tStore) sendFile(iNode, iId string, iConn net.Conn) error {
 }
 
 func (o *tStore) getDir(iNode string) ([]string, error) {
-   fmt.Printf("read dir %s\n", o._nodeSub(iNode))
+   fmt.Printf("%s - read dir %s\n", _logNode(iNode), o._nodeSub(iNode))
    aFd, err := os.Open(o._nodeSub(iNode))
    if err != nil {
       if os.IsNotExist(err) { err = nil }
