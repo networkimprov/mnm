@@ -1105,6 +1105,15 @@ func Init(iMain string, iTime time.Time) {
 
    err := os.MkdirAll(o.temp, 0700)
    if err != nil { panic(err) }
+   aFd, err := os.Open(o.temp)
+   if err != nil { panic(err) }
+   aTmps, err := aFd.Readdirnames(0)
+   if err != nil { panic(err) }
+   aFd.Close()
+   for a := range aTmps {
+      fmt.Fprintf(os.Stderr, "- - - store.Init transaction incomplete; can rm %s\n", o.temp + aTmps[a])
+      //todo remove o.temp + aTmps[a]
+   }
 
    if iTime.IsZero() {
       iTime = time.Now() // only for test runs
