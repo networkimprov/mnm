@@ -46,9 +46,9 @@ Ack responses `(ack)` from the server have the following format:
 ```
 { "op":     "ack",
   "id":     string,  // matches id on the message being ack'd
- ["msgid":  string,  // id assigned to the message being ack'd
+ <"msgid":  string,  // id assigned to the message being ack'd
   "posted": string   // datetime assigned to the message being ack'd
- |"error":  string]} // reason the message was not delivered
+ |"error":  string>} // reason the message was not delivered
 ```
 
 Messages from the server typically have the following required headers `(std)`:
@@ -135,7 +135,7 @@ _todo: cork pauses delivery to user's nodes, params date & for-list_
     ["newnode":  string   // user label for a client device
     |"newalias": string]} // user alias, must be 8+ printable characters
    ```
-   Response: `(ack)`  
+   Response: `(ack) // without .msgid or .posted`  
    To sender's nodes:
    ```
    { "op":       "user",  // these have higher priority than normal messages
@@ -153,7 +153,7 @@ _todo: cork pauses delivery to user's nodes, params date & for-list_
      "type": "add" | "drop"
            | "init"}                  // no "ohiedit" message is sent to sender's nodes
    ```
-   Response: `(ack)`  
+   Response: `(ack) // without .msgid or .posted`  
    To sender's nodes:
    ```
    { "op":   "ohiedit",
@@ -211,7 +211,7 @@ or a member to update their recorded alias.
     |"newalias":  string   // user alias, for "alias"
     |"to":        string]} // user alias, for "drop"
    ```
-   Response: `(ack)`  
+   Response: `(ack) // without .msgid or .posted`  
    To group members:
    ```
    { "op":       "member",

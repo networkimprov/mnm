@@ -453,12 +453,12 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
       }
       if err == nil {
          iHead.For = []tHeaderFor{{Id:o.uid, Type:eForUser}}
-         aMid, aPosted, err = o._postMsg(iHead, aEtc, nil)
+         _, _, err = o._postMsg(iHead, aEtc, nil)
       }
       if err != nil {
          fmt.Fprintf(os.Stderr, "%s link._handleMsg useredit %s\n", o._logNode(), err)
       }
-      o.queue.ackAsap(iHead.Id, aMid, aPosted, err)
+      o.queue.ackAsap(iHead.Id, "", "", err)
    case eOpOhiEdit:
       aStat := eOhiOff; if iHead.Type == "init" || iHead.Type == "add" { aStat = eOhiOn }
       if aStat != eOhiOn && iHead.Type != "drop" { return sMsgHeaderBad }
@@ -483,10 +483,10 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
          if iHead.Type != "init" {
             aHead := &tHeader{Op: eOpOhiEdit, For: []tHeaderFor{{Id:o.uid, Type:eForUser}}}
             aEtc := tMsg{"for":iHead.For, "type":iHead.Type}
-            aMid, aPosted, err = o._postMsg(aHead, aEtc, nil)
+            _, _, err = o._postMsg(aHead, aEtc, nil)
          }
       }
-      o.queue.ackAsap(iHead.Id, aMid, aPosted, err)
+      o.queue.ackAsap(iHead.Id, "", "", err)
    case eOpGroupInvite:
       iHead.Act = "invite"
       fallthrough
@@ -503,7 +503,8 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
          aUid, err = UDb.GroupInvite(iHead.Gid, iHead.To, iHead.From, o.uid)
          if err != nil { break }
          iHead.For = []tHeaderFor{{Id:aUid, Type:eForUser}}
-         _, _, err = o._postMsg(iHead, tMsg{"gid":iHead.Gid, "alias":iHead.From, "to":iHead.To}, iData)
+         aMid, aPosted, err = o._postMsg(iHead, tMsg{"gid":iHead.Gid, "alias":iHead.From, "to":iHead.To},
+                                         iData)
          aAlias = iHead.To
       case "join":
          aAlias, err = UDb.GroupJoin(iHead.Gid, o.uid, iHead.NewAlias)
@@ -524,7 +525,7 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
             aEtc["newalias"] = aNewAlias
          }
          aHead := &tHeader{Op: eOpGroupEdit, For: []tHeaderFor{{Id:iHead.Gid, Type:eForGroupAll}}}
-         aMid, aPosted, err = o._postMsg(aHead, aEtc, nil)
+         _, _, err = o._postMsg(aHead, aEtc, nil)
       }
       if err != nil {
          fmt.Fprintf(os.Stderr, "%s link._handleMsg group %s\n", o._logNode(), err)
@@ -943,9 +944,15 @@ func (o *tQueue) unlink() {
 }
 
 func (o *tQueue) ackAsap(iId, iMsgId, iPosted string, iErr error) {
-   aMsg := tMsg{"op":"ack", "id":iId, "msgid":iMsgId, "posted":iPosted}
+   aMsg := struct { //todo reorder when tTestWork.want changes to map[string]interface{}
+      Error  string `json:"error,omitempty"`
+      Id     string `json:"id"`
+      MsgId  string `json:"msgid,omitempty"`
+      Op     string `json:"op"`
+      Posted string `json:"posted,omitempty"`
+   }{Op: "ack", Id: iId, MsgId: iMsgId, Posted: iPosted}
    if iErr != nil {
-      aMsg["error"] = iErr.Error()
+      aMsg.Error = iErr.Error()
    }
    aConn := <-o.connChan
    _, err := aConn.Write(packMsg(aMsg, nil))

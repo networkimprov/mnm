@@ -192,27 +192,27 @@ func _newTestClient(iAct tTestAction, iInfo [3]int) *tTestClient {
           want: `{"id":"123","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
                 `{"alias":"test1","datalen":0,"from":"`+aUid+`","headsum":#ck#,"id":"#id#","op":"ping","posted":"#pdt#","to":"test2"}` ,
       },{ head: tMsg{"Op":eOpUserEdit, "Id":"0", "Newalias":"short"} ,
-          want: `{"error":"newalias must be 8+ characters","id":"0","msgid":"#mid#","op":"ack","posted":"#pst#"}` ,
+          want: `{"error":"newalias must be 8+ characters","id":"0","op":"ack"}` ,
       },{ head: tMsg{"Op":eOpUserEdit, "Id":"0", "Newalias":"sam walker"} ,
-          want: `{"id":"0","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
+          want: `{"id":"0","op":"ack"}`+"\n"+
                 `{"datalen":0,"from":"`+aUid+`","headsum":#sck#,"id":"#sid#","newalias":"sam walker","op":"user","posted":"#spdt#"}` ,
       },{ head: tMsg{"Op":eOpUserEdit, "Id":"0", "Newnode":"ref"} ,
-          want: `{"id":"0","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
+          want: `{"id":"0","op":"ack"}`+"\n"+
                 `{"datalen":0,"from":"`+aUid+`","headsum":#sck#,"id":"#sid#","newnode":"ref","nodeid":"#nid#","op":"user","posted":"#spdt#"}` ,
       },{ head: tMsg{"Op":eOpGroupEdit, "Id":"0", "Gid":"blab", "Act":"join"} ,
-          want: `{"id":"0","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
+          want: `{"id":"0","op":"ack"}`+"\n"+
                 `{"act":"join","alias":"test1","datalen":0,"from":"`+aUid+`","gid":"blab","headsum":#sck#,"id":"#sid#","op":"member","posted":"#spdt#"}` ,
       },{ head: tMsg{"Op":eOpGroupEdit, "Id":"0", "Gid":"blab", "Act":"drop", "To":"test1"} ,
-          want: `{"id":"0","msgid":"#mid#","op":"ack","posted":"#pst#"}` ,
+          want: `{"id":"0","op":"ack"}` ,
       },{ head: tMsg{"Op":eOpGroupInvite, "Id":"0", "Gid":"short", "Datalen":0, "From":"test1", "To":"test2"} ,
-          want: `{"error":"gid must be 8+ characters","id":"0","msgid":"#mid#","op":"ack","posted":"#pst#"}` ,
+          want: `{"error":"gid must be 8+ characters","id":"0","op":"ack"}` ,
       },{ head: tMsg{"Op":eOpGroupInvite, "Id":"0", "Gid":"talktalk", "Datalen":5, "From":"test1", "To":"test2"} ,
           data: `hello` ,
           want: `{"id":"0","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
                 `{"act":"invite","alias":"test2","datalen":0,"from":"`+aUid+`","gid":"talktalk","headsum":#sck#,"id":"#sid#","op":"member","posted":"#spdt#"}`+"\n"+
                 `{"alias":"test1","datalen":5,"from":"`+aUid+`","gid":"talktalk","headsum":#ck#,"id":"#id#","op":"invite","posted":"#pdt#","to":"test2"}hello` ,
       },{ head: tMsg{"Op":eOpGroupEdit, "Id":"0", "Gid":"talktalk", "Act":"alias", "Newalias":"test11"} ,
-          want: `{"id":"0","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
+          want: `{"id":"0","op":"ack"}`+"\n"+
                 `{"act":"alias","alias":"test1","datalen":0,"from":"`+aUid+`","gid":"talktalk","headsum":#sck#,"id":"#sid#","newalias":"test11","op":"member","posted":"#spdt#"}` ,
       },{ head: tMsg{"Op":eOpPing, "Id":"123", "Datalen":144, "From":"test1", "To":"test2"} ,
           data: `123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 1234` ,
@@ -222,14 +222,14 @@ func _newTestClient(iAct tTestAction, iInfo [3]int) *tTestClient {
           want: `{"info":"login ok","op":"info"}`+"\n"+
                 `{"datalen":0,"from":"`+aUid+`","headsum":#sck#,"id":"#sid#","node":"tbd","op":"login","posted":"#spdt#"}` ,
       },{ head: tMsg{"Op":eOpOhiEdit, "Id":"0", "For":[]tTestForOhi{{Id:aForid}}, "Type":"init"} ,
-          want: `{"id":"0","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
+          want: `{"id":"0","op":"ack"}`+"\n"+
                 `{"from":"`+aUid+`","op":"ohi","status":1}` ,
       },{ head: tMsg{"Op":eOpOhiEdit, "Id":"0", "For":[]tTestForOhi{{Id:aForid}}, "Type":"drop"} ,
-          want: `{"id":"0","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
+          want: `{"id":"0","op":"ack"}`+"\n"+
                 `{"datalen":0,"for":[{"Id":"`+aForid+`","Type":0}],"from":"`+aUid+`","headsum":#sck#,"id":"#sid#","op":"ohiedit","posted":"#spdt#","type":"drop"}`+"\n"+
                 `{"from":"`+aUid+`","op":"ohi","status":2}` ,
       },{ head: tMsg{"Op":eOpOhiEdit, "Id":"0", "For":[]tTestForOhi{{Id:aForid}}, "Type":"add"} ,
-          want: `{"id":"0","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
+          want: `{"id":"0","op":"ack"}`+"\n"+
                 `{"datalen":0,"for":[{"Id":"`+aForid+`","Type":0}],"from":"`+aUid+`","headsum":#sck#,"id":"#sid#","op":"ohiedit","posted":"#spdt#","type":"add"}`+"\n"+
                 `{"from":"`+aUid+`","op":"ohi","status":1}` ,
       },{ head: tMsg{"Op":eOpPulse} ,
