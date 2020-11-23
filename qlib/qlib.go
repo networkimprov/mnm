@@ -228,6 +228,7 @@ type UserDatabase interface {
 
    // for test purposes
    TempUser(iUid, iNewNode string)
+   TempNode(iUid, iNewNode string)
    TempAlias(iUid, iNewAlias string)
    TempGroup(iGid, iUid, iAlias string)
    Erase()

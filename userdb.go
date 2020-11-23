@@ -630,6 +630,12 @@ func (o *tUserDb) TempUser(iUid, iNewNode string) {
    o.user[iUid] = &tUser{Nodes: map[string]tNode{iNewNode: {Num:1}}, NonDefunctNodesCount:1}
 }
 
+func (o *tUserDb) TempNode(iUid, iNewNode string) {
+   aUser := o.user[iUid]
+   aUser.Nodes[iNewNode] = tNode{Num:2}
+   aUser.NonDefunctNodesCount = 2
+}
+
 func (o *tUserDb) TempAlias(iUid, iNewAlias string) {
    o.alias[iNewAlias] = iUid
 }

@@ -27,8 +27,11 @@ const kTestLoginWait time.Duration = 6 * time.Second
 
 var sTestNodeIds = make(map[int][]string)
 var sTestVerifyDone = make(chan int)
-var sTestVerifyWant struct { val string; sync.Mutex } // expected results of _verifyRead()
-var sTestVerifyGot [3]string // actual results of _verifyRead()
+var sTestVerifyOp int
+var sTestVerifyNfsn bool
+var sTestVerifyWant struct { val string; sync.Mutex } // expected results
+var sTestVerifyGot [3]string // actual results: response to sender, msg to sender, msg to receiver
+var sTestVerifyGotNode = make(map[int]string) // actual results at nodes
 var sTestVerifyFail int
 var sTestClientCount int32
 var sTestClientId chan [3]int
@@ -40,17 +43,21 @@ var sTestReadSize = [...]int{80, 80, 80, 80, 400, 400, 2000, 2000, 10000, 50000,
 var sTestReadData = make([]byte, 16*1024)
 
 func LocalTest(i int) {
-   sTestVerifyWant.val = "\n"
-   sTestVerifyGot[2] = "\n"
-
-   UDb.TempUser("u100002", _testMakeNode(100002))
-   UDb.TempUser("u100003", _testMakeNode(100003))
+   sTestVerifyGotNode[100002] = ""
+   sTestVerifyGotNode[100003] = ""
+   UDb.TempUser("u100002", _testMakeNode(100002, 0))
+   UDb.TempUser("u100003", _testMakeNode(100003, 0))
+   UDb.TempNode("u100002", _testMakeNode(100002, 1))
+   UDb.TempNode("u100003", _testMakeNode(100003, 1))
    UDb.TempAlias("u100002", "test1")
    UDb.TempAlias("u100002", "test11")
    UDb.TempAlias("u100003", "test2")
    UDb.TempGroup("blab", "u100002", "test1") // Status eStatInvited
 
    NewLink(_newTestClient(eActVerifyRecv, [3]int{100003, 0, 0}))
+   NewLink(_newTestClient(eActVerifyRecv, [3]int{100003, 1, 0}))
+   NewLink(_newTestClient(eActVerifyRecv, [3]int{100002, 1, 0}))
+   time.Sleep(10 * time.Millisecond)
    NewLink(_newTestClient(eActVerifySend, [3]int{100002, 0, 0}))
    <-sTestVerifyDone
    time.Sleep(10 * time.Millisecond)
@@ -61,7 +68,7 @@ func LocalTest(i int) {
    for a := 0; a <= i; a++ {
       aId := 111000 + a
       aS := fmt.Sprint(aId)
-      UDb.TempUser("u"+aS, _testMakeNode(aId))
+      UDb.TempUser("u"+aS, _testMakeNode(aId, 0))
       UDb.TempAlias("u"+aS, "a"+aS)
       UDb.TempGroup("g"+fmt.Sprint(a/100), "u"+aS, "a"+aS)
       if a < i {
@@ -85,11 +92,14 @@ func LocalTest(i int) {
    _ = os.RemoveAll(sStore.Root)
 }
 
-func _testMakeNode(id int) string {
-   aNodeId := sBase32.EncodeToString([]byte(fmt.Sprint(id)))
-   sTestNodeIds[id] = []string{aNodeId, "", ""}
-   aNodeSha, err := getNodeSha(&aNodeId)
-   if err != nil { panic(err) }
+func _testMakeNode(iId, iN int) string {
+   aNodeId, aNodeSha := makeNodeId()
+   aSet := sTestNodeIds[iId]
+   if aSet == nil {
+      aSet = []string{"", "", ""}
+   }
+   aSet[iN] = aNodeId
+   sTestNodeIds[iId] = aSet
    return aNodeSha
 }
 
@@ -106,9 +116,14 @@ type tTestClient struct {
 }
 
 type tTestAction int
-const ( eActCycle tTestAction =iota; eActVerifySend; eActVerifyRecv )
+const ( eActCycle tTestAction = iota; eActVerifySend; eActVerifyRecv )
 
-type tTestWork struct { msg []byte; head tMsg; data, want string }
+type tTestWork struct {
+   msg []byte
+   head tMsg
+   data, want string
+   nfsn bool // not for sender's node
+}
 
 type tTestForOhi struct { Id string }
 
@@ -175,9 +190,11 @@ func _newTestClient(iAct tTestAction, iInfo [3]int) *tTestClient {
       },  aTmtpRev,
         { head: tMsg{"Op":eOpLogin, "Uid":aUid, "Node":sTestNodeIds[aTc.id][0]} ,
           want: `{"info":"login ok","op":"info"}`+"\n"+
+                `{"datalen":0,"from":"`+aUid+`","headsum":#sck#,"id":"#sid#","node":"tbd","op":"login","posted":"#spdt#"}`+"\n"+
                 `{"datalen":0,"from":"`+aUid+`","headsum":#sck#,"id":"#sid#","node":"tbd","op":"login","posted":"#spdt#"}` ,
-      },{ head: tMsg{"Op":eOpPost, "Id":"zyx", "Datalen":15, "Datahead":5, "Datasum":1, "For":[]tHeaderFor{
-                       {Id:aForid, Type:eForUser} }} ,
+          nfsn: true,
+      },{ head: tMsg{"Op":eOpPost, "Id":"zyx", "Datalen":15, "Datahead":5, "Datasum":1,
+                     "For":[]tHeaderFor{{Id:aForid, Type:eForUser}}} ,
           data: `data for Id:zyx` ,
           want: `{"id":"zyx","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
                 `{"datahead":5,"datalen":15,"datasum":1,"from":"`+aUid+`","headsum":#ck#,"id":"#id#","op":"delivery","posted":"#pdt#"}data for Id:zyx` ,
@@ -222,9 +239,11 @@ func _newTestClient(iAct tTestAction, iInfo [3]int) *tTestClient {
         { head: tMsg{"Op":eOpLogin, "Uid":aUid, "Node":sTestNodeIds[aTc.id][0]} ,
           want: `{"info":"login ok","op":"info"}`+"\n"+
                 `{"datalen":0,"from":"`+aUid+`","headsum":#sck#,"id":"#sid#","node":"tbd","op":"login","posted":"#spdt#"}` ,
+          nfsn: true,
       },{ head: tMsg{"Op":eOpOhiEdit, "Id":"0", "For":[]tTestForOhi{{Id:aForid}}, "Type":"init"} ,
           want: `{"id":"0","op":"ack"}`+"\n"+
                 `{"from":"`+aUid+`","op":"ohi","status":1}` ,
+          nfsn: true,
       },{ head: tMsg{"Op":eOpOhiEdit, "Id":"0", "For":[]tTestForOhi{{Id:aForid}}, "Type":"drop"} ,
           want: `{"id":"0","op":"ack"}`+"\n"+
                 `{"datalen":0,"for":[{"Id":"`+aForid+`","Type":0}],"from":"`+aUid+`","headsum":#sck#,"id":"#sid#","op":"ohiedit","posted":"#spdt#","type":"drop"}`+"\n"+
@@ -238,12 +257,13 @@ func _newTestClient(iAct tTestAction, iInfo [3]int) *tTestClient {
           want: `{"error":"logout ok","op":"quit"}`+"\n"+
                 `{"from":"`+aUid+`","op":"ohi","status":2}` ,
       },  aTmtpRev,
-        { msg : []byte(`0034{"Op":2, "Uid":"`+aUid+`", "Node":"`+sTestNodeIds[aTc.id][0]+`"}`+
+        { msg : []byte(`004c{"Op":2, "Uid":"`+aUid+`", "Node":"`+sTestNodeIds[aTc.id][0]+`"}`+
                        `003f{"Op":9, "Id":"123", "Datalen":1, "From":"test1", "To":"test2"}1`) ,
           want: `{"info":"login ok","op":"info"}`+"\n"+
                 `{"id":"123","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
                 `{"datalen":0,"from":"`+aUid+`","headsum":#sck#,"id":"#sid#","node":"tbd","op":"login","posted":"#spdt#"}`+"\n"+
                 `{"alias":"test1","datalen":1,"from":"`+aUid+`","headsum":#ck#,"id":"#id#","op":"ping","posted":"#pdt#","to":"test2"}1` ,
+          nfsn: true,
       },{ head: tMsg{"Op":eOpPost, "Id":"zyx", "Datalen":15, "For":[]tHeaderFor{
                        {Id:aForid, Type:eForUser} }} ,
           data: `data for Id` ,
@@ -272,11 +292,12 @@ func _newTestClient(iAct tTestAction, iInfo [3]int) *tTestClient {
 
 func (o *tTestClient) _verifyRead(iBuf []byte) (int, error) {
    var aMsg []byte
-   o.count++
 
    if o.action == eActVerifyRecv {
+      o.count++
       if o.count == 1 {
-         aMsg = packMsg(tMsg{"Op":eOpLogin, "Uid":"u"+fmt.Sprint(o.id), "Node":sTestNodeIds[o.id][0]}, nil)
+         aMsg = packMsg(tMsg{"Op":eOpLogin, "Uid":"u"+fmt.Sprint(o.id),
+                             "Node":sTestNodeIds[o.id][o.nodeN]}, nil)
          aMsg = packMsg(tMsg{"Op":eOpTmtpRev, "Id":"1"}, aMsg)
       } else {
          select {
@@ -287,30 +308,53 @@ func (o *tTestClient) _verifyRead(iBuf []byte) (int, error) {
          }
       }
    } else {
-      time.Sleep(20 * time.Millisecond)
-      aGot := strings.Join(sTestVerifyGot[:], "")
+      time.Sleep(10 * time.Millisecond)
+      select {
+      case aId := <-o.ack:
+         aMsg = packMsg(tMsg{"Op":eOpAck, "Id":aId, "Type":"n"}, nil)
+         return copy(iBuf, aMsg), nil
+      default:
+      }
+      aGot := strings.TrimSuffix(strings.Join(sTestVerifyGot[:], ""), "\n")
       if aGot != sTestVerifyWant.val {
          sTestVerifyFail++
-         fmt.Fprintf(os.Stderr, "Verify FAIL:\n  want: %s   got: %s", sTestVerifyWant.val, aGot)
+         fmt.Fprintf(os.Stderr, "Verify FAIL:\n  want: %s\n  got:  %s\n", sTestVerifyWant.val, aGot)
       }
-      if o.count-1 == len(o.work) {
+      for aK, aV := range sTestVerifyGotNode {
+         aWant := sTestVerifyGot[2]
+         if aK == o.id { // sender's node
+            if sTestVerifyOp == eOpQuit || sTestVerifyOp == eOpOhiEdit && sTestVerifyNfsn {
+               aWant = ""
+            } else if sTestVerifyOp == eOpGroupInvite {
+               aWant = sTestVerifyGot[2] + sTestVerifyGot[1]
+            } else if sTestVerifyOp == eOpPostNotify {
+               aWant = aWant[strings.LastIndexByte(aWant[:len(aWant)-1], '\n')+1:]
+            } else if sTestVerifyGot[1] != "" && !sTestVerifyNfsn {
+               aWant = sTestVerifyGot[1]
+            }
+         }
+         aV, aWant = strings.TrimSuffix(aV, "\n"), strings.TrimSuffix(aWant, "\n")
+         if aV != aWant {
+            sTestVerifyFail++
+            fmt.Fprintf(os.Stderr, "Verify node FAIL:\n  want: %s\n  got:  %s\n", aWant, aV)
+         }
+         sTestVerifyGotNode[aK] = ""
+      }
+      for a := range sTestVerifyGot { sTestVerifyGot[a] = "" }
+      if o.count == len(o.work) {
          close(sTestVerifyDone)
          return 0, io.EOF
       }
-      aWk := o.work[o.count-1]
-      aNl := "\n"; if aWk.want == "" { aNl = "" }
-      sTestVerifyWant.val = aWk.want + aNl
-      sTestVerifyGot[0], sTestVerifyGot[1], sTestVerifyGot[2] = "","",""
+      aWk := o.work[o.count]
+      sTestVerifyWant.val = aWk.want
+      sTestVerifyOp, _ = aWk.head["Op"].(int)
+      sTestVerifyNfsn = aWk.nfsn
+      o.count++
       aMsg = aWk.msg
       if aMsg == nil {
          aMsg = packMsg(aWk.head, []byte(aWk.data))
       } else if string(aMsg) == "delay" {
          return 0, &net.OpError{Op:"read", Err:&tTimeoutError{}}
-      }
-      select {
-      case aId := <-o.ack:
-         aMsg = packMsg(tMsg{"Op":eOpAck, "Id":aId, "Type":"n"}, aMsg)
-      default:
       }
    }
    return copy(iBuf, aMsg), nil
@@ -462,7 +506,12 @@ func (o *tTestClient) Write(iBuf []byte) (int, error) {
 
    aOp := aHead["op"].(string)
    if o.action >= eActVerifySend {
-      if o.action == eActVerifySend || !(aOp == "tmtprev" || aOp == "info" || aOp == "login") {
+      aLine := string(iBuf[4:]) + "\n"
+      if o.action == eActVerifyRecv && (aOp == "tmtprev" || aOp == "info" || aOp == "login") {
+         // skip
+      } else if o.nodeN > 0 {
+         sTestVerifyGotNode[o.id] += aLine
+      } else {
          aI := 0; if o.action == eActVerifyRecv { aI = 2 }
          if aHead["msgid"] != nil {
             _testVerifyWantEdit("mid", aHead["msgid"].(string))
@@ -481,7 +530,7 @@ func (o *tTestClient) Write(iBuf []byte) (int, error) {
          if aOp == "notify" {
             _testVerifyWantEdit("pid", aHead["postid"].(string))
          }
-         sTestVerifyGot[aI] += string(iBuf[4:]) + "\n"
+         sTestVerifyGot[aI] += aLine
       }
    } else {
       if aHead["error"] != nil {
