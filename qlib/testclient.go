@@ -290,6 +290,13 @@ func _newTestClient(iAct tTestAction, iInfo [3]int) *tTestClient {
    return aTc
 }
 
+func (o *tTestClient) Read(iBuf []byte) (int, error) {
+   if o.action == eActCycle {
+      return o._cycleRead(iBuf)
+   }
+   return o._verifyRead(iBuf)
+}
+
 func (o *tTestClient) _verifyRead(iBuf []byte) (int, error) {
    var aMsg []byte
 
@@ -358,25 +365,6 @@ func (o *tTestClient) _verifyRead(iBuf []byte) (int, error) {
       }
    }
    return copy(iBuf, aMsg), nil
-}
-
-func _testLoginSummary() {
-   if atomic.AddInt32(&sTestLoginTotal, 1) % (sTestClientCount * 1) == 0 {
-      var aMinV, aMaxV, aMinK, aMaxK int = 1e9, 0,0,0
-      for aK, aV := range sTestLogins {
-         if *aV > aMaxV { aMaxV = *aV; aMaxK = aK }
-         if *aV < aMinV { aMinV = *aV; aMinK = aK }
-      }
-      fmt.Fprintf(os.Stderr, "login summary: min u%d %d, max u%d %d\n", aMinK, aMinV, aMaxK, aMaxV)
-   }
-}
-
-func _testRecvSummary(i int) {
-   aB := atomic.AddInt64(&sTestRecvBytes, int64(i))
-   aN := atomic.AddInt32(&sTestRecvCount, 1)
-   if aN % (sTestClientCount * 2) == 0 {
-      fmt.Fprintf(os.Stderr, "messages %d, ohis %d, MB %d\n", aN, sTestRecvOhi, aB/(1024*1024))
-   }
 }
 
 func (o *tTestClient) _cycleRead(iBuf []byte) (int, error) {
@@ -462,17 +450,23 @@ func (o *tTestClient) _cycleRead(iBuf []byte) (int, error) {
    return copy(iBuf, aMsg), nil
 }
 
-func (o *tTestClient) Read(iBuf []byte) (int, error) {
-   if o.action == eActCycle {
-      return o._cycleRead(iBuf)
+func _testLoginSummary() {
+   if atomic.AddInt32(&sTestLoginTotal, 1) % (sTestClientCount * 1) == 0 {
+      var aMinV, aMaxV, aMinK, aMaxK int = 1e9, 0,0,0
+      for aK, aV := range sTestLogins {
+         if *aV > aMaxV { aMaxV = *aV; aMaxK = aK }
+         if *aV < aMinV { aMinV = *aV; aMinK = aK }
+      }
+      fmt.Fprintf(os.Stderr, "login summary: min u%d %d, max u%d %d\n", aMinK, aMinV, aMaxK, aMaxV)
    }
-   return o._verifyRead(iBuf)
 }
 
-func _testVerifyWantEdit(iOld, iNew string) {
-   sTestVerifyWant.Lock()
-   sTestVerifyWant.val = strings.Replace(sTestVerifyWant.val, "#"+iOld+"#", iNew, 1)
-   sTestVerifyWant.Unlock()
+func _testRecvSummary(i int) {
+   aB := atomic.AddInt64(&sTestRecvBytes, int64(i))
+   aN := atomic.AddInt32(&sTestRecvCount, 1)
+   if aN % (sTestClientCount * 2) == 0 {
+      fmt.Fprintf(os.Stderr, "messages %d, ohis %d, MB %d\n", aN, sTestRecvOhi, aB/(1024*1024))
+   }
 }
 
 func (o *tTestClient) Write(iBuf []byte) (int, error) {
@@ -575,6 +569,12 @@ func (o *tTestClient) Write(iBuf []byte) (int, error) {
       return 0, &net.OpError{Op:"write", Err:tError("closed")}
    }
    return len(iBuf), nil
+}
+
+func _testVerifyWantEdit(iOld, iNew string) {
+   sTestVerifyWant.Lock()
+   sTestVerifyWant.val = strings.Replace(sTestVerifyWant.val, "#"+iOld+"#", iNew, 1)
+   sTestVerifyWant.Unlock()
 }
 
 func (o *tTestClient) SetReadDeadline(i time.Time) error {
