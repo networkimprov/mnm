@@ -203,7 +203,8 @@ func _newTestClient(iAct tTestAction, iInfo [3]int) *tTestClient {
           want: `{"id":"0","op":"ack"}`+"\n"+
                 `{"act":"join","alias":"test1","datalen":0,"from":"`+aUid+`","gid":"blab","headsum":#sck#,"id":"#sid#","op":"member","posted":"#spdt#"}` ,
       },{ head: tMsg{"Op":eOpGroupEdit, "Id":"0", "Gid":"blab", "Act":"drop", "To":"test1"} ,
-          want: `{"id":"0","op":"ack"}` ,
+          want: `{"id":"0","op":"ack"}`+"\n"+
+                `{"act":"drop","alias":"test1","datalen":0,"from":"`+aUid+`","gid":"blab","headsum":#sck#,"id":"#sid#","op":"member","posted":"#spdt#"}` ,
       },{ head: tMsg{"Op":eOpGroupInvite, "Id":"0", "Gid":"short", "Datalen":0, "From":"test1", "To":"test2"} ,
           want: `{"error":"gid must be 8+ characters","id":"0","op":"ack"}` ,
       },{ head: tMsg{"Op":eOpGroupInvite, "Id":"0", "Gid":"talktalk", "Datalen":5, "From":"test1", "To":"test2"} ,

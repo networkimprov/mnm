@@ -525,6 +525,9 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
             aEtc["newalias"] = aNewAlias
          }
          aHead := &tHeader{Op: eOpGroupEdit, For: []tHeaderFor{{Id:iHead.Gid, Type:eForGroupAll}}}
+         if iHead.Act == "drop" {
+            aHead.For = append(aHead.For, tHeaderFor{Id:aUid, Type:eForUser})
+         }
          _, _, err = o._postMsg(aHead, aEtc, nil)
       }
       if err != nil {
