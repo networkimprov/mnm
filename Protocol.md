@@ -1,10 +1,19 @@
 ### TMTP Protocol
 
-An outline of the rationale underlying this work is given in 
-[_Why TMTP?_](https://github.com/networkimprov/mnm/blob/master/Rationale.md)
+"Trusted Messaging Transfer Protocol" defines a simple client/server scheme 
+for reliable store-and-forward message delivery. 
+It needs no other protocol in the way that POP & IMAP need SMTP. 
+TMTP may be conveyed by any secure, reliable means, e.g. TCP+TLS. 
+TMTP sessions are typically long-duration, and may idle for extended periods. 
+After the client completes a login or register request, either side may contact the other.
+A client may simultaneously contact multiple TMTP servers via separate connections. 
 
-__Status:__ Version 1 is a work in progress, and aspects need to be revised, 
-but all of the elements defined herein are implemented in the 
+The rationale underlying this work is outlined in 
+[_Why TMTP?_](https://mnmnotmail.org/rationale.html)
+The project homepage is [mnmnotmail.org](https://mnmnotmail.org).
+
+__Status:__ Version 1 is a work in progress, and aspects need to be revised. 
+All of the elements defined herein are implemented in the 
 [mnm server](https://github.com/networkimprov/mnm).
 
 __Todo:__ Collect relevant items from the 
