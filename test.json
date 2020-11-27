@@ -1,0 +1,183 @@
+[{
+   "head": {"Op":"eOpTmtpRev", "Id":"1"} ,
+   "want": [{"id":"1", "op":"tmtprev"}]
+},{
+   "head": {"Op":"eOpTmtpRev", "Id":"1"} ,
+   "want": [{"error":"disallowed op repetition", "op":"quit"}]
+},{
+   "head": {"Op":"eOpLogin", "Uid":"noone", "Node":"none"} ,
+   "want": [] ,"//":" print 'quit tmtprev was omitted'"
+},{"tmtp": 1},{
+   "msg" : "00z1{\"Op\":3, \"Uid\":\"noone\"}" ,
+   "want": [{"error":"invalid header length", "op":"quit"}]
+},{"tmtp": 1},{
+   "msg" : "000a{\"Op\":12f3" ,
+   "want": [{"error":"invalid header", "op":"quit"}]
+},{"tmtp": 1},{
+   "head": {"Op":"eOpLogin", "Uid":"noone", "NoId":"none"} ,
+   "want": [{"error":"invalid header", "op":"quit"}]
+},{"tmtp": 1},{
+   "head": {"Op":"eOpPost", "Id":"zyx", "Datalen":1, "For":[{"Id":"x", "Type":1}]} ,
+   "data": "1" ,
+   "want": [{"error":"disallowed op on unauthenticated link", "op":"quit"}]
+},{"tmtp": 1},{
+   "head": {"Op":"eOpRegister", "NewNode":"blue", "NewAlias":"_"} ,
+   "want": [{"nodeid":"#nid#", "op":"registered", "uid":"#uid#"},
+            {"info":"login ok", "op":"info"}]
+},{
+   "head": {"Op":"eOpQuit"} ,
+   "want": [{"error":"logout ok", "op":"quit"}]
+},{"tmtp": 1},{
+   "head": {"Op":"eOpRegister", "NewNode":"blue", "NewAlias":"LongJohn Silver"} ,
+   "want": [{"nodeid":"#nid#", "op":"registered", "uid":"#uid#"},
+            {"info":"login ok", "op":"info"}]
+},{
+   "head": {"Op":"eOpQuit"} ,
+   "want": [{"error":"logout ok", "op":"quit"}]
+},{"tmtp": 1},{
+   "head": {"Op":"eOpRegister", "NewNode":"blue", "NewAlias":"short"} ,
+   "want": [{"error":"newalias must be 8+ characters", "nodeid":"#nid#", "op":"registered", "uid":"#uid#"},
+            {"info":"login ok", "op":"info"}]
+},{
+   "head": {"Op":"eOpLogin", "Uid":"*senduid", "Node":"*sendnode"} ,
+   "want": [{"error":"disallowed op on connected link", "op":"quit"}]
+},{"tmtp": 1},{
+   "head": {"Op":"eOpLogin", "Uid":"*senduid", "Node":"*sendnode", "Datalen":5} ,
+   "data": "extra" ,
+   "want": [{"error":"invalid header", "op":"quit"}]
+},{"tmtp": 1},{
+   "head": {"Op":"eOpLogin", "Uid":"noone", "Node":"none"} ,
+   "want": [{"error":"corrupt base32 value", "op":"quit"}]
+},{"tmtp": 1},{
+   "head": {"Op":"eOpLogin", "Uid":"noone", "Node":"LB27ML46"} ,
+   "want": [{"error":"login failed", "op":"quit"}]
+},{"tmtp": 1},{
+   "head": {"Op":"eOpLogin", "Uid":"*recvuid", "Node":"*recvnode"} ,
+   "want": [{"error":"node already connected", "op":"quit"}]
+},{"tmtp": 1},{
+   "head": {"Op":"eOpLogin", "Uid":"*senduid", "Node":"*sendnode"} ,
+   "want": [{"info":"login ok", "op":"info"},
+            {"datalen":0, "from":"*senduid", "headsum":1, "id":"#sid#", "node":"tbd", "op":"login", "posted":"#spdt#"},
+            {"datalen":0, "from":"*senduid", "headsum":1, "id":"#sid#", "node":"tbd", "op":"login", "posted":"#spdt#"}] ,
+   "nfsn": true
+},{
+   "head": {"Op":"eOpPost", "Id":"zyx", "Datalen":15, "Datahead":5, "Datasum":1,
+            "For":[{"Id":"*recvuid", "Type":1}]} ,
+   "data": "data for Id:zyx" ,
+   "want": [{"id":"zyx", "msgid":"#mid#", "op":"ack", "posted":"#pst#"},
+            {"datahead":5, "datalen":15, "datasum":1, "from":"*senduid", "headsum":2, "id":"#id#", "op":"delivery", "posted":"#pdt#",
+             "~data": ["data for Id:zyx"] }]
+},{
+   "head": {"Op":"eOpPostNotify", "Id":"id", "Datalen":14, "Datahead":5, "Datasum":5,
+            "For":[{"Id":"*recvuid", "Type":1}], "Fornotself":true,
+            "Notelen":5, "Notehead":1, "Notesum":1} , "//todo":" add Notefor",
+   "data": "note.post data" ,
+   "want": [{"id":"id", "msgid":"#mid#", "op":"ack", "posted":"#pst#"},
+            {"datahead":5, "datalen":9, "datasum":5, "from":"*senduid", "headsum":2, "id":"#id#", "notify":1, "op":"delivery", "posted":"#pdt#",
+             "~data": ["post data"] },
+            {"datahead":1, "datalen":5, "datasum":1, "from":"*senduid", "headsum":2, "id":"#id#", "op":"notify", "posted":"#pdt#", "postid":"#pid#",
+             "~data": ["note."] }]
+},{
+   "head": {"Op":"eOpPing", "Id":"123", "Datalen":0, "From":"test1", "To":"test2"} ,
+   "want": [{"id":"123", "msgid":"#mid#", "op":"ack", "posted":"#pst#"},
+            {"alias":"test1", "datalen":0, "from":"*senduid", "headsum":2, "id":"#id#", "op":"ping", "posted":"#pdt#", "to":"test2"}]
+},{
+   "head": {"Op":"eOpUserEdit", "Id":"0", "Newalias":"short"} ,
+   "want": [{"error":"newalias must be 8+ characters", "id":"0", "op":"ack"}]
+},{
+   "head": {"Op":"eOpUserEdit", "Id":"0", "Newalias":"sam walker"} ,
+   "want": [{"id":"0", "op":"ack"},
+            {"datalen":0, "from":"*senduid", "headsum":1, "id":"#sid#", "newalias":"sam walker", "op":"user", "posted":"#spdt#"}]
+},{
+   "head": {"Op":"eOpUserEdit", "Id":"0", "Newnode":"ref"} ,
+   "want": [{"id":"0", "op":"ack"},
+            {"datalen":0, "from":"*senduid", "headsum":1, "id":"#sid#", "newnode":"ref", "nodeid":"#nid#", "op":"user", "posted":"#spdt#"}]
+},{
+   "head": {"Op":"eOpGroupEdit", "Id":"0", "Gid":"blab", "Act":"join"} ,
+   "want": [{"id":"0", "op":"ack"},
+            {"act":"join", "alias":"test1", "datalen":0, "from":"*senduid", "gid":"blab", "headsum":1, "id":"#sid#", "op":"member", "posted":"#spdt#"}]
+},{
+   "head": {"Op":"eOpGroupEdit", "Id":"0", "Gid":"blab", "Act":"drop", "To":"test1"} ,
+   "want": [{"id":"0", "op":"ack"},
+            {"act":"drop", "alias":"test1", "datalen":0, "from":"*senduid", "gid":"blab", "headsum":1, "id":"#sid#", "op":"member", "posted":"#spdt#"}]
+},{
+   "head": {"Op":"eOpGroupInvite", "Id":"0", "Gid":"short", "Datalen":0, "From":"test1", "To":"test2"} ,
+   "want": [{"error":"gid must be 8+ characters", "id":"0", "op":"ack"}]
+},{
+   "head": {"Op":"eOpGroupInvite", "Id":"0", "Gid":"talktalk", "Datalen":5, "From":"test1", "To":"test2"} ,
+   "data": "hello" ,
+   "want": [{"id":"0", "msgid":"#mid#", "op":"ack", "posted":"#pst#"},
+            {"act":"invite", "alias":"test2", "datalen":0, "from":"*senduid", "gid":"talktalk", "headsum":1, "id":"#sid#", "op":"member", "posted":"#spdt#"},
+            {"alias":"test1", "datalen":5, "from":"*senduid", "gid":"talktalk", "headsum":2, "id":"#id#", "op":"invite", "posted":"#pdt#", "to":"test2",
+             "~data": ["hello"] }]
+},{
+   "head": {"Op":"eOpGroupEdit", "Id":"0", "Gid":"talktalk", "Act":"alias", "Newalias":"test11"} ,
+   "want": [{"id":"0", "op":"ack"},
+            {"act":"alias", "alias":"test1", "datalen":0, "from":"*senduid", "gid":"talktalk", "headsum":1, "id":"#sid#", "newalias":"test11", "op":"member", "posted":"#spdt#"}]
+},{
+   "head": {"Op":"eOpPing", "Id":"123", "Datalen":144, "From":"test1", "To":"test2"} ,
+   "data": "123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 1234" ,
+   "want": [{"error":"data too long for request type", "op":"quit"}]
+},{"tmtp": 1},{
+   "head": {"Op":"eOpLogin", "Uid":"*senduid", "Node":"*sendnode"} ,
+   "want": [{"info":"login ok", "op":"info"},
+            {"datalen":0, "from":"*senduid", "headsum":1, "id":"#sid#", "node":"tbd", "op":"login", "posted":"#spdt#"}] ,
+   "nfsn": true
+},{
+   "head": {"Op":"eOpOhiEdit", "Id":"0", "For":[{"Id":"*recvuid"}], "Type":"init"} ,
+   "want": [{"id":"0", "op":"ack"},
+            {"from":"*senduid", "op":"ohi", "status":1}] ,
+   "nfsn": true
+},{
+   "head": {"Op":"eOpOhiEdit", "Id":"0", "For":[{"Id":"*recvuid"}], "Type":"drop"} ,
+   "want": [{"id":"0", "op":"ack"},
+            {"datalen":0, "for":[{"Id":"*recvuid", "Type":0}], "from":"*senduid", "headsum":1, "id":"#sid#", "op":"ohiedit", "posted":"#spdt#", "type":"drop"},
+            {"from":"*senduid", "op":"ohi", "status":2}]
+},{
+   "head": {"Op":"eOpOhiEdit", "Id":"0", "For":[{"Id":"*recvuid"}], "Type":"add"} ,
+   "want": [{"id":"0", "op":"ack"},
+            {"datalen":0, "for":[{"Id":"*recvuid", "Type":0}], "from":"*senduid", "headsum":1, "id":"#sid#", "op":"ohiedit", "posted":"#spdt#", "type":"add"},
+            {"from":"*senduid", "op":"ohi", "status":1}]
+},{
+   "head": {"Op":"eOpPulse"}
+},{
+   "head": {"Op":"eOpQuit"} ,
+   "want": [{"error":"logout ok", "op":"quit"},
+            {"from":"*senduid", "op":"ohi", "status":2}]
+},{"tmtp": 1},{
+   "head": {"Op":"eOpLogin", "Uid":"*senduid", "Node":"*sendnode"} ,
+   "data": "003f{\"Op\":9, \"Id\":\"123\", \"Datalen\":1, \"From\":\"test1\", \"To\":\"test2\"}1" ,
+   "want": [{"info":"login ok", "op":"info"},
+            {"id":"123", "msgid":"#mid#", "op":"ack", "posted":"#pst#"},
+            {"datalen":0, "from":"*senduid", "headsum":1, "id":"#sid#", "node":"tbd", "op":"login", "posted":"#spdt#"},
+            {"alias":"test1", "datalen":1, "from":"*senduid", "headsum":2, "id":"#id#", "op":"ping", "posted":"#pdt#", "to":"test2",
+             "~data": ["1"] }] ,
+   "nfsn": true
+},{
+   "head": {"Op":"eOpPost", "Id":"zyx", "Datalen":15, "For":[{"Id":"*recvuid", "Type":1}]} ,
+   "data": "data for Id"
+},{
+   "msg" : ":zyx" ,
+   "want": [{"id":"zyx", "msgid":"#mid#", "op":"ack", "posted":"#pst#"},
+            {"datalen":15, "from":"*senduid", "headsum":2, "id":"#id#", "op":"delivery", "posted":"#pdt#",
+             "~data": ["data for Id:zyx"] }]
+},{
+   "head": {"Op":"eOpPing", "Id":"123", "Datalen":141, "From":"test1", "To":"test2"} ,
+   "data": "\u00d7 123456789 123456789 123456789 123456789 123456789 "
+},{
+   "msg" : "123456789 123456789 123456789 123456789 123456789 "
+},{
+   "msg" : "123456789 123456789 123456789 12345678" ,
+   "want": [{"id":"123", "msgid":"#mid#", "op":"ack", "posted":"#pst#"},
+            {"alias":"test1", "datalen":141, "from":"*senduid", "headsum":2, "id":"#id#", "op":"ping", "posted":"#pdt#", "to":"test2",
+             "~data": ["\u00d7 123456789 123456789 123456789 123456789 123456789 ",
+                       "123456789 123456789 123456789 123456789 123456789 ",
+                       "123456789 123456789 123456789 12345678"] }]
+},{
+   "head": {"Op":"eOpPing", "Id":"123", "Datalen":3, "From":"test1", "To":"test2"} ,
+   "datb": [65,255,90] ,
+   "want": [{"error":"data not valid UTF8", "op":"quit"}]
+},{"tmtp": 1},{
+   "msg" : "delay" ,
+   "want": [] ,"//":" print 'fail connection timeout'"
+}]

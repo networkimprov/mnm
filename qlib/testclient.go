@@ -26,6 +26,7 @@ import (
 const kTestLoginWait time.Duration = 6 * time.Second
 
 var sTestNodeIds = make(map[int][]string)
+var sTestVerifyWork []tTestWork
 var sTestVerifyDone = make(chan int)
 var sTestVerifyOp int
 var sTestVerifyNfsn bool
@@ -53,6 +54,78 @@ func LocalTest(i int) {
    UDb.TempAlias("u100002", "test11")
    UDb.TempAlias("u100003", "test2")
    UDb.TempGroup("blab", "u100002", "test1") // Status eStatInvited
+
+   aFd, err := os.Open("test.json")
+   if err != nil {
+      fmt.Fprintf(os.Stderr, "%s\n", err)
+      return
+   }
+   err = json.NewDecoder(aFd).Decode(&sTestVerifyWork)
+   aFd.Close()
+   if err != nil {
+      fmt.Fprintf(os.Stderr, "test.json %s\n", err)
+      return
+   }
+   for a := range sTestVerifyWork {
+      aWk := &sTestVerifyWork[a]
+      if aWk.Tmtp > 0 {
+         aWk.Head, aWk.wants = sTestVerifyWork[0].Head, sTestVerifyWork[0].wants
+         aWk.Msg, aWk.Data, aWk.Datb = "", "", nil
+         continue
+      }
+      fFor := func(cObj interface{}) {
+         if cFor, _ := cObj.([]interface{}); cFor != nil {
+            for c := range cFor {
+               if cEl, _ := cFor[c].(map[string]interface{}); cEl != nil {
+                  switch cId, _ := cEl["Id"].(string); cId {
+                  case "*senduid": cEl["Id"] = "u100002"
+                  case "*recvuid": cEl["Id"] = "u100003"
+                  }
+               }
+            }
+         }
+      }
+      if aWk.Head != nil {
+         if aOp, _ := aWk.Head["Op"].(string); aOp != "" {
+            aWk.Head["Op"] = kOpSet[aOp]
+         }
+         switch aUid, _ := aWk.Head["Uid"].(string); aUid {
+         case "*senduid": aWk.Head["Uid"] = "u100002"
+         case "*recvuid": aWk.Head["Uid"] = "u100003"
+         }
+         switch aNode, _ := aWk.Head["Node"].(string); aNode {
+         case "*sendnode": aWk.Head["Node"] = sTestNodeIds[100002][0]
+         case "*recvnode": aWk.Head["Node"] = sTestNodeIds[100003][0]
+         }
+         fFor(aWk.Head["For"])
+      }
+      if len(aWk.Want) == 0 { continue }
+      aData := make([]string, len(aWk.Want))
+      for a1 := range aWk.Want {
+         switch aFrom, _ := aWk.Want[a1]["from"].(string); aFrom {
+         case "*senduid": aWk.Want[a1]["from"] = "u100002"
+         }
+         fFor(aWk.Want[a1]["for"])
+         if aDataSet, _ := aWk.Want[a1]["~data"].([]interface{}); aDataSet != nil {
+            for a2 := range aDataSet {
+               aData[a1] += fmt.Sprint(aDataSet[a2])
+            }
+            aWk.Want[a1]["~data"] = a1
+         }
+      }
+      aBuf, err := json.Marshal(aWk.Want)
+      if err != nil {
+         fmt.Fprintf(os.Stderr, "test.json %s\n", err)
+         return
+      }
+      aWk.wants = strings.ReplaceAll(string(aBuf[1:len(aBuf)-1]), "},{", "}\n{")
+      aWk.wants = strings.ReplaceAll(aWk.wants, `"headsum":1`, `"headsum":#sck#`)
+      aWk.wants = strings.ReplaceAll(aWk.wants, `"headsum":2`, `"headsum":#ck#`)
+      for a1 := range aData {
+         if aData[a1] == "" { continue }
+         aWk.wants = strings.Replace(aWk.wants, `,"~data":`+ fmt.Sprint(a1) +`}`, `}`+ aData[a1], 1)
+      }
+   }
 
    NewLink(_newTestClient(eActVerifyRecv, [3]int{100003, 0, 0}))
    NewLink(_newTestClient(eActVerifyRecv, [3]int{100003, 1, 0}))
@@ -103,13 +176,33 @@ func _testMakeNode(iId, iN int) string {
    return aNodeSha
 }
 
+type tTestWork struct {
+   Tmtp byte    // replay eOpTmtpRev object; other fields ignored
+   Msg string   // send this; ignore Head & Data
+   Head tMsg    // send this combined with Data or Datb
+   Data string  // if set, ignore Datb
+   Datb []byte
+   Want []tMsg  // expected results, in order of sTestVerifyGot
+   Nfsn bool    // sender's results not for sender's node
+   wants string
+}
+
+var kOpSet = map[string]int{
+   "eOpTmtpRev": eOpTmtpRev,
+   "eOpRegister": eOpRegister, "eOpLogin": eOpLogin,
+   "eOpUserEdit": eOpUserEdit, "eOpOhiEdit": eOpOhiEdit,
+   "eOpGroupInvite": eOpGroupInvite, "eOpGroupEdit": eOpGroupEdit,
+   "eOpPost": eOpPost, "eOpPostNotify": eOpPostNotify, "eOpPing": eOpPing,
+   "eOpAck": eOpAck,
+   "eOpPulse": eOpPulse, "eOpQuit": eOpQuit,
+}
+
 type tTestClient struct {
    id int // user id
    nodeN, nodeMax int // index and max-index of sTestNodeIds
    count int // msg number
    toRead, toWrite int // data yet to read/write
    action tTestAction // test mode
-   work []tTestWork // verify sequence data
    ack chan string // writer tells reader to issue ack to qlib
    closed bool // when about to shut down
    readDeadline time.Time // set by qlib
@@ -118,176 +211,9 @@ type tTestClient struct {
 type tTestAction int
 const ( eActCycle tTestAction = iota; eActVerifySend; eActVerifyRecv )
 
-type tTestWork struct {
-   msg []byte
-   head tMsg
-   data, want string
-   nfsn bool // not for sender's node
-}
-
-type tTestForOhi struct { Id string }
-
 func _newTestClient(iAct tTestAction, iInfo [3]int) *tTestClient {
-   aTc := &tTestClient{action: iAct, id: iInfo[0], nodeN: iInfo[1], nodeMax: iInfo[2],
+   return &tTestClient{action: iAct, id: iInfo[0], nodeN: iInfo[1], nodeMax: iInfo[2],
                        ack: make(chan string, 10)}
-   if iAct == eActVerifySend {
-      aUid   := fmt.Sprintf("u%d", aTc.id)
-      aForid := fmt.Sprintf("u%d", aTc.id + 1)
-      aTmtpRev := tTestWork{
-         head: tMsg{"Op":eOpTmtpRev, "Id":"1"} ,
-         want: `{"id":"1","op":"tmtprev"}` ,
-      }
-      aTc.work = []tTestWork{
-        { head: tMsg{"Op":eOpLogin, "Uid":"noone", "Node":"none"} ,
-          want: `` , // print "quit tmtprev was omitted"
-      },  aTmtpRev,
-        { msg : []byte(`00z1{"Op":3, "Uid":"noone"}`) ,
-          want: `{"error":"invalid header length","op":"quit"}` ,
-      },  aTmtpRev,
-        { msg : []byte(`000a{"Op":12f3`) ,
-          want: `{"error":"invalid header","op":"quit"}` ,
-      },  aTmtpRev,
-        { head: tMsg{"Op":eOpLogin, "Uid":"noone", "NoId":"none"} ,
-          want: `{"error":"invalid header","op":"quit"}` ,
-      },  aTmtpRev,
-        { head: tMsg{"Op":eOpTmtpRev, "Id":"1"} ,
-          want: `{"error":"disallowed op repetition","op":"quit"}` ,
-      },  aTmtpRev,
-        { head: tMsg{"Op":eOpPost, "Id":"zyx", "Datalen":1, "For":[]tHeaderFor{{Id:"x", Type:eForUser}}} ,
-          data: `1` ,
-          want: `{"error":"disallowed op on unauthenticated link","op":"quit"}` ,
-      },  aTmtpRev,
-        { head: tMsg{"Op":eOpRegister, "NewNode":"blue", "NewAlias":"_"} ,
-          want: `{"nodeid":"#nid#","op":"registered","uid":"#uid#"}`+"\n"+
-                `{"info":"login ok","op":"info"}` ,
-      },{ head: tMsg{"Op":eOpQuit} ,
-          want: `{"error":"logout ok","op":"quit"}` ,
-      },  aTmtpRev,
-        { head: tMsg{"Op":eOpRegister, "NewNode":"blue", "NewAlias":"LongJohn Silver"} ,
-          want: `{"nodeid":"#nid#","op":"registered","uid":"#uid#"}`+"\n"+
-                `{"info":"login ok","op":"info"}` ,
-      },{ head: tMsg{"Op":eOpQuit} ,
-          want: `{"error":"logout ok","op":"quit"}` ,
-      },  aTmtpRev,
-        { head: tMsg{"Op":eOpRegister, "NewNode":"blue", "NewAlias":"short"} ,
-          want: `{"error":"newalias must be 8+ characters","nodeid":"#nid#","op":"registered","uid":"#uid#"}`+"\n"+
-                `{"info":"login ok","op":"info"}` ,
-      },{ head: tMsg{"Op":eOpLogin, "Uid":aUid, "Node":sTestNodeIds[aTc.id][0]} ,
-          want: `{"error":"disallowed op on connected link","op":"quit"}` ,
-      },  aTmtpRev,
-        { head: tMsg{"Op":eOpLogin, "Uid":aUid, "Node":sTestNodeIds[aTc.id][0], "Datalen":5} ,
-          data: `extra` ,
-          want: `{"error":"invalid header","op":"quit"}` ,
-      },  aTmtpRev,
-        { head: tMsg{"Op":eOpLogin, "Uid":"noone", "Node":"none"} ,
-          want: `{"error":"corrupt base32 value","op":"quit"}` ,
-      },  aTmtpRev,
-        { head: tMsg{"Op":eOpLogin, "Uid":"noone", "Node":"LB27ML46"} ,
-          want: `{"error":"login failed","op":"quit"}` ,
-      },  aTmtpRev,
-        { head: tMsg{"Op":eOpLogin, "Uid":aForid, "Node":sTestNodeIds[aTc.id+1][0]} ,
-          want: `{"error":"node already connected","op":"quit"}` ,
-      },  aTmtpRev,
-        { head: tMsg{"Op":eOpLogin, "Uid":aUid, "Node":sTestNodeIds[aTc.id][0]} ,
-          want: `{"info":"login ok","op":"info"}`+"\n"+
-                `{"datalen":0,"from":"`+aUid+`","headsum":#sck#,"id":"#sid#","node":"tbd","op":"login","posted":"#spdt#"}`+"\n"+
-                `{"datalen":0,"from":"`+aUid+`","headsum":#sck#,"id":"#sid#","node":"tbd","op":"login","posted":"#spdt#"}` ,
-          nfsn: true,
-      },{ head: tMsg{"Op":eOpPost, "Id":"zyx", "Datalen":15, "Datahead":5, "Datasum":1,
-                     "For":[]tHeaderFor{{Id:aForid, Type:eForUser}}} ,
-          data: `data for Id:zyx` ,
-          want: `{"id":"zyx","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
-                `{"datahead":5,"datalen":15,"datasum":1,"from":"`+aUid+`","headsum":#ck#,"id":"#id#","op":"delivery","posted":"#pdt#"}data for Id:zyx` ,
-      },{ head: tMsg{"Op":eOpPostNotify, "Id":"id", "Datalen":14, "Datahead":5, "Datasum":5,
-                     "For":[]tHeaderFor{{Id:aForid, Type:eForUser}}, "Fornotself":true,
-                     "Notelen":5, "Notehead":1, "Notesum":1} , //todo add Notefor
-          data: `note.post data` ,
-          want: `{"id":"id","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
-                `{"datahead":5,"datalen":9,"datasum":5,"from":"`+aUid+`","headsum":#ck#,"id":"#id#","notify":1,"op":"delivery","posted":"#pdt#"}post data`+"\n"+
-                `{"datahead":1,"datalen":5,"datasum":1,"from":"`+aUid+`","headsum":#ck#,"id":"#id#","op":"notify","posted":"#pdt#","postid":"#pid#"}note.` ,
-      },{ head: tMsg{"Op":eOpPing, "Id":"123", "Datalen":0, "From":"test1", "To":"test2"} ,
-          want: `{"id":"123","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
-                `{"alias":"test1","datalen":0,"from":"`+aUid+`","headsum":#ck#,"id":"#id#","op":"ping","posted":"#pdt#","to":"test2"}` ,
-      },{ head: tMsg{"Op":eOpUserEdit, "Id":"0", "Newalias":"short"} ,
-          want: `{"error":"newalias must be 8+ characters","id":"0","op":"ack"}` ,
-      },{ head: tMsg{"Op":eOpUserEdit, "Id":"0", "Newalias":"sam walker"} ,
-          want: `{"id":"0","op":"ack"}`+"\n"+
-                `{"datalen":0,"from":"`+aUid+`","headsum":#sck#,"id":"#sid#","newalias":"sam walker","op":"user","posted":"#spdt#"}` ,
-      },{ head: tMsg{"Op":eOpUserEdit, "Id":"0", "Newnode":"ref"} ,
-          want: `{"id":"0","op":"ack"}`+"\n"+
-                `{"datalen":0,"from":"`+aUid+`","headsum":#sck#,"id":"#sid#","newnode":"ref","nodeid":"#nid#","op":"user","posted":"#spdt#"}` ,
-      },{ head: tMsg{"Op":eOpGroupEdit, "Id":"0", "Gid":"blab", "Act":"join"} ,
-          want: `{"id":"0","op":"ack"}`+"\n"+
-                `{"act":"join","alias":"test1","datalen":0,"from":"`+aUid+`","gid":"blab","headsum":#sck#,"id":"#sid#","op":"member","posted":"#spdt#"}` ,
-      },{ head: tMsg{"Op":eOpGroupEdit, "Id":"0", "Gid":"blab", "Act":"drop", "To":"test1"} ,
-          want: `{"id":"0","op":"ack"}`+"\n"+
-                `{"act":"drop","alias":"test1","datalen":0,"from":"`+aUid+`","gid":"blab","headsum":#sck#,"id":"#sid#","op":"member","posted":"#spdt#"}` ,
-      },{ head: tMsg{"Op":eOpGroupInvite, "Id":"0", "Gid":"short", "Datalen":0, "From":"test1", "To":"test2"} ,
-          want: `{"error":"gid must be 8+ characters","id":"0","op":"ack"}` ,
-      },{ head: tMsg{"Op":eOpGroupInvite, "Id":"0", "Gid":"talktalk", "Datalen":5, "From":"test1", "To":"test2"} ,
-          data: `hello` ,
-          want: `{"id":"0","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
-                `{"act":"invite","alias":"test2","datalen":0,"from":"`+aUid+`","gid":"talktalk","headsum":#sck#,"id":"#sid#","op":"member","posted":"#spdt#"}`+"\n"+
-                `{"alias":"test1","datalen":5,"from":"`+aUid+`","gid":"talktalk","headsum":#ck#,"id":"#id#","op":"invite","posted":"#pdt#","to":"test2"}hello` ,
-      },{ head: tMsg{"Op":eOpGroupEdit, "Id":"0", "Gid":"talktalk", "Act":"alias", "Newalias":"test11"} ,
-          want: `{"id":"0","op":"ack"}`+"\n"+
-                `{"act":"alias","alias":"test1","datalen":0,"from":"`+aUid+`","gid":"talktalk","headsum":#sck#,"id":"#sid#","newalias":"test11","op":"member","posted":"#spdt#"}` ,
-      },{ head: tMsg{"Op":eOpPing, "Id":"123", "Datalen":144, "From":"test1", "To":"test2"} ,
-          data: `123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 1234` ,
-          want: `{"error":"data too long for request type","op":"quit"}` ,
-      },  aTmtpRev,
-        { head: tMsg{"Op":eOpLogin, "Uid":aUid, "Node":sTestNodeIds[aTc.id][0]} ,
-          want: `{"info":"login ok","op":"info"}`+"\n"+
-                `{"datalen":0,"from":"`+aUid+`","headsum":#sck#,"id":"#sid#","node":"tbd","op":"login","posted":"#spdt#"}` ,
-          nfsn: true,
-      },{ head: tMsg{"Op":eOpOhiEdit, "Id":"0", "For":[]tTestForOhi{{Id:aForid}}, "Type":"init"} ,
-          want: `{"id":"0","op":"ack"}`+"\n"+
-                `{"from":"`+aUid+`","op":"ohi","status":1}` ,
-          nfsn: true,
-      },{ head: tMsg{"Op":eOpOhiEdit, "Id":"0", "For":[]tTestForOhi{{Id:aForid}}, "Type":"drop"} ,
-          want: `{"id":"0","op":"ack"}`+"\n"+
-                `{"datalen":0,"for":[{"Id":"`+aForid+`","Type":0}],"from":"`+aUid+`","headsum":#sck#,"id":"#sid#","op":"ohiedit","posted":"#spdt#","type":"drop"}`+"\n"+
-                `{"from":"`+aUid+`","op":"ohi","status":2}` ,
-      },{ head: tMsg{"Op":eOpOhiEdit, "Id":"0", "For":[]tTestForOhi{{Id:aForid}}, "Type":"add"} ,
-          want: `{"id":"0","op":"ack"}`+"\n"+
-                `{"datalen":0,"for":[{"Id":"`+aForid+`","Type":0}],"from":"`+aUid+`","headsum":#sck#,"id":"#sid#","op":"ohiedit","posted":"#spdt#","type":"add"}`+"\n"+
-                `{"from":"`+aUid+`","op":"ohi","status":1}` ,
-      },{ head: tMsg{"Op":eOpPulse} ,
-      },{ head: tMsg{"Op":eOpQuit} ,
-          want: `{"error":"logout ok","op":"quit"}`+"\n"+
-                `{"from":"`+aUid+`","op":"ohi","status":2}` ,
-      },  aTmtpRev,
-        { msg : []byte(`004c{"Op":2, "Uid":"`+aUid+`", "Node":"`+sTestNodeIds[aTc.id][0]+`"}`+
-                       `003f{"Op":9, "Id":"123", "Datalen":1, "From":"test1", "To":"test2"}1`) ,
-          want: `{"info":"login ok","op":"info"}`+"\n"+
-                `{"id":"123","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
-                `{"datalen":0,"from":"`+aUid+`","headsum":#sck#,"id":"#sid#","node":"tbd","op":"login","posted":"#spdt#"}`+"\n"+
-                `{"alias":"test1","datalen":1,"from":"`+aUid+`","headsum":#ck#,"id":"#id#","op":"ping","posted":"#pdt#","to":"test2"}1` ,
-          nfsn: true,
-      },{ head: tMsg{"Op":eOpPost, "Id":"zyx", "Datalen":15, "For":[]tHeaderFor{
-                       {Id:aForid, Type:eForUser} }} ,
-          data: `data for Id` ,
-      },{ msg : []byte(`:zyx`) ,
-          want: `{"id":"zyx","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
-                `{"datalen":15,"from":"`+aUid+`","headsum":#ck#,"id":"#id#","op":"delivery","posted":"#pdt#"}data for Id:zyx` ,
-      },{ head: tMsg{"Op":eOpPing, "Id":"123", "Datalen":141, "From":"test1", "To":"test2"} ,
-          data: "\u00d7 123456789 123456789 123456789 123456789 123456789 " ,
-      },{ msg : []byte(`123456789 123456789 123456789 123456789 123456789 `) ,
-      },{ msg : []byte(`123456789 123456789 123456789 12345678`) ,
-          want: `{"id":"123","msgid":"#mid#","op":"ack","posted":"#pst#"}`+"\n"+
-                `{"alias":"test1","datalen":141,"from":"`+aUid+`","headsum":#ck#,"id":"#id#","op":"ping","posted":"#pdt#","to":"test2"}`+
-                "\u00d7 123456789 123456789 123456789 123456789 123456789 "+
-                `123456789 123456789 123456789 123456789 123456789 `+
-                `123456789 123456789 123456789 12345678` ,
-      },{ head: tMsg{"Op":eOpPing, "Id":"123", "Datalen":3, "From":"test1", "To":"test2"} ,
-          data: "a\xFFz" ,
-          want: `{"error":"data not valid UTF8","op":"quit"}` ,
-      },  aTmtpRev,
-        { msg : []byte(`delay`) ,
-          want: `` , // print "fail connection timeout"
-      }}
-   }
-   return aTc
 }
 
 func (o *tTestClient) Read(iBuf []byte) (int, error) {
@@ -348,19 +274,20 @@ func (o *tTestClient) _verifyRead(iBuf []byte) (int, error) {
          sTestVerifyGotNode[aK] = ""
       }
       for a := range sTestVerifyGot { sTestVerifyGot[a] = "" }
-      if o.count == len(o.work) {
+      if o.count == len(sTestVerifyWork) {
          close(sTestVerifyDone)
          return 0, io.EOF
       }
-      aWk := o.work[o.count]
-      sTestVerifyWant.val = aWk.want
-      sTestVerifyOp, _ = aWk.head["Op"].(int)
-      sTestVerifyNfsn = aWk.nfsn
+      aWk := sTestVerifyWork[o.count]
+      sTestVerifyWant.val = aWk.wants
+      sTestVerifyOp, _ = aWk.Head["Op"].(int)
+      sTestVerifyNfsn = aWk.Nfsn
       o.count++
-      aMsg = aWk.msg
-      if aMsg == nil {
-         aMsg = packMsg(aWk.head, []byte(aWk.data))
-      } else if string(aMsg) == "delay" {
+      aMsg = []byte(aWk.Msg)
+      if aWk.Msg == "" {
+         aData := aWk.Datb; if aWk.Data != "" { aData = []byte(aWk.Data) }
+         aMsg = packMsg(aWk.Head, aData)
+      } else if aWk.Msg == "delay" {
          return 0, &net.OpError{Op:"read", Err:&tTimeoutError{}}
       }
    }
@@ -411,10 +338,11 @@ func (o *tTestClient) _cycleRead(iBuf []byte) (int, error) {
          *sTestLogins[o.id]++
          _testLoginSummary()
       } else if o.count == 3 {
-         var aFor []tTestForOhi
+         type _tForOhi struct { Id string }
          aMax := int(sTestClientCount); if aMax > 100 { aMax = 100 }
+         aFor := make([]_tForOhi, 0, aMax)
          for a := 0; a < aMax; a++ {
-            aFor = append(aFor, tTestForOhi{Id:"u"+fmt.Sprint(o.id/aMax*aMax+a)})
+            aFor = append(aFor, _tForOhi{Id:"u"+fmt.Sprint(o.id/aMax*aMax+a)})
          }
          aHead = tMsg{"Op":eOpOhiEdit, "Id":fmt.Sprint(o.count), "For":aFor, "Type":"init"}
       } else if o.count == 4 && o.id % 2 == 1 {
