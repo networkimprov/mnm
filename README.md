@@ -41,15 +41,31 @@ b) `openssl req -new -x509 -sha256 -key server.key -out server.crt -days 3650`
 c) `cp mnm.conf mnm.config` # edit to revise ntp.hosts and adjust listen.laddr with "host:port"
 
    Note: On a public Internet host, port 443 will see a steady trickle of probe requests 
-   (often with nefarious intent) which pollutes the mnm logs. 
+   (often with malicious intent) which pollutes the mnm log. 
    Choose a port above 1024 to avoid this. 
 
-1. Run  
-a) `./mnm` # default port 443 may require sudo; logs to stdout/stderr  
-b) ctrl-C to stop  
+1. Run server  
+a) `./mnm` # default port 443 may require `sudo ./mnm`; logs to stdout & stderr  
+b) _Ctrl-C_ to stop  
 or  
 a) `./mnm >> logfile 2>&1 &` # run in background, logs to end of logfile  
 b) `kill -s INT <background_pid>` # send SIGINT signal, triggering graceful shutdown
+
+1. Distribute the server address to users  
++&nbsp; For a self-signed certificate, the address is `=address:port`  
++&nbsp; For a proper certificate, the address is `+address:port`  
++&nbsp; Examples: `=192.168.1.2:3456` and `+example.com:443`
+
+
+### Build & package
+
+Assuming this repository has been obtained via `git clone`:
+
+a) `cd mnm`  
+b) `git stash` # if required  
+c) `git checkout <your_branch>`  
+d) Edit _kVersionDate_ in main.go  
+e) `./pkg.sh` # make release downloads
 
 
 ### Testing
