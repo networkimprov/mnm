@@ -216,6 +216,11 @@ func TestUserDb(iPath string) bool {
    if err == nil || err.(*tUdbError).id != eErrAliasTaken {
       fReport("already taken case succeeded: AddAlias")
    }
+   aDb.TempGroup("AddAliasGid1", aUid1, "AddAlias/A1")
+   err = aDb.AddAlias(aUid1, "", "AddAliasGid1")
+   if err == nil || err.(*tUdbError).id != eErrAliasTaken {
+      fReport("already taken by group case succeeded: AddAlias")
+   }
 
    // DROPALIAS
    aUid1, aUid2 = "AddUserUid1", "AddAliasUid2"
@@ -317,6 +322,11 @@ func TestUserDb(iPath string) bool {
    _, err = aDb.GroupInvite("Ginvite/Gid\x00", aAlias1, aAlias2, aUid2)
    if err == nil || err.(*tUdbError).id != eErrArgument {
       fReport("non-printable gid case succeeded: GroupInvite")
+   }
+   aDb.TempAlias(aUid2, "GinviteAlias1")
+   _, err = aDb.GroupInvite("GinviteAlias1", aAlias1, aAlias2, aUid2)
+   if err == nil || err.(*tUdbError).id != eErrAliasTaken {
+      fReport("unavailable gid case succeeded: GroupInvite")
    }
    aDb.TempGroup(aGid2, aUid1, aAlias1)
    _, err = aDb.GroupInvite(aGid2, aAlias1, aAlias2, aUid2)

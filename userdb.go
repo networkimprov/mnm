@@ -50,10 +50,8 @@ type tUserDb struct {
    userDoor sync.RWMutex
    user map[string]*tUser
 
-   aliasDoor sync.RWMutex
+   algrDoor sync.RWMutex
    alias map[string]string // value is Uid
-
-   groupDoor sync.RWMutex
    group map[string]*tGroup
 }
 
@@ -271,7 +269,6 @@ func (o *tUserDb) AddAlias(iUid, iNat, iEn string) error {
 
    aUser, err := o.fetchUser(iUid, eFetchCheck)
    if err != nil { return err }
-
    if aUser == nil {
       return &tUdbError{id: eErrUserInvalid, msg: fmt.Sprintf("AddAlias: iUid %s not found", iUid)}
    }
@@ -282,7 +279,9 @@ func (o *tUserDb) AddAlias(iUid, iNat, iEn string) error {
    for _, aAlias := range aAliases {
       aUid := iUid
       if aAlias != "" {
-         aUid, _ = o.Lookup(aAlias)
+         _, err = o.fetchGroup(aAlias, eFetchCheck) // retrieve from disk, if nec
+         if err != nil { return err }
+         aUid, _ = o.Lookup(aAlias) //todo return non-tUdbError
       }
       if aUid == iUid {
          aAddedCount++
@@ -294,11 +293,14 @@ func (o *tUserDb) AddAlias(iUid, iNat, iEn string) error {
 
    aUser.Lock(); defer aUser.Unlock()
 
-   o.aliasDoor.Lock(); defer o.aliasDoor.Unlock()
+   o.algrDoor.Lock(); defer o.algrDoor.Unlock()
 
    for _, aAlias := range aAliases {
-      if aAlias != "" && o.alias[aAlias] != "" && o.alias[aAlias] != iUid {
+      if aAlias == "" { continue }
+      if o.alias[aAlias] != "" && o.alias[aAlias] != iUid {
          return &tUdbError{id: eErrAliasTaken, msg: fmt.Sprintf("AddAlias: alias %s already taken", aAlias)}
+      } else if o.group[aAlias] != nil {
+         return &tUdbError{id: eErrAliasTaken, msg: fmt.Sprintf("AddAlias: alias %s not available", aAlias)}
       }
    }
    if iNat != "" { o.alias[iNat] = iUid }
@@ -337,9 +339,9 @@ func (o *tUserDb) DropAlias(iUid, iAlias string) error {
       return &tUdbError{id: eErrAliasInvalid, msg: fmt.Sprintf("DropAlias: iAlias %s not for iUid %s", iAlias, iUid)}
    }
 
-   o.aliasDoor.Lock()
+   o.algrDoor.Lock()
    o.alias[iAlias] = kAliasDefunctUid
-   o.aliasDoor.Unlock()
+   o.algrDoor.Unlock()
 
    aUser.clearTouched()
    for a, _ := range aUser.Aliases {
@@ -420,9 +422,9 @@ func (o *tUserDb) Lookup(iAlias string) (aUid string, err error) {
       return "", &tUdbError{id: eErrArgument, msg: "Lookup: iAlias is empty"}
    }
 
-   o.aliasDoor.RLock()
+   o.algrDoor.RLock()
    aUid = o.alias[iAlias] // check cache
-   o.aliasDoor.RUnlock()
+   o.algrDoor.RUnlock()
 
    if aUid == "" { // iAlias not in cache
       aObj, err := o.getRecord(eTalias, iAlias)
@@ -432,14 +434,14 @@ func (o *tUserDb) Lookup(iAlias string) (aUid string, err error) {
          return "", &tUdbError{id: eErrUnknownAlias, msg: fmt.Sprintf("Lookup: iAlias %s not found", iAlias)}
       }
 
-      o.aliasDoor.Lock()
+      o.algrDoor.Lock()
       if aTemp := o.alias[iAlias]; aTemp != "" { // recheck the map
          aUid = aTemp
       } else {
          aUid = aObj.(string)
          o.alias[iAlias] = aUid // add Uid to map
       }
-      o.aliasDoor.Unlock()
+      o.algrDoor.Unlock()
    }
    return aUid, nil
 }
@@ -465,12 +467,17 @@ func (o *tUserDb) GroupInvite(iGid, iAlias, iByAlias, iByUid string) (aUid strin
    aGroup.Lock(); defer aGroup.Unlock()
 
    if len(aGroup.Uid) == 0 {
-      if invalidInput(iGid) {
-         o.groupDoor.Lock()
+      _, _ = o.Lookup(iGid) // retrieve from disk, if nec //todo return non-tUdbError
+      o.algrDoor.Lock()
+      if o.alias[iGid] != "" || invalidInput(iGid) {
          delete(o.group, iGid)
-         o.groupDoor.Unlock()
+         o.algrDoor.Unlock()
+         if o.alias[iGid] != "" {
+            return "", &tUdbError{id: eErrAliasTaken, msg: fmt.Sprintf("GroupInvite: gid %s not available", iGid)}
+         }
          return "", &tUdbError{id: eErrArgument, msg: fmt.Sprintf("GroupInvite: invalid string '%s'", iGid)}
       }
+      o.algrDoor.Unlock()
       aGroup.Uid[iByUid] = tMember{Alias: iByAlias, Status: eStatJoined}
    } else {
       if aGroup.Uid[iByUid].Status != eStatJoined {
@@ -729,9 +736,9 @@ func (o *tUserDb) fetchUser(iUid string, iMake tFetch) (*tUser, error) {
 }
 
 func (o *tUserDb) fetchGroup(iGid string, iMake tFetch) (*tGroup, error) {
-   o.groupDoor.RLock() // read-lock group map
+   o.algrDoor.RLock() // read-lock group map
    aGroup := o.group[iGid] // lookup group in map
-   o.groupDoor.RUnlock()
+   o.algrDoor.RUnlock()
 
    if aGroup == nil { // group not in cache
       aObj, err := o.getRecord(eTgroup, iGid)
@@ -745,13 +752,13 @@ func (o *tUserDb) fetchGroup(iGid string, iMake tFetch) (*tGroup, error) {
          aGroup.Uid = make(map[string]tMember) // initialize map of members
       }
 
-      o.groupDoor.Lock()
+      o.algrDoor.Lock()
       if aTemp := o.group[iGid]; aTemp != nil { // recheck the map
          aGroup = aTemp
       } else {
          o.group[iGid] = aGroup // add group to map
       }
-      o.groupDoor.Unlock()
+      o.algrDoor.Unlock()
    }
    return aGroup, nil
 }
