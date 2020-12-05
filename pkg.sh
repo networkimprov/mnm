@@ -17,7 +17,7 @@ bins=(
 go build
 app="$(basename "$PWD")"
 appdir=mnm-tmtpd
-files=("$app" LICENSE mnm.conf)
+files=("$app" LICENSE mnm.conf test.json)
 fileswin=("${files[@]}")
 fileswin[0]+=.exe
 ver=($("./$app" --version))
