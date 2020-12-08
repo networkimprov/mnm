@@ -82,6 +82,14 @@ nanoseconds since the epoch, and increment that value for each id string generat
 This supports generation of up to one billion ids per second, and doesn't require a persistent 
 record of the last id generated before shutdown.
 
+Human-readable text must be UTF-8. 
+For _Ping_ and _GroupInvite_ messages, the text must be displayed verbatim. 
+For _Post_ and _PostNotify_ messages, the text should be displayed per the 
+[CommonMark](https://commonmark.org) specification, with extensions for strikethrough, 
+[tables](https://help.github.com/articles/organizing-information-with-tables/), 
+slide decks, charts, forms, and hyperlinks to attachments & messages. \
+_todo: document mnm CommonMark extensions_
+
 ### Client messages and resulting server messages
 
 After the client completes a Login or Register sequence, either side may contact the other.
