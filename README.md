@@ -12,6 +12,9 @@ Learn more at [mnmnotmail.org](https://mnmnotmail.org).
 
 ### Server status
 
+[_11 December 2020_ - v0.1](https://github.com/networkimprov/mnm/releases/latest)
+is released for Linux! 
+
 _13 April 2019_ -
 A private preview is now live! Contact the author if you'd like to try it.
 
@@ -31,14 +34,17 @@ or for a group of 100 (2x) every 1-30s, then logout and idle for 1-30s.
 
 ### Quick start
 
-1. Download & Build  
+1. Download binary or build from source  
+a) Get [mnm-tmtpd-linux-amd64-v0.1.0.tgz](https://github.com/networkimprov/mnm/releases/download/v0.1.0/mnm-tmtpd-linux-amd64-v0.1.0.tgz)  
+b) Extract with `tar xzf mnm-tmtpd-linux-amd64-v0.1.0.tgz`  
+or  
 a) `go get github.com/networkimprov/mnm`  
-b) `cd $GOPATH/src/github.com/networkimprov/mnm`
 
 1. Enable TCP+TLS with self-signed certificate  
-a) `openssl ecparam -genkey -name secp384r1 -out server.key`  
-b) `openssl req -new -x509 -sha256 -key server.key -out server.crt -days 3650`  
-c) `cp mnm.conf mnm.config` # edit to revise ntp.hosts and adjust listen.laddr with "host:port"
+a) `cd mnm`  
+b) `openssl ecparam -genkey -name secp384r1 -out server.key`  
+c) `openssl req -new -x509 -sha256 -key server.key -out server.crt -days 3650`  
+d) `cp mnm.conf mnm.config` # edit to revise ntp.hosts and adjust listen.laddr with "host:port"  
 
    Note: On a public Internet host, port 443 will see a steady trickle of probe requests 
    (often with malicious intent) which pollutes the mnm log. 
