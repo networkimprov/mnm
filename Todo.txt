@@ -1,9 +1,6 @@
 
-check use of ack msgid; not valid when msg originates on server
-
-add --version option
-
-testclient trigger ack & register errors
+testclient
+  trigger ack & register errors
 
 on register, submit credentials to authentication service
 
@@ -21,20 +18,20 @@ PostNotify synchronization
     complete request, clear flag
 
 userdb
+  group option to allow anyone to post (enables helpdesk use case)
+  testing: call Temp*() when op is presumed to succeed
   node labels
   groupalias: if crash after putrecord, retry won't send orig alias in update to group
   testuserdb: fReport use aFuncName to print name when needed
-  single RWMutex for all caches (alias, user, group)?
   move password generation to userdb
     get & store random salt per-site
-
-check/fix pending transactions on qlib start
-
-log entries give datetime, short uid, node, msg type, details
 
 systemd script
 
 tmtp
+  postnotify: current subscribers post a cc list confirming items where byuid is theirs
+  post & postnotify: infer some cc fields
+  post include from:alias; reflect in response.alias
   group invite include aliases of current group members
   re-send on missed ack may cause dup with unique msgid at receiver
     request msgid from service prior to send?
@@ -45,14 +42,19 @@ tmtp
   "via" header on msgs to a group?
   track node logins on ohi channel
   include alias in from/for
-  ping add from:alias
   register return service metadata
+  drop newalias from register op to avoid orphan alias
+
+explore PAKE protocols e.g. https://tools.ietf.org/html/draft-irtf-cfrg-opaque-01
+
+on open/close, posix_fadvise+dontneed for userdb records and queue dirs
 
 clean
   check o.*Head < 0 || o.*Len < o.*Head
   spacing of +"/"+ and _,err
 
-0.2+
+
+Planned & Possible Features
 
 replace json lib with faster third-party one
 
@@ -61,12 +63,13 @@ common address book for accounts & groups accessible to all members
 
 discards pings from blocked address
 
-disallow new group if an alias by same name exists, and vice versa
-convert alias to group?
+allow converting alias to group?
 
 decrypt For[].Id with sender's key; encrypt From with recipient's key
 
 prioritize ack msgs as with ohi
+
+tmtp recall-message for use by admin to mitigate malware
 
 receive-only accounts which cannot ping or post
   register field
