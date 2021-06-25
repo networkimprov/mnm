@@ -58,9 +58,21 @@ a) `./mnm >> logfile 2>&1 &` # run in background, logs to end of logfile
 b) `kill -s INT <background_pid>` # send SIGINT signal, triggering graceful shutdown
 
 1. Distribute the server address to users  
-+&nbsp; For a self-signed certificate, the address is `=address:port`  
-+&nbsp; For a proper certificate, the address is `+address:port`  
-+&nbsp; Examples: `=192.168.1.2:3456` and `+example.com:443`
++&nbsp; Use `=address:port` for a self-signed certificate, for example `=192.168.1.2:3456`  
++&nbsp; Use `+address:port` for a CA-issued certificate, for example `+mnm.example.com:443`  
+
+
+### Configuration
+
+The file mnm.config contains a JSON object with these fields.
+
+The `ntp` (network time protocol) object defines:  
+`hosts` - an array of NTP servers  
+`retries` - the number of times to retry each host  
+
+The `listen` object defines:  
+`net` & `laddr` - arguments to `net.ListenConfig.Listen(nil, net, laddr)`  
+`certPath` & `keyPath` - arguments to `tls.LoadX509KeyPair(certPath, keyPath)`  
 
 
 ### Build & package
@@ -77,8 +89,12 @@ e) `./pkg.sh` # make release downloads
 ### Testing
 
 Continuous test sequence with simulated clients  
-a) `./mnm 10` # may be 2-1000  
+a) `./mnm 10 > /dev/null` # may be 2-1000  
 b) ctrl-C to stop
+
+The file `test.json` gives a sequence of requests and expected results, 
+which runs prior to the continuous test. 
+It includes invalid requests, which print messages to stderr.
 
 
 ### What's here
