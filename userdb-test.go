@@ -77,19 +77,19 @@ func TestUserDb(iPath string) bool {
    // ADDUSER
    aUid1 = "AddUserUid1"
    aNode1 = "AddUserN1"
-   _, err = aDb.AddUser(aUid1, aNode1)
+   _, err = aDb.AddUser(aUid1, aNode1, nil)
    if err != nil || aDb.user[aUid1].Nodes[aNode1].Num != 1 {
       fReport("add case failed")
    }
-   _, err = aDb.AddUser(aUid1, aNode1)
+   _, err = aDb.AddUser(aUid1, aNode1, nil)
    if err != nil || aDb.user[aUid1].Nodes[aNode1].Num != 1 {
       fReport("re-add case failed")
    }
-   _, err = aDb.AddUser(aUid1, "AddUserN0")
+   _, err = aDb.AddUser(aUid1, "AddUserN0", nil)
    if err == nil || err.(*tUdbError).id != eErrMissingNode {
       fReport("add existing case succeeded: AddUser")
    }
-   _, err = aDb.AddUser("AddUserUid\x00", "AddUserN0")
+   _, err = aDb.AddUser("AddUserUid\x00", "AddUserN0", nil)
    if err == nil || err.(*tUdbError).id != eErrArgument {
       fReport("non-printable uid case succeeded: AddUser")
    }
@@ -110,7 +110,7 @@ func TestUserDb(iPath string) bool {
    if err == nil || err.(*tUdbError).id != eErrUserInvalid {
       fReport("invalid user case succeeded: AddNode")
    }
-   aDb.AddUser(aUid2, aNode1)
+   aDb.AddUser(aUid2, aNode1, nil)
    for a := 1; a < 100; a++ {
       _, err = aDb.AddNode(aUid2, "AddNodeN0"+fmt.Sprint(a))
       if err != nil {
@@ -150,7 +150,7 @@ func TestUserDb(iPath string) bool {
    if err == nil || err.(*tUdbError).id != eErrUserInvalid {
       fReport("invalid user case succeeded: DropNode")
    }
-   aDb.AddUser(aUid2, aNode2)
+   aDb.AddUser(aUid2, aNode2, nil)
    _, err = aDb.DropNode(aUid2, aNode2)
    if err == nil || err.(*tUdbError).id != eErrLastNode {
       fReport("last node case succeeded: DropNode")
@@ -211,7 +211,7 @@ func TestUserDb(iPath string) bool {
    if err == nil || err.(*tUdbError).id != eErrUserInvalid {
       fReport("invalid user case succeeded: AddAlias")
    }
-   aDb.AddUser(aUid2, aNode1)
+   aDb.AddUser(aUid2, aNode1, nil)
    err = aDb.AddAlias(aUid2, aNat, "")
    if err == nil || err.(*tUdbError).id != eErrAliasTaken {
       fReport("already taken case succeeded: AddAlias")
@@ -285,7 +285,7 @@ func TestUserDb(iPath string) bool {
    aGid1, aGid2 = "Ginvite/Gid1", "Ginvite/Gid2"
    aUid1, aUid2 = "AddUserUid1", "GinviteUid2"
    aAlias1, aAlias2 = "GinviteA1", "GinviteA2"
-   aDb.AddUser(aUid2, "GinviteN2")
+   aDb.AddUser(aUid2, "GinviteN2", nil)
    aDb.AddAlias(aUid2, "", aAlias2)
    aDb.AddAlias(aUid1, "", aAlias1)
    _, err = aDb.GroupInvite(aGid1, aAlias1, aAlias2, aUid2)
@@ -338,7 +338,7 @@ func TestUserDb(iPath string) bool {
    aGid1, aGid2 = "GjoinGid1", "GjoinGid2"
    aUid1, aUid2 = "AddUserUid1", "GjoinUid2"
    aAlias1, aAlias2, aAlias3 = "GjoinA1", "GjoinA2", "GjoinA3"
-   aDb.AddUser(aUid2, "GjoinN2")
+   aDb.AddUser(aUid2, "GjoinN2", nil)
    aDb.AddAlias(aUid2, "", aAlias2)
    aDb.AddAlias(aUid1, "", aAlias1)
    aDb.AddAlias(aUid1, "", aAlias3)

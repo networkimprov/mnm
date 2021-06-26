@@ -97,28 +97,40 @@ After the client completes a Login or Register sequence, either side may contact
 0. __TmtpRev__ gives the latest recognized protocol version; it must be the first message.
    ```
    { "op": 0,
-     "id": "1"}       // protocol version string
+     "id": "1"}                                // protocol version string
    ```
    Response:
    ```
-   { "op": "tmtprev",
-     "id": "1"}       // protocol version string
+   { "op":     "tmtprev",
+     "id":     "1",                            // protocol version string
+     "name":   string,                         // site-specific name
+    <"auth":   1 | 2,                          // 1 registration, 2 registration & login
+     "authby": [{"label": string,              // OpenID Connect provider
+                 "login": [string, <string>],  // authentication URL, URL-encoded params
+                 "token": [string, <string>]}, // token URL, URL-encoded params
+                ... ]>}
    ```
 
 0. __Register__ creates a user account with a single node.  
 _todo: accept credentials for third party authentication services_  
    ```
    { "op":       1,
-     "newnode":  string,     // user label for a client device
-    <"newalias": string>}    // user alias, must be 8+ printable characters
+     "newnode":  string,            // user label for a client device
+    <"newalias": string>,           // user alias, must be 8+ printable characters
+    <"oidc":                        // OpenID Connect token result
+      { "token_type":    "Bearer",
+        "expires_in":    uint,
+        "id_token":      string,
+        "access_token":  string,
+        "refresh_token": string}>}
    ```
    Response: same as _Login_  
    To sender's node:
    ```
    { "op":     "registered",
-     "uid":    string,       // permanent id for new user
-     "nodeid": string,       // password for first node
-    <"error":  string>}      // reason alias was not allowed
+     "uid":    string,              // permanent id for new user
+     "nodeid": string,              // password for first node
+    <"error":  string>}             // reason alias was not allowed
    ```
 
 0. __Login__ connects a client to a user node.  

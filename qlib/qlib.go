@@ -42,6 +42,10 @@ const kAliasMinLen = 8
 const kPostDateFormat = "2006-01-02T15:04:05.000Z07:00"
 
 var UDb UserDatabase // set by caller
+var sSiteName string
+var sAuthType byte
+var sAuthBy []TAuthBy
+var sAuthOptional bool
 
 // encoding without vowels to avoid words
 var sBase32 = base32.NewEncoding("%+123456789BCDFGHJKLMNPQRSTVWXYZ")
@@ -52,6 +56,17 @@ var sOhi = tOhi{from: tOhiMap{}}
 var sNode = tNodes{list: tNodeMap{}}
 var sStore = tStore{}
 
+
+type TAuthBy struct {
+   Label string   `json:"label"`
+   Login []string `json:"login"`
+   Token []string `json:"token"`
+                                      // config options follow
+   Std   []string `json:",omitempty"`
+   Keys  string   `json:",omitempty"`
+   Iss   string   `json:",omitempty"` // expected in ID token
+   Aud   string   `json:",omitempty"` // expected in ID token
+}
 
 type tHeader struct {
    Op uint8
@@ -65,6 +80,7 @@ type tHeader struct {
    Act string
    For, NoteFor []tHeaderFor
    ForNotSelf bool
+   Oidc *tOpenidToken
 }
 
 const (
@@ -84,7 +100,7 @@ const ( _=iota; eForUser; eForGroupAll; eForGroupExcl; eForSelf )
 
 var sHeaderDefs = [...]tHeader{
    eOpTmtpRev    : { Id:"1" },
-   eOpRegister   : { NewNode:"1", NewAlias:"1" },
+   eOpRegister   : { NewNode:"1", NewAlias:"1" }, // Oidc optional
    eOpLogin      : { Uid:"1", Node:"1" },
    eOpUserEdit   : { Id:"1" },
    eOpOhiEdit    : { Id:"1", For:[]tHeaderFor{{}}, Type:"1" },
@@ -163,6 +179,7 @@ var (
    sMsgOpDisallowedOff = &tMsgQuit{Op:"quit", Error:"disallowed op on unauthenticated link"}
    sMsgOpDisallowedOn  = &tMsgQuit{Op:"quit", Error:"disallowed op on connected link"}
    sMsgNeedTmtpRev     = &tMsgQuit{Op:"quit", Error:"tmtprev was omitted"}
+   sMsgAuthRequired    = &tMsgQuit{Op:"quit", Error:"authentication required"}
    sMsgRegisterFailure = &tMsgQuit{Op:"quit", Error:"register failure"} //todo details
    sMsgLoginFailure    = &tMsgQuit{Op:"quit", Error:"login failed"}
    sMsgLoginNodeOnline = &tMsgQuit{Op:"quit", Error:"node already connected"}
@@ -208,7 +225,7 @@ type UserDatabase interface {
    //   a set of Groups for message distribution
    //   the set of Aliases & Uids for each group
 
-   AddUser(iUid, iNewNode string) (aQid string, err error)
+   AddUser(iUid, iNewNode string, iAuth map[string]interface{}) (aQid string, err error)
    AddNode(iUid, iNewNode string) (aQid string, err error)
    DropNode(iUid, iNode string) (aQid string, err error)
    AddAlias(iUid, iNat, iEn string) error
@@ -234,6 +251,44 @@ type UserDatabase interface {
    Erase()
 }
 
+
+func SetTmtpRev(iName string, iType byte, iBy []TAuthBy) error {
+   sSiteName, sAuthType, sAuthBy, sAuthOptional = iName, iType, iBy, false
+   if len(sAuthBy) > 26 { // limited by mnm client state parameter
+      return tError("too many authentication services (max 26)")
+   } else if len(sAuthBy) == 0 {
+      sAuthType = 0
+   } else if sAuthBy[0].Login == nil {
+      sAuthBy = sAuthBy[1:]
+      sAuthOptional = true
+   }
+   clearConfigOpenid()
+   for a := range sAuthBy {
+      if sAuthBy[a].Label == "" {
+         return tError(fmt.Sprintf("missing label for authby[%d]", a))
+      }
+      for _, aSet := range [...][]string{sAuthBy[a].Login, sAuthBy[a].Token} {
+         aParams := ""
+         for a1 := 1; a1 < len(aSet); a1++ {
+            aParams += "&"+ aSet[a1]
+         }
+         for a1 := range sAuthBy[a].Std {
+            aParams += "&"+ sAuthBy[a].Std[a1]
+         }
+         if len(aSet) < 2 || aSet[0] == "" || aParams == "" {
+            return tError("missing URL/params for "+ sAuthBy[a].Label)
+         }
+         aSet[1] = aParams[1:]
+      }
+      sAuthBy[a].Login = sAuthBy[a].Login[:2]
+      sAuthBy[a].Token = sAuthBy[a].Token[:2]
+      sAuthBy[a].Std = nil
+      addConfigOpenid(sAuthBy[a].Keys, sAuthBy[a].Iss, sAuthBy[a].Aud)
+      sAuthBy[a].Keys, sAuthBy[a].Iss, sAuthBy[a].Aud = "", "", ""
+   }
+   initOpenid()
+   return nil
+}
 
 func Suspend() {
    sRecvDoor.Lock()
@@ -381,11 +436,24 @@ func (o *tLink) _handleMsg(iHead *tHeader, iData []byte) *tMsgQuit {
       default:
          o.tmtprev = "1"
       }
-      o.conn.Write(packMsg(tMsg{"op":"tmtprev", "id":o.tmtprev}, nil))
+      aRev := tMsg{"op":"tmtprev", "id":o.tmtprev, "name":sSiteName}
+      if sAuthType != 0 {
+         aRev["auth"], aRev["authby"] = sAuthType, sAuthBy
+      }
+      o.conn.Write(packMsg(aRev, nil))
    case eOpRegister:
+      var aAuthData tMsg
+      if len(sAuthBy) > 0 && (!sAuthOptional || iHead.Oidc != nil) {
+         if iHead.Oidc == nil { return sMsgAuthRequired }
+         aAuthData, err = validateTokenOpenid(iHead.Oidc)
+         if err != nil {
+            fmt.Fprintf(os.Stderr, "%s link._handleMsg register %s\n", o._logNode(), err)
+            return sMsgAuthRequired
+         }
+      }
       aUid := makeUid()
       aNodeId, aNodeSha := makeNodeId()
-      _, err = UDb.AddUser(aUid, aNodeSha) //todo iHead.NewNode
+      _, err = UDb.AddUser(aUid, aNodeSha, aAuthData) //todo iHead.NewNode
       if err != nil {
          fmt.Fprintf(os.Stderr, "%s link._handleMsg register %s\n", o._logNode(), err)
          return sMsgRegisterFailure

@@ -60,6 +60,7 @@ type tUser struct {
    Nodes map[string]tNode
    NonDefunctNodesCount int
    Aliases []tAlias // public names for the user
+   Authentication map[string]interface{} `json:",omitempty"`
    CheckSum uint32
 }
 
@@ -165,7 +166,7 @@ func NewUserDb(iPath string) (*tUserDb, error) {
 //: if same parameters are retried after success, ie data already exists,
 //:   function should do nothing but return success
 
-func (o *tUserDb) AddUser(iUid, iNewNode string) (aQid string, err error) {
+func (o *tUserDb) AddUser(iUid, iNewNode string, iAuth map[string]interface{}) (aQid string, err error) {
    //: add user
    //: iUid not in o.user, or already has iNewNode
    aUser, err := o.fetchUser(iUid, eFetchMake)
@@ -185,6 +186,7 @@ func (o *tUserDb) AddUser(iUid, iNewNode string) (aQid string, err error) {
 
    aUser.Nodes[iNewNode] = tNode{Defunct: false, Num: 1}
    aUser.NonDefunctNodesCount++
+   aUser.Authentication = iAuth
 
    err = o.putRecord(eTuser, iUid, aUser)
    if err != nil { return "", err }

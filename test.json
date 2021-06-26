@@ -1,6 +1,8 @@
 [{
    "head": {"Op":"eOpTmtpRev", "Id":"1"} ,
-   "want": [{"id":"1", "op":"tmtprev"}]
+   "want": [{"id":"1", "op":"tmtprev", "name":"Verify", "auth":1,
+             "authby":[{"label":"X", "login":["https://example.com/l", "a&b&d"],
+                                     "token":["https://example.com/t", "c&d"]}] }]
 },{
    "head": {"Op":"eOpTmtpRev", "Id":"1"} ,
    "want": [{"error":"disallowed op repetition", "op":"quit"}]

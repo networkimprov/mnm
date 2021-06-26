@@ -26,6 +26,7 @@ import (
 const kTestLoginWait time.Duration = 6 * time.Second
 
 var sTestNodeIds = make(map[int][]string)
+var sTestVerifyAuthToken *tOpenidToken
 var sTestVerifyWork []tTestWork
 var sTestVerifyDone = make(chan int)
 var sTestVerifyOp int
@@ -127,6 +128,13 @@ func LocalTest(i int) {
       }
    }
 
+   sTestVerifyAuthToken = enableTestOpenid()
+   SetTmtpRev("Verify", 1, []TAuthBy{{Label:"X",
+                                      Login:[]string{"https://example.com/l", "a", "b"},
+                                      Token:[]string{"https://example.com/t", "c"},
+                                      Std:  []string{"d"},
+                                      Keys: "http://localhost:8080/keys",
+                                      Iss:  "issuer", Aud: "audience"}})
    NewLink(_newTestClient(eActVerifyRecv, [3]int{100003, 0, 0}))
    NewLink(_newTestClient(eActVerifyRecv, [3]int{100003, 1, 0}))
    NewLink(_newTestClient(eActVerifyRecv, [3]int{100002, 1, 0}))
@@ -134,6 +142,7 @@ func LocalTest(i int) {
    NewLink(_newTestClient(eActVerifySend, [3]int{100002, 0, 0}))
    <-sTestVerifyDone
    time.Sleep(10 * time.Millisecond)
+   SetTmtpRev("Cycle", 0, nil)
    fmt.Fprintf(os.Stderr, "%d verify pass failures, starting cycle\n\n", sTestVerifyFail)
 
    sTestClientCount = int32(i)
@@ -285,6 +294,9 @@ func (o *tTestClient) _verifyRead(iBuf []byte) (int, error) {
       o.count++
       aMsg = []byte(aWk.Msg)
       if aWk.Msg == "" {
+         if sTestVerifyOp == eOpRegister && aWk.Head["Oidc"] == nil {
+            aWk.Head["Oidc"] = sTestVerifyAuthToken
+         }
          aData := aWk.Datb; if aWk.Data != "" { aData = []byte(aWk.Data) }
          aMsg = packMsg(aWk.Head, aData)
       } else if aWk.Msg == "delay" {

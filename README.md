@@ -64,7 +64,7 @@ b) `kill -s INT <background_pid>` # send SIGINT signal, triggering graceful shut
 
 ### Configuration
 
-The file mnm.config contains a JSON object with these fields.
+The file "mnm.config" contains a JSON object with these fields.
 
 The `ntp` (network time protocol) object defines:  
 `hosts` - an array of NTP servers  
@@ -73,6 +73,24 @@ The `ntp` (network time protocol) object defines:
 The `listen` object defines:  
 `net` & `laddr` - arguments to `net.ListenConfig.Listen(nil, net, laddr)`  
 `certPath` & `keyPath` - arguments to `tls.LoadX509KeyPair(certPath, keyPath)`  
+
+The `name` parameter defines the server's `tmtprev` response `.name` field.
+
+The `auth` parameter defines where third party authentication is required:  
+`0` - not supported  
+`1` - required for registration  
+`2` - required for registration and login (not yet implemented)  
+
+The `authby` array defines a set of objects describing OpenID Connect providers:  
+`label` - the name of the OIDC provider/application  
+`login` - an array giving the base URL, followed by name=value request parameters, for OIDC `/authorize`  
+`token` - an array giving the base URL, followed by name=value request parameters, for OIDC `/token`  
+`std` - an array of name=value request parameters to append to both `login` & `token` requests  
+`keys` - the URL for the public key needed to validate tokens provided by OIDC authentication  
+`iss` & `aud` - expected values for claims in the `.id_token` field of OIDC tokens  
+
+If the first `authby` object is empty, OpenID Connect authentication is optional. 
+This is useful for testing.
 
 
 ### Build & package

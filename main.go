@@ -55,7 +55,7 @@ func mainResult() int {
       err = sConfig.load()
       if err != nil {
          if !os.IsNotExist(err) {
-            fmt.Fprintf(os.Stderr, "config load: %s\n", err.Error())
+            fmt.Fprintf(os.Stderr, "config load: %v\n", err)
          } else {
             fmt.Fprintf(os.Stderr, "config load: %s missing; see mnm.conf for example\n", kConfigFile)
          }
@@ -105,12 +105,18 @@ type tConfig struct {
       Laddr string
       CertPath, KeyPath string
    }
+   Name string
+   Auth byte
+   AuthBy []pQ.TAuthBy
 }
 
 func (o *tConfig) load() error {
    aBuf, err := ioutil.ReadFile(kConfigFile)
    if err != nil { return err }
    err = json.Unmarshal(aBuf, o)
+   if err != nil { return err }
+
+   err = pQ.SetTmtpRev(o.Name, o.Auth, o.AuthBy) // modifies .AuthBy
    if err != nil { return err }
 
    for _, aHost := range o.Ntp.Hosts {
