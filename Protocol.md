@@ -8,8 +8,6 @@ TMTP sessions are typically long-duration, and may idle for extended periods.
 After the client completes a login or register request, either side may contact the other.
 A client may simultaneously contact multiple TMTP servers via separate connections. 
 
-The rationale underlying this work is outlined in 
-[_Why TMTP?_](https://mnmnotmail.org/rationale.html)
 The project homepage is [mnmnotmail.org](https://mnmnotmail.org).
 
 __Status:__ Version 1 is a work in progress, and aspects need to be revised. 

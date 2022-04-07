@@ -7,8 +7,6 @@ a [simple protocol](Protocol.md) between them.
 
 Learn more at [mnmnotmail.org](https://mnmnotmail.org). 
 
-[**Download the mnm client app**](https://mnmnotmail.org/#quick-start) 
-
 
 ### Server status
 
